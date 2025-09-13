@@ -548,7 +548,7 @@
                             playRow.style.backgroundColor = '';
                         }, 1000);
                     } else if (playsContainer) {
-                        // Fallback: scroll al final del contenedor
+                        // Fallback: scroll al final del contenedorcito
                         playsContainer.scrollTop = playsContainer.scrollHeight;
                     }
                 }, 150);
