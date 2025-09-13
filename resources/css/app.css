@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+.ticket-ultranegrita {
+    font-weight: 900!important; /* O 'bolder' si prefieres una palabra clave */
+    font-size: 2em!important; /* Ajusta este valor según el tamaño deseado, por ejemplo, 1.5em, 24px, larger, etc. */
+
+}
+body {
+   font-weight: 900!important;
+}
+
+.livewire-component-wrapper { /* Reemplaza con una clase real o un selector más adecuado */
+    font-weight: 900!important;
+}
+[x-cloak] {
+    display: none;
+}
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-fade-in {
+    animation: fade-in 0.3s ease-out;
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background-color: #00000028;
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: #ffffff2d;
+    border-radius: 10px;
+}
+
+@media print {
+    .no-print {
+        display: none !important;
+    }
+}
+
+.zNotification {
+    z-index: 999999999;
+}
