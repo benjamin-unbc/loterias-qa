@@ -631,7 +631,7 @@
         input[type=number] {
             -moz-appearance: textfield;
         }
-        /* Evitar selección automática solo en el campo Número */
+        /* Evitar selección automática solo en el campo Númerooo */
 #number {
     -webkit-user-select: none;
     -moz-user-select: none;
