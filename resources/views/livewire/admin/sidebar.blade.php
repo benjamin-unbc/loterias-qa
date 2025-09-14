@@ -126,15 +126,7 @@
                         </a>
                     </li>
                     @endcanany
-                    @canany(['ver clientes', 'crear clientes', 'editar clientes', 'eliminar clientes'])
-                    <li>
-                        <a href="{{ route('clients.show') }}"
-                            class="flex items-center w-full p-2
-                        {{ (request()->routeIs('clients.show') or request()->is('module-users/clients/store*')) ? 'text-yellow-300 font-extrabold' : 'text-gray-400 hover:text-white' }} transition duration-75 rounded-lg pl-11 group hover:bg-gray-200/20">
-                            <i class="fas fa-user-tie w-5 h-5 mr-3"></i> Clientes
-                        </a>
-                    </li>
-                    @endcanany
+                   
                 </ul>
             </li>
             @endcan

@@ -12,8 +12,6 @@ use App\Livewire\Admin\Roles\ShowRoles;
 use App\Livewire\Admin\Roles\StoreRole;
 use App\Livewire\Admin\Users\ShowUsers;
 use App\Livewire\Admin\Users\StoreUser;
-use App\Livewire\Admin\Clients\ShowClients;
-use App\Livewire\Admin\Clients\StoreClient;
 use App\Livewire\Admin\Results;
 
 Route::middleware([
