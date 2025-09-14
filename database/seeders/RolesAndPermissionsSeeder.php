@@ -45,11 +45,6 @@ class RolesAndPermissionsSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'ver usuarios']);
         Permission::firstOrCreate(['name' => 'eliminar usuarios']);
 
-        // create permissions clients
-        Permission::firstOrCreate(['name' => 'crear clientes']);
-        Permission::firstOrCreate(['name' => 'editar clientes']);
-        Permission::firstOrCreate(['name' => 'ver clientes']);
-        Permission::firstOrCreate(['name' => 'eliminar clientes']);
 
         // --- Permisos de Acciones por Módulo (Ejemplos) ---
         // Gestor de Jugadas
