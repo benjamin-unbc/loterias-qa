@@ -578,7 +578,10 @@ class PlaysManager extends Component
 
     {
 
-        $this->play = PlaysSentModel::where('ticket', $ticketNumber)->first();
+        // OPTIMIZACIÓN: Consulta optimizada con select específico
+        $this->play = PlaysSentModel::select(['ticket', 'code', 'date', 'time', 'user_id', 'amount', 'share_token'])
+            ->where('ticket', $ticketNumber)
+            ->first();
 
         if (!$this->play) {
 
@@ -692,7 +695,10 @@ class PlaysManager extends Component
 
         try {
 
-            $playsSentOriginal = PlaysSentModel::where('ticket', $ticketToSearch)->first();
+            // OPTIMIZACIÓN 1: Consulta optimizada con select específico
+            $playsSentOriginal = PlaysSentModel::select(['ticket', 'code', 'date', 'time', 'user_id', 'amount'])
+                ->where('ticket', $ticketToSearch)
+                ->first();
 
             if (!$playsSentOriginal) {
 
@@ -703,12 +709,14 @@ class PlaysManager extends Component
 
 
 
-            $apusDelTicket = ApusModel::where('ticket', $ticketToSearch)
-
+            // OPTIMIZACIÓN 2: Consulta optimizada con select específico y índices
+            $apusDelTicket = ApusModel::select([
+                    'id', 'ticket', 'user_id', 'number', 'position', 'import', 
+                    'lottery', 'numberR', 'positionR', 'original_play_id'
+                ])
+                ->where('ticket', $ticketToSearch)
                 ->orderBy('original_play_id', 'asc')
-
                 ->orderBy('id', 'asc')
-
                 ->get();
 
 

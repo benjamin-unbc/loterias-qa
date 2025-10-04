@@ -45,4 +45,111 @@
             </div>
         </form>
     </x-authentication-card>
+
+    @push('scripts')
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const emailInput = document.getElementById('email');
+            const loginLogo = document.getElementById('login-logo');
+            const clientNameContainer = document.getElementById('client-name-container');
+            const clientName = document.getElementById('client-name');
+            let debounceTimer;
+
+            // Función para verificar si el email pertenece a un cliente
+            function checkClientLogo(email) {
+                if (!email || !email.includes('@')) {
+                    resetLogo();
+                    return;
+                }
+
+                fetch(`/api/check-client/${encodeURIComponent(email)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.is_client && data.has_photo) {
+                            // Mostrar logo del cliente
+                            loginLogo.src = `/storage/${data.photo_path}`;
+                            loginLogo.alt = data.name;
+                            loginLogo.className = 'w-40 h-40 rounded-xl object-cover border-4 border-yellow-300 shadow-lg transition-all duration-300 ease-in-out';
+                            
+                            // Mostrar nombre de fantasía
+                            showClientName(data.name);
+                            
+                        } else if (data.is_client && !data.has_photo) {
+                            // Cliente sin logo - mostrar logo con borde especial
+                            loginLogo.src = '{{ asset("assets/images/logo.png") }}';
+                            loginLogo.alt = `Cliente: ${data.name}`;
+                            loginLogo.className = 'w-40 rounded-xl border-4 border-blue-300 shadow-lg transition-all duration-300 ease-in-out';
+                            
+                            // Mostrar nombre de fantasía
+                            showClientName(data.name);
+                            
+                        } else {
+                            // No es cliente - logo normal
+                            resetLogo();
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error checking client:', error);
+                        resetLogo();
+                    });
+            }
+
+            // Función para mostrar el nombre del cliente
+            function showClientName(name) {
+                clientName.textContent = name;
+                clientNameContainer.classList.remove('hidden');
+                clientNameContainer.classList.add('block');
+                
+                // Animación de entrada
+                setTimeout(() => {
+                    clientNameContainer.style.opacity = '0';
+                    clientNameContainer.style.transform = 'translateY(-10px)';
+                    clientNameContainer.style.transition = 'all 0.3s ease-in-out';
+                    
+                    setTimeout(() => {
+                        clientNameContainer.style.opacity = '1';
+                        clientNameContainer.style.transform = 'translateY(0)';
+                    }, 50);
+                }, 10);
+            }
+
+            // Función para ocultar el nombre del cliente
+            function hideClientName() {
+                clientNameContainer.style.opacity = '0';
+                clientNameContainer.style.transform = 'translateY(-10px)';
+                
+                setTimeout(() => {
+                    clientNameContainer.classList.add('hidden');
+                    clientNameContainer.classList.remove('block');
+                    clientName.textContent = '';
+                }, 300);
+            }
+
+            // Función para resetear el logo a su estado original
+            function resetLogo() {
+                loginLogo.src = '{{ asset("assets/images/logo.png") }}';
+                loginLogo.alt = 'Logo';
+                loginLogo.className = 'w-40 rounded-xl transition-all duration-300 ease-in-out';
+                
+                // Ocultar nombre del cliente
+                hideClientName();
+            }
+
+            // Event listener con debounce para evitar muchas consultas
+            emailInput.addEventListener('input', function() {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    checkClientLogo(this.value);
+                }, 500); // Esperar 500ms después del último input
+            });
+
+            // Resetear logo cuando se borra el email
+            emailInput.addEventListener('blur', function() {
+                if (!this.value) {
+                    resetLogo();
+                }
+            });
+        });
+    </script>
+    @endpush
 </x-guest-layout>

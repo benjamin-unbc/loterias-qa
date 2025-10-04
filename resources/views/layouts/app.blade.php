@@ -40,6 +40,7 @@
     </div>
 
     @livewire('notification')
+    @livewire('system-notifications')
     @stack('modals')
 
     @livewireScripts {{-- Correcto para Livewire v2 --}}

@@ -33,13 +33,22 @@ class FortifyServiceProvider extends ServiceProvider
     {
         Fortify::authenticateUsing(function (Request $request) {
             $user = User::where('email', $request->email)->first();
-;
-            if ($user != null && !$user->is_active) {
-                throw ValidationException::withMessages(['email' => 'Su cuenta se encuentra inactiva. Por favor, contacte a soporte.']);
+            
+            if (!$user) {
+                return null;
             }
-            if ($user && $user->is_active && Hash::check($request->password, $user->password)) {
+            
+            // Verificar si la cuenta está activa
+            if (!$user->is_active) {
+                throw ValidationException::withMessages(['email' => 'Usuario desactivado. Por favor, comuníquese con un Administrador.']);
+            }
+            
+            // Verificar la contraseña
+            if (Hash::check($request->password, $user->password)) {
                 return $user;
             }
+            
+            return null;
         });
         Fortify::createUsersUsing(CreateNewUser::class);
         Fortify::updateUserProfileInformationUsing(UpdateUserProfileInformation::class);

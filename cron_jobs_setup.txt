@@ -1,0 +1,37 @@
+# CONFIGURACIÓN DE CRON JOBS PARA EXTRACCIÓN AUTOMÁTICA
+# =====================================================
+
+# Para configurar en cPanel:
+# 1. Ve a "Cron Jobs" en tu cPanel
+# 2. Agrega las siguientes tareas:
+
+# Extracción automática cada 10 segundos (detección rápida)
+# */10 10-23 * * * /usr/bin/php /home/tu_usuario/public_html/artisan lottery:auto-extract --interval=10
+
+# O para extracción cada 30 segundos:
+# 0,30 10-23 * * * /usr/bin/php /home/tu_usuario/public_html/artisan lottery:auto-extract --interval=30
+
+# O para extracción cada minuto:
+# * 10-23 * * * /usr/bin/php /home/tu_usuario/public_html/artisan lottery:auto-extract --interval=60
+
+# HORARIOS DE FUNCIONAMIENTO:
+# - Inicio: 10:25 AM
+# - Fin: 12:00 AM (00:00)
+# - El sistema verifica automáticamente si está en horario de funcionamiento
+
+# HORARIOS DE LOTERÍA:
+# - La Previa: 09:00-11:00
+# - Primera: 11:00-13:00  
+# - Matutina: 13:00-15:00
+# - Vespertina: 15:00-17:00
+# - Nocturna: 17:00-19:00
+
+# CONFIGURACIÓN RECOMENDADA (DETECCIÓN RÁPIDA):
+# Extracción cada 10 segundos durante horarios de funcionamiento (10:25 AM a 12:00 AM)
+*/10 10-23 * * * /usr/bin/php /home/tu_usuario/public_html/artisan lottery:auto-extract --interval=10
+
+# NOTAS:
+# - Reemplaza "tu_usuario" con tu usuario de cPanel
+# - Ajusta la ruta si tu proyecto está en una subcarpeta
+# - Los logs se guardan en storage/logs/laravel.log
+# - El comando se ejecuta automáticamente sin intervención manual

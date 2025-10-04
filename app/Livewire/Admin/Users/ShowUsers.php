@@ -19,7 +19,10 @@ class ShowUsers extends Component
     #[Layout('layouts.app')]
     public function render()
     {
-        $users = User::search($this->search)->paginate($this->cant);
+        // Excluir usuarios con rol "Cliente" - solo mostrar usuarios administrativos
+        $users = User::whereDoesntHave('roles', function($query) {
+            $query->where('name', 'Cliente');
+        })->search($this->search)->paginate($this->cant);
 
         return view('livewire.admin.users.show-users', [
             'users' => $users

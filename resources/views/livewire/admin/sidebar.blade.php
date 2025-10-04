@@ -6,7 +6,15 @@
     <div class="flex-1 px-3 pb-4 overflow-y-auto bg-[#22272b] dark:bg-gray-800">
         <div class="flex items-center mb-4 justify-center pb-3 border-b border-gray-600">
             <a href="{{ route('plays-manager') }}">
-                <img src="{{ asset('assets/images/logo.png') }}" class="h-20 rounded-lg" alt="Loterias Logo" />
+                @if(Auth::user()->hasRole('Cliente') && Auth::user()->profile_photo_path)
+                    <!-- Logo personalizado para clientes -->
+                    <img src="{{ asset('storage/' . Auth::user()->profile_photo_path) }}" 
+                         alt="{{ Auth::user()->first_name }}" 
+                         class="h-20 w-20 rounded-lg object-cover border-2 border-yellow-200" />
+                @else
+                    <!-- Logo estándar para otros usuarios -->
+                    <img src="{{ asset('assets/images/logo.png') }}" class="h-20 rounded-lg" alt="Loterias Logo" />
+                @endif
             </a>
         </div>
         <ul class="space-y-1 font-medium text-[15px]">
@@ -70,6 +78,15 @@
             @endcan
             @can('access_menu_extractos')
             <li>
+                @if(Auth::user()->hasRole('Administrador'))
+                <a href="#" onclick="checkNewResultsAndRedirect()"
+                    class="flex items-center p-2 text-white rounded-lg dark:text-white {{ request()->routeIs('extracts') ? 'bg-yellow-200' : 'hover:bg-gray-200/20 group' }}">
+                    <i
+                        class="fas fa-file-alt w-5 h-5 {{ request()->routeIs('extracts') ? 'text-gray-600 font-extrabold' : 'text-gray-300 transition duration-75' }}"></i>
+                    <span
+                        class="ms-3 {{ request()->routeIs('extracts') ? 'text-gray-600 font-extrabold' : '' }}">Extractos</span>
+                </a>
+                @else
                 <a href="{{ route('extracts') }}"
                     class="flex items-center p-2 text-white rounded-lg dark:text-white {{ request()->routeIs('extracts') ? 'bg-yellow-200' : 'hover:bg-gray-200/20 group' }}">
                     <i
@@ -77,6 +94,7 @@
                     <span
                         class="ms-3 {{ request()->routeIs('extracts') ? 'text-gray-600 font-extrabold' : '' }}">Extractos</span>
                 </a>
+                @endif
             </li>
             @endcan
             @can('access_menu_asistencia_remota')
@@ -91,6 +109,39 @@
                 </a>
             </li>
             @endcan
+            {{-- OCULTADO: Extractor de Artículos - Solo accesible por ruta directa --}}
+            {{-- <li>
+                <a href="{{ route('extractor.interface') }}"
+                    class="flex items-center p-2 text-white rounded-lg dark:text-white {{ request()->routeIs('extractor.interface') ? 'bg-yellow-200' : 'hover:bg-gray-200/20 group' }}">
+                    <i
+                        class="fas fa-newspaper w-5 h-5 {{ request()->routeIs('extractor.interface') ? 'text-gray-600 font-extrabold' : 'text-gray-300 transition duration-75' }}"></i>
+                    <span
+                        class="ms-3 {{ request()->routeIs('extractor.interface') ? 'text-gray-600 font-extrabold' : '' }}">Extractor de Artículos</span>
+                </a>
+            </li> --}}
+            
+            {{-- OCULTADO: Cabezas de Lotería - Solo accesible por ruta directa --}}
+            {{-- <li>
+                <a href="{{ route('heads.interface') }}"
+                    class="flex items-center p-2 text-white rounded-lg dark:text-white {{ request()->routeIs('heads.interface') ? 'bg-yellow-200' : 'hover:bg-gray-200/20 group' }}">
+                    <i
+                        class="fas fa-dice w-5 h-5 {{ request()->routeIs('heads.interface') ? 'text-gray-600 font-extrabold' : 'text-gray-300 transition duration-75' }}"></i>
+                    <span
+                        class="ms-3 {{ request()->routeIs('heads.interface') ? 'text-gray-600 font-extrabold' : '' }}">Cabezas de Lotería</span>
+                </a>
+            </li> --}}
+            
+            {{-- OCULTADO: 20 Ganadores - Solo accesible por ruta directa --}}
+            {{-- <li>
+                <a href="{{ route('winning-numbers.interface') }}"
+                    class="flex items-center p-2 text-white rounded-lg dark:text-white {{ request()->routeIs('winning-numbers.interface') ? 'bg-yellow-200' : 'hover:bg-gray-200/20 group' }}">
+                    <i
+                        class="fas fa-list-ol w-5 h-5 {{ request()->routeIs('winning-numbers.interface') ? 'text-gray-600 font-extrabold' : 'text-gray-300 transition duration-75' }}"></i>
+                    <span
+                        class="ms-3 {{ request()->routeIs('winning-numbers.interface') ? 'text-gray-600 font-extrabold' : '' }}">20 Ganadores</span>
+                </a>
+            </li> --}}
+            
             @canany(['access_menu_usuarios_y_roles', 'crear roles', 'editar roles', 'ver roles', 'eliminar roles', 'crear usuarios', 'editar usuarios', 'ver usuarios', 'eliminar usuarios'])
             <li>
                 <button type="button"
@@ -126,7 +177,15 @@
                         </a>
                     </li>
                     @endcanany
-                   
+                    @canany(['ver clientes', 'crear clientes', 'editar clientes', 'eliminar clientes'])
+                    <li>
+                        <a href="{{ route('clients.show') }}"
+                            class="flex items-center w-full p-2
+                        {{ (request()->routeIs('clients.show') or request()->is('module-users/clients/store*')) ? 'text-yellow-300 font-extrabold' : 'text-gray-400 hover:text-white' }} transition duration-75 rounded-lg pl-11 group hover:bg-gray-200/20">
+                            <i class="fas fa-user-tie w-5 h-5 mr-3"></i> Clientes
+                        </a>
+                    </li>
+                    @endcanany
                 </ul>
             </li>
             @endcan
@@ -138,3 +197,10 @@
         @livewire('admin.navbar')
     </div>
 </aside>
+
+<script>
+function checkNewResultsAndRedirect() {
+    // Redirigir directamente a Extractos sin verificación ni mensajes
+    window.location.href = '{{ route("extracts") }}';
+}
+</script>
