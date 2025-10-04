@@ -282,65 +282,47 @@ class WinningNumbersService
     }
     
     /**
-     * Verifica si la página muestra números del día anterior
-     * Esto previene insertar números del día anterior cuando vivitusuerte.com aún no actualiza
+     * Verifica si la página muestra números del día actual
+     * SOLO extrae números cuando la página muestra la fecha actual del sistema
      */
     private function isPageDateCurrent(string $html): bool
     {
         try {
             $currentDate = date('Y-m-d');
-            $previousDate = date('Y-m-d', strtotime('-1 day'));
-            
             $this->log("Fecha actual del sistema: $currentDate");
-            $this->log("Fecha anterior: $previousDate");
             
-            // Verificar si ya tenemos números para el día anterior
-            if (class_exists('App\Models\Number')) {
-                $previousDayCount = \App\Models\Number::where('date', $previousDate)->count();
-                $this->log("Números existentes para día anterior ($previousDate): $previousDayCount");
+            // Extraer la fecha de la página desde el atributo data-fecha-default
+            $pageDate = $this->extractPageDate($html);
+            
+            if ($pageDate) {
+                $this->log("Fecha encontrada en la página: $pageDate");
                 
-                if ($previousDayCount > 0) {
-                    // Extraer algunos números de la página para comparar
-                    $pageNumbers = $this->extractSampleNumbers($html);
-                    
-                    if (!empty($pageNumbers)) {
-                        // Verificar si estos números ya existen en el día anterior
-                        $existingNumbers = \App\Models\Number::where('date', $previousDate)
-                                                           ->whereIn('value', $pageNumbers)
-                                                           ->count();
-                        
-                        $this->log("Números de la página que ya existen en día anterior: $existingNumbers de " . count($pageNumbers));
-                        
-                        // Si más del 80% de los números ya existen en el día anterior, 
-                        // probablemente la página aún no se ha actualizado
-                        $similarityPercentage = ($existingNumbers / count($pageNumbers)) * 100;
-                        
-                        if ($similarityPercentage > 80) {
-                            $this->log("⚠️ Página muestra números del día anterior (similitud: {$similarityPercentage}%). Saltando extracción.");
-                            return false;
-                        } else {
-                            $this->log("✅ Página muestra números nuevos (similitud: {$similarityPercentage}%). Procediendo con extracción.");
-                            return true;
-                        }
-                    }
+                // SOLO proceder si la fecha de la página coincide EXACTAMENTE con la fecha actual
+                if ($pageDate === $currentDate) {
+                    $this->log("✅ La página muestra la fecha actual ($currentDate). Procediendo con extracción.");
+                    return true;
+                } else {
+                    $this->log("⚠️ La página muestra fecha diferente ($pageDate vs $currentDate). NO se extraerán números hasta que la página actualice su fecha.");
+                    return false;
                 }
             }
             
-            // Si no hay números del día anterior o no se pueden comparar, permitir extracción
-            $this->log("No se puede verificar similitud con día anterior. Procediendo con extracción.");
-            return true;
+            // Si no se puede extraer la fecha de la página, NO proceder
+            $this->log("❌ No se pudo extraer fecha de la página. NO se extraerán números por seguridad.");
+            return false;
             
         } catch (\Exception $e) {
             $this->log('Error verificando fecha de página: ' . $e->getMessage(), 'error');
-            // En caso de error, permitir extracción (comportamiento por defecto)
-            return true;
+            // En caso de error, NO proceder por seguridad
+            $this->log("❌ Error en verificación de fecha. NO se extraerán números por seguridad.");
+            return false;
         }
     }
     
     /**
-     * Extrae una muestra de números de la página para comparar
+     * Extrae la fecha de la página desde el atributo data-fecha-default
      */
-    private function extractSampleNumbers(string $html): array
+    private function extractPageDate(string $html): ?string
     {
         try {
             $dom = new \DOMDocument();
@@ -348,36 +330,23 @@ class WinningNumbersService
             $dom->loadHTML($html);
             $xpath = new \DOMXPath($dom);
             
-            $numbers = [];
-            $tables = $xpath->query('//table');
+            // Buscar el elemento con data-fecha-default
+            $dateElements = $xpath->query('//*[@data-fecha-default]');
             
-            // Extraer números de las primeras 2 tablas (La Previa y Primera)
-            for ($i = 0; $i < min(2, $tables->length); $i++) {
-                $table = $tables->item($i);
-                $cells = $xpath->query('.//td', $table);
-                
-                for ($j = 0; $j < $cells->length; $j += 2) {
-                    $numberCell = $cells->item($j + 1);
-                    if ($numberCell) {
-                        $number = trim($numberCell->textContent);
-                        if (preg_match('/^\d{4}$/', $number) && $number !== '----') {
-                            $numbers[] = $number;
-                            if (count($numbers) >= 10) { // Limitar a 10 números para la comparación
-                                break 2;
-                            }
-                        }
-                    }
+            foreach ($dateElements as $element) {
+                $dateValue = $element->getAttribute('data-fecha-default');
+                if ($dateValue && preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateValue)) {
+                    return $dateValue;
                 }
             }
             
-            $this->log("Números de muestra extraídos: " . implode(', ', $numbers));
-            return $numbers;
-            
+            return null;
         } catch (\Exception $e) {
-            $this->log('Error extrayendo números de muestra: ' . $e->getMessage(), 'error');
-            return [];
+            $this->log('Error extrayendo fecha de página: ' . $e->getMessage(), 'error');
+            return null;
         }
     }
+    
     
     /**
      * Convierte fecha de formato DD/MM/YYYY a YYYY-MM-DD
