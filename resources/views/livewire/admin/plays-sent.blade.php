@@ -69,6 +69,9 @@
                         <th scope="col" class="px-6 py-3">Lot</th>
                         <th scope="col" class="px-6 py-3">Pago</th>
                         <th scope="col" class="px-6 py-3">Importe</th>
+                        @if(!Auth::user()->hasRole('Cliente'))
+                            <th scope="col" class="px-6 py-3 text-center">ID Usuario</th>
+                        @endif
                         <th scope="col" class="px-6 py-3 text-center">Acciones</th>
                     </tr>
                 </thead>
@@ -100,6 +103,13 @@
                                     ${{ number_format($playItem->amount ?? 0, 2, ',', '.') }}
                                 @endif
                             </td>
+                            @if(!Auth::user()->hasRole('Cliente'))
+                                <td class="px-6 py-4 {{ $playItem->status === 'I' ? 'line-through' : ''}} text-center">
+                                    <span class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                                        {{ $playItem->user_id }}
+                                    </span>
+                                </td>
+                            @endif
                             <td class="px-2 py-4 flex gap-1 items-center justify-center">
                                 <button wire:click='viewApus("{{ $playItem->ticket }}")'
                                         class="font-medium text-center text-yellow-200 bg-gray-700 p-1 px-2 rounded-md
@@ -118,7 +128,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="px-6 py-4 text-center text-gray-500">
+                            <td colspan="{{ Auth::user()->hasRole('Cliente') ? '8' : '9' }}" class="px-6 py-4 text-center text-gray-500">
                                 No hay jugadas enviadas
                             </td>
                         </tr>
@@ -156,7 +166,7 @@
                         <x-ticket-modal wire:model="showApusModal" overlayClasses="bg-gray-500 bg-opacity-25">
                             <x-slot name="title">
                                 Información del Ticket
-                                <button wire:click="$set('showApusModal', false)" id="buttonCancel"
+                                <button onclick="cerrarModal()" id="buttonCancel"
                                         class="bg-red-500 text-white px-4 py-1 text-sm rounded-md no-print">
                                     Cerrar
                                 </button>
@@ -165,7 +175,7 @@
                             
                             <x-slot name="content">
                                 <div class="flex items-center justify-between gap-2 no-print z-10 mt-3" id="buttonsContainer">
-                                    <a href="{{ route('plays-manager') }}"
+                                    <a href="/"
                                        class="w-full text-sm px-3 py-1 bg-teal-500 text-white rounded-md flex justify-center
                                               items-center gap-2 hover:bg-teal-600/90 duration-200">
                                         <i class="fa-solid fa-rug rotate-90"></i> Nuevo ticket
@@ -192,9 +202,19 @@
                                 <div id="ticketContainer" data-code="{{ $play->code }}" data-ticket="{{ $play->ticket }}"
                                      class="w-[80mm] mx-auto p-2 text-black bg-white relative">
                                     <div class="flex items-center justify-center mb-2">
-                                        <img src="{{ asset('assets/images/logo.png') }}"
-                                             class="w-16 h-16"
-                                             alt="Logo" />
+                                        @if(Auth::user()->hasRole('Cliente') && Auth::user()->profile_photo_path)
+                                            <img src="{{ asset('storage/' . Auth::user()->profile_photo_path) }}"
+                                                 class="w-16 h-16 rounded-lg object-cover border-2 border-yellow-300"
+                                                 alt="{{ Auth::user()->first_name }}" />
+                                        @elseif(Auth::user()->hasRole('Cliente'))
+                                            <img src="{{ asset('assets/images/logo.png') }}"
+                                                 class="w-16 h-16 rounded-lg border-2 border-blue-300"
+                                                 alt="Cliente" />
+                                        @else
+                                            <img src="{{ asset('assets/images/logo.png') }}"
+                                                 class="w-16 h-16"
+                                                 alt="Logo" />
+                                        @endif
                                     </div>
 
                                     {{-- <h3 class="text-center font-bold text-lg">
@@ -284,7 +304,12 @@
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script>
-          function printTicket() {
+    // Función simple para cerrar el modal
+    function cerrarModal() {
+        window.location.reload();
+    }
+
+    function printTicket() {
         html2canvas(document.getElementById('ticketContainer'), { scale: 2 }).then(canvas => {
             const imgData = canvas.toDataURL('image/png');
             let iframe = document.createElement('iframe');
@@ -331,14 +356,20 @@
         if (buttons) buttons.style.display = 'none';
         if (closeBtn) closeBtn.style.display = 'none';
 
-        const canvas = await html2canvas(ticketElem, { scale: 2 });
-        const imgData = canvas.toDataURL("image/png");
+        try {
+            const canvas = await html2canvas(ticketElem, { scale: 2 });
+            const imgData = canvas.toDataURL("image/png");
 
-        const ticketImg = document.getElementById('ticketImagen');
-        ticketImg.src = imgData;
-
-        if (buttons) buttons.style.display = 'flex';
-        if (closeBtn) closeBtn.style.display = 'block';
+            const ticketImg = document.getElementById('ticketImagen');
+            if (ticketImg) {
+                ticketImg.src = imgData;
+            }
+        } catch (error) {
+            console.error('Error generando imagen:', error);
+        } finally {
+            if (buttons) buttons.style.display = 'flex';
+            if (closeBtn) closeBtn.style.display = 'block';
+        }
     }
 
     async function guardarTicket() {

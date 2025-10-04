@@ -12,6 +12,8 @@ use App\Livewire\Admin\Roles\ShowRoles;
 use App\Livewire\Admin\Roles\StoreRole;
 use App\Livewire\Admin\Users\ShowUsers;
 use App\Livewire\Admin\Users\StoreUser;
+use App\Livewire\Admin\Clients\ShowClients;
+use App\Livewire\Admin\Clients\StoreClient;
 use App\Livewire\Admin\Results;
 
 Route::middleware([
@@ -46,6 +48,13 @@ Route::middleware([
             Route::get('/show', ShowUsers::class)->name('users.show');
             Route::get('/store/{id?}', StoreUser::class)->name('users.store')
                 ->middleware('permission:editar usuarios|crear usuarios');
+        });
+
+        //Clients abm
+        Route::group(['middleware' => ['permission:crear clientes|editar clientes|ver clientes|eliminar clientes']], function () {
+            Route::get('/clients', ShowClients::class)->name('clients.show');
+            Route::get('/clients/store/{id?}', StoreClient::class)->name('clients.store')
+                ->middleware('permission:editar clientes|crear clientes');
         });
 
       

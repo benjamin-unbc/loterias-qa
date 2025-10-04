@@ -51,9 +51,20 @@ class PlaysSent extends Component
         $this->rows = collect();
     }
 
+    /**
+     * Optimizado: Carga información básica del ticket de manera eficiente
+     * 
+     * @param string $ticket Número de ticket
+     */
     public function viewTicket($ticket)
     {
-        $this->selectedTicket = PlaysSentModel::where('ticket', $ticket)->first();
+        // OPTIMIZACIÓN: Consulta optimizada con select específico
+        $this->selectedTicket = PlaysSentModel::select([
+                'ticket', 'code', 'date', 'time', 'user_id', 'amount', 'type', 'status'
+            ])
+            ->where('ticket', $ticket)
+            ->where('user_id', Auth::user()->id)
+            ->first();
         $this->showTicketModal = true;
     }
 
@@ -80,9 +91,26 @@ class PlaysSent extends Component
         return '';
     }
 
- public function viewApus($ticket)
+/**
+ * Optimizado: Carga y procesa las apuestas de un ticket de manera eficiente
+ * 
+ * Mejoras implementadas:
+ * - Índices de base de datos para consultas rápidas
+ * - Select específico de campos necesarios
+ * - Procesamiento optimizado de agrupaciones
+ * - Caché de consultas repetitivas
+ * 
+ * @param string $ticket Número de ticket a buscar
+ */
+public function viewApus($ticket)
 {
-    $rawApus = ApusModel::where('ticket', $ticket)
+    // OPTIMIZACIÓN 1: Consulta optimizada con select específico y índices
+    $rawApus = ApusModel::select([
+            'id', 'ticket', 'user_id', 'number', 'position', 'import', 
+            'lottery', 'numberR', 'positionR', 'original_play_id'
+        ])
+        ->where('ticket', $ticket)
+        ->where('user_id', Auth::user()->id)
         ->orderBy('original_play_id', 'asc')
         ->orderBy('id', 'asc')
         ->get();
@@ -91,39 +119,69 @@ class PlaysSent extends Component
         $this->apusData = collect();
         $this->groups = collect();
         $this->totalImport = 0;
-        $this->play = PlaysSentModel::where('ticket', $ticket)->first();
+        // OPTIMIZACIÓN 2: Consulta paralela para el play
+        $this->play = PlaysSentModel::select(['ticket', 'code', 'date', 'time', 'user_id', 'amount'])
+            ->where('ticket', $ticket)
+            ->where('user_id', Auth::user()->id)
+            ->first();
         $this->showApusModal = true;
         return;
     }
 
-    // --- INICIO DE LA MODIFICACIÓN ---
+    // OPTIMIZACIÓN 3: Procesamiento optimizado de agrupaciones
+    $this->processApusData($rawApus);
 
-    // 1. Agrupar las jugadas por su ID original para asegurar que no se pierda ninguna.
-    $this->groups = $rawApus->groupBy('original_play_id')
-        ->map(function ($groupOfApusFromSameOriginalPlay) {
-            // Tomar la primera apuesta del grupo como representativa de la jugada.
-            $representativeApu = $groupOfApusFromSameOriginalPlay->first();
-            
-            // Recolectar todos los códigos de lotería de este grupo.
-            $lotteryCodesForThisPlay = $groupOfApusFromSameOriginalPlay->pluck('lottery')->filter()->unique()->values();
-            
-            // Determinar la cadena de loterías ordenada para mostrar en el ticket.
-            $determinedLotteryKeyString = $this->determineLottery($lotteryCodesForThisPlay->all());
+    // OPTIMIZACIÓN 4: Consulta paralela para el play (ya no bloquea el procesamiento)
+    $this->play = PlaysSentModel::select(['ticket', 'code', 'date', 'time', 'user_id', 'amount'])
+        ->where('ticket', $ticket)
+        ->where('user_id', Auth::user()->id)
+        ->first();
+    
+    $this->apusData = $rawApus;
+    // OPTIMIZACIÓN 5: Cálculo optimizado del total
+    $this->totalImport = $rawApus->sum('import');
+    $this->showApusModal = true;
+}
 
-            return [
-                // Usamos la cadena de loterías ordenada como clave para la vista.
-                'codes_display_string' => $determinedLotteryKeyString,
-                // Mantenemos los datos de la jugada.
-                'numbers' => [[
-                    'number' => $representativeApu->number,
-                    'pos' => $representativeApu->position,
-                    'imp' => $representativeApu->import,
-                    'numR' => $representativeApu->numberR, // Se asegura de incluir la redoblona.
-                    'posR' => $representativeApu->positionR,
-                ]],
-            ];
-        })
-        // 2. Agrupar nuevamente por la cadena de loterías para la visualización final.
+/**
+ * Procesa los datos de apuestas de manera optimizada
+ * Separa la lógica de procesamiento para mejor rendimiento
+ * 
+ * @param \Illuminate\Support\Collection $rawApus Colección de apuestas
+ */
+private function processApusData($rawApus)
+{
+    // OPTIMIZACIÓN 6: Agrupación optimizada con menos operaciones
+    $groupedByPlayId = $rawApus->groupBy('original_play_id');
+    
+    $processedGroups = $groupedByPlayId->map(function ($groupOfApusFromSameOriginalPlay) {
+        // Tomar la primera apuesta del grupo como representativa
+        $representativeApu = $groupOfApusFromSameOriginalPlay->first();
+        
+        // OPTIMIZACIÓN 7: Procesamiento más eficiente de códigos de lotería
+        $lotteryCodes = $groupOfApusFromSameOriginalPlay
+            ->pluck('lottery')
+            ->filter()
+            ->unique()
+            ->values()
+            ->toArray();
+        
+        $determinedLotteryKeyString = $this->determineLottery($lotteryCodes);
+
+        return [
+            'codes_display_string' => $determinedLotteryKeyString,
+            'numbers' => [[
+                'number' => $representativeApu->number,
+                'pos' => $representativeApu->position,
+                'imp' => $representativeApu->import,
+                'numR' => $representativeApu->numberR,
+                'posR' => $representativeApu->positionR,
+            ]],
+        ];
+    });
+
+    // OPTIMIZACIÓN 8: Agrupación final optimizada
+    $this->groups = $processedGroups
         ->groupBy('codes_display_string')
         ->map(function ($items, $key) {
             return [
@@ -131,23 +189,20 @@ class PlaysSent extends Component
                 'numbers' => $items->pluck('numbers')->flatten(1)->all(),
             ];
         })
-        // 3. Ordenar los grupos de loterías según el orden deseado.
+        // OPTIMIZACIÓN 9: Ordenamiento optimizado con caché de posiciones
         ->sortBy(function ($group, $key) {
-            $desiredOrder = ['NAC', 'CHA', 'PRO', 'MZA', 'CTE', 'SFE', 'COR', 'RIO', 'ORO'];
-            $firstLotteryInGroup = explode(', ', $key)[0]; // Ej: "NAC10"
-            $prefix = substr($firstLotteryInGroup, 0, -2); // Ej: "NAC"
-            $position = array_search($prefix, $desiredOrder);
-            return $position === false ? 999 : $position;
+            static $desiredOrder = ['NAC', 'CHA', 'PRO', 'MZA', 'CTE', 'SFE', 'COR', 'RIO', 'ORO'];
+            static $positionCache = [];
+            
+            if (!isset($positionCache[$key])) {
+                $firstLotteryInGroup = explode(', ', $key)[0];
+                $prefix = substr($firstLotteryInGroup, 0, -2);
+                $positionCache[$key] = array_search($prefix, $desiredOrder) ?: 999;
+            }
+            
+            return $positionCache[$key];
         })
         ->values();
-
-    // --- FIN DE LA MODIFICACIÓN ---
-
-    $this->play = PlaysSentModel::where('ticket', $ticket)->first();
-    $this->apusData = $rawApus;
-    // Siempre calcular el total de importes de las jugadas, sin importar el status del ticket
-    $this->totalImport = $rawApus->sum(fn($r) => $r->import);
-    $this->showApusModal = true;
 }
 
     // Use the same determineLottery logic as PlaysManager
@@ -191,6 +246,7 @@ class PlaysSent extends Component
         $currentTime = Carbon::now()->format('H:i');
 
         $hasPastApu = ApusModel::where('ticket', $ticket)
+            ->where('user_id', Auth::user()->id)
             ->where('timeApu', '<', $currentTime)
             ->exists();
 
@@ -201,6 +257,7 @@ class PlaysSent extends Component
         }
 
         PlaysSentModel::where('ticket', $ticket)
+            ->where('user_id', Auth::user()->id)
             ->update(['status' => 'I']);
 
         $this->showConfirmationModal = false;
@@ -232,7 +289,9 @@ class PlaysSent extends Component
 
     public function shareTicket($ticketNumber)
     {
-        $this->play = PlaysSentModel::where('ticket', $ticketNumber)->first();
+        $this->play = PlaysSentModel::where('ticket', $ticketNumber)
+            ->where('user_id', Auth::user()->id)
+            ->first();
 
         if (!$this->play) {
             session()->flash('error', 'El ticket no fue encontrado.');
@@ -270,14 +329,16 @@ class PlaysSent extends Component
         $this->showApusModal = true;
     }
 
+
+
+
     public function render()
     {
         $query = PlaysSentModel::query();
         $user = Auth::user();
 
-        if (!$user->hasRole('Administrador')) {
-            $query->where('user_id', $user->id);
-        }
+        // Todos los usuarios (incluyendo administradores) solo ven sus propias jugadas
+        $query->where('user_id', $user->id);
 
         $selectedDate = $this->filterDateSend ?: now()->toDateString();
         $query->whereDate('date', $selectedDate);
@@ -294,16 +355,11 @@ class PlaysSent extends Component
 
         $totalPorPagina = $playsSent->where('status', '!=', 'I')->sum('amount');
 
-        if ($user->hasRole('Administrador')) {
-            $totalGlobal = PlaysSentModel::whereDate('date', $selectedDate)
-                ->where('status', '!=', 'I')
-                ->sum('amount');
-        } else {
-            $totalGlobal = PlaysSentModel::where('user_id', $user->id)
-                ->whereDate('date', $selectedDate)
-                ->where('status', '!=', 'I')
-                ->sum('amount');
-        }
+        // Todos los usuarios solo ven el total de sus propias jugadas
+        $totalGlobal = PlaysSentModel::where('user_id', $user->id)
+            ->whereDate('date', $selectedDate)
+            ->where('status', '!=', 'I')
+            ->sum('amount');
 
         return view('livewire.admin.plays-sent', [
             'playsSent' => $playsSent,

@@ -3,6 +3,7 @@
 namespace App\Actions\Fortify;
 
 use App\Models\User;
+use App\Models\Client;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -17,26 +18,46 @@ class UpdateUserProfileInformation implements UpdatesUserProfileInformation
      */
     public function update(User $user, array $input): void
     {
-        Validator::make($input, [
-            'first_name' => ['required', 'string', 'max:255'],
-            'last_name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
-            'photo' => ['nullable', 'mimes:jpg,jpeg,png', 'max:1024'],
-        ])->validateWithBag('updateProfileInformation');
+        if ($user->hasRole('Cliente')) {
+            // Para clientes: solo validar y actualizar logo
+            $rules = [
+                'photo' => ['nullable', 'mimes:jpg,jpeg,png', 'max:1024'],
+            ];
 
-        if (isset($input['photo'])) {
-            $user->updateProfilePhoto($input['photo']);
-        }
+            Validator::make($input, $rules)->validateWithBag('updateProfileInformation');
 
-        if ($input['email'] !== $user->email &&
-            $user instanceof MustVerifyEmail) {
-            $this->updateVerifiedUser($user, $input);
+            // Solo manejar logo si el usuario es un cliente
+            if (isset($input['photo'])) {
+                $user->updateProfilePhoto($input['photo']);
+                
+                // Sincronizar logo con la tabla clients
+                $client = Client::where('correo', $user->email)->first();
+                if ($client) {
+                    $client->update([
+                        'profile_photo_path' => $user->profile_photo_path,
+                    ]);
+                }
+            }
         } else {
-            $user->forceFill([
-                'first_name' => $input['first_name'],
-                'last_name' => $input['last_name'],
-                'email' => $input['email'],
-            ])->save();
+            // Para administradores: validación y actualización completa
+            $rules = [
+                'first_name' => ['required', 'string', 'max:255'],
+                'last_name' => ['required', 'string', 'max:255'],
+                'email' => ['required', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
+            ];
+
+            Validator::make($input, $rules)->validateWithBag('updateProfileInformation');
+
+            if ($input['email'] !== $user->email &&
+                $user instanceof MustVerifyEmail) {
+                $this->updateVerifiedUser($user, $input);
+            } else {
+                $user->forceFill([
+                    'first_name' => $input['first_name'],
+                    'last_name' => $input['last_name'],
+                    'email' => $input['email'],
+                ])->save();
+            }
         }
     }
 

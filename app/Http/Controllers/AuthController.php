@@ -16,6 +16,15 @@ class AuthController extends Controller
 
         if (Auth::attempt($credentials)) {
             $user = Auth::user();
+
+            // Bloquear acceso si el usuario está desactivado
+            if (!$user->is_active) {
+                Auth::logout();
+                return response()->json([
+                    'message' => 'Usuario desactivado. Por favor, comuníquese con un Administrador.'
+                ], 403);
+            }
+
             $token = $user->createToken('MyAppToken')->plainTextToken;
 
             return response()->json([

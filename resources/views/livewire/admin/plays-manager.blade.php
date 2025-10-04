@@ -389,8 +389,21 @@
                         <div class="pagina-carta">
                             <div id="ticketContainer" data-code="{{ $play->code }}" data-ticket="{{ $play->ticket }}"
                                 class="w-[80mm] mx-auto p-2 text-black bg-white relative">
-                                <div class="flex items-center justify-center mb-2"> <img
-                                        src="{{ asset('assets/images/logo.png') }}" class="w-16 h-16" alt="Logo" />
+                                <div class="flex items-center justify-center mb-2">
+                                    
+                                    @if(Auth::user()->hasRole('Cliente') && Auth::user()->profile_photo_path)
+                                        <img src="{{ asset('storage/' . Auth::user()->profile_photo_path) }}"
+                                             class="w-16 h-16 rounded-lg object-cover border-2 border-yellow-300"
+                                             alt="{{ Auth::user()->first_name }}" />
+                                    @elseif(Auth::user()->hasRole('Cliente'))
+                                        <img src="{{ asset('assets/images/logo.png') }}"
+                                             class="w-16 h-16 rounded-lg border-2 border-blue-300"
+                                             alt="Cliente" />
+                                    @else
+                                        <img src="{{ asset('assets/images/logo.png') }}"
+                                             class="w-16 h-16"
+                                             alt="Logo" />
+                                    @endif
                                 </div>
                                 {{-- <h3 class="text-center font-bold text-lg"> REIMPRESIÓN </h3> --}}
                                 <div class="flex justify-between border-b border-gray-400 py-1 text-lg"> <span>Vendedor:
@@ -548,7 +561,7 @@
                             playRow.style.backgroundColor = '';
                         }, 1000);
                     } else if (playsContainer) {
-                        // Fallback: scroll al final del contenedorcito
+                        // Fallback: scroll al final del contenedor
                         playsContainer.scrollTop = playsContainer.scrollHeight;
                     }
                 }, 150);
@@ -631,7 +644,7 @@
         input[type=number] {
             -moz-appearance: textfield;
         }
-        
+        /* Evitar selección automática solo en el campo Número */
 #number {
     -webkit-user-select: none;
     -moz-user-select: none;

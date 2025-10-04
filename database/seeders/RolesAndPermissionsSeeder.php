@@ -45,6 +45,12 @@ class RolesAndPermissionsSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'ver usuarios']);
         Permission::firstOrCreate(['name' => 'eliminar usuarios']);
 
+        // create permissions clients
+        Permission::firstOrCreate(['name' => 'crear clientes']);
+        Permission::firstOrCreate(['name' => 'editar clientes']);
+        Permission::firstOrCreate(['name' => 'ver clientes']);
+        Permission::firstOrCreate(['name' => 'eliminar clientes']);
+
 
         // --- Permisos de Acciones por Módulo (Ejemplos) ---
         // Gestor de Jugadas
@@ -70,5 +76,20 @@ class RolesAndPermissionsSeeder extends Seeder
         // create admin with all permissions
         $role = Role::firstOrCreate(['name' => 'Administrador']);
         $role->givePermissionTo(Permission::all());
+
+        // create client role for web guard (mismo que administradores)
+        $clientRole = Role::firstOrCreate(['name' => 'Cliente']);
+        // Los clientes tendrán permisos básicos de visualización
+        $clientPermissions = [
+            'access_menu_gestor_de_jugadas',
+            'plays_view',
+            'access_menu_resultados',
+            'access_menu_extractos'
+        ];
+        
+        foreach ($clientPermissions as $permissionName) {
+            $permission = Permission::firstOrCreate(['name' => $permissionName]);
+            $clientRole->givePermissionTo($permission);
+        }
     }
 }

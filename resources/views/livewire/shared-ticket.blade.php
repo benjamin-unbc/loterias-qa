@@ -18,7 +18,19 @@
 
         <div id="printContentTicket" class="flex flex-col items-center gap-2 border border-gray-600 rounded-md p-3 w-full">
             <div class="w-full flex items-center justify-center border-b border-gray-600  pb-2">
-                <img src="{{ asset('assets/images/logo.png') }}" class="w-16 h-16 rounded-lg" alt="Vector Seguros Logo" />
+                @if($user && $user->hasRole('Cliente') && $user->profile_photo_path)
+                    <img src="{{ asset('storage/' . $user->profile_photo_path) }}" 
+                         class="w-16 h-16 rounded-lg object-cover border-2 border-yellow-300" 
+                         alt="{{ $user->first_name }}" />
+                @elseif($user && $user->hasRole('Cliente'))
+                    <img src="{{ asset('assets/images/logo.png') }}" 
+                         class="w-16 h-16 rounded-lg border-2 border-blue-300" 
+                         alt="Cliente" />
+                @else
+                    <img src="{{ asset('assets/images/logo.png') }}" 
+                         class="w-16 h-16 rounded-lg" 
+                         alt="Vector Seguros Logo" />
+                @endif
                 {{-- <h3 class="font-bold text-lg w-full text-center text-white">REIMPRESION</h3> --}}
             </div>
 
