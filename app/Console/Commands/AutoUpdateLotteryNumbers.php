@@ -47,8 +47,16 @@ class AutoUpdateLotteryNumbers extends Command
         if (!$force) {
             $existingCount = Number::where('date', $todayDate)->count();
             if ($existingCount > 0) {
-                $this->info("ℹ️  Ya existen {$existingCount} números para {$todayDate}. Usa --force para actualizar de todos modos.");
-                return;
+                $this->info("ℹ️  Ya existen {$existingCount} números para {$todayDate}. Verificando números faltantes por ciudad/turno...");
+                
+                // Verificar si hay ciudades/turnos sin números completos
+                $missingNumbers = $this->checkMissingNumbers($todayDate);
+                if (empty($missingNumbers)) {
+                    $this->info("✅ Todos los números están completos para {$todayDate}.");
+                    return;
+                } else {
+                    $this->info("⚠️  Se encontraron números faltantes en: " . implode(', ', $missingNumbers));
+                }
             }
         }
         
@@ -238,6 +246,11 @@ class AutoUpdateLotteryNumbers extends Command
                         $existingNumber->value = $number;
                         $existingNumber->save();
                         $updated++;
+                        
+                        // Notificar si es número de cabeza (posición 1) y cambió
+                        if ($position === 1) {
+                            $this->createHeadNumberNotification($cityName, $turnName, $number, $date, 'actualizado');
+                        }
                     }
                 } else {
                     // Crear nuevo número
@@ -249,6 +262,11 @@ class AutoUpdateLotteryNumbers extends Command
                         'date' => $date
                     ]);
                     $inserted++;
+                    
+                    // Notificar si es número de cabeza (posición 1)
+                    if ($position === 1) {
+                        $this->createHeadNumberNotification($cityName, $turnName, $number, $date, 'insertado');
+                    }
                 }
             }
             
@@ -259,19 +277,134 @@ class AutoUpdateLotteryNumbers extends Command
         return ['inserted' => $inserted, 'updated' => $updated];
     }
 
+
     /**
      * Verifica si la hora actual está dentro del horario de funcionamiento
-     * Horario: 10:30 AM - 23:59 PM
+     * Horario: 24/7 (funciona siempre)
      */
     private function isWithinOperatingHours()
     {
-        $now = Carbon::now();
-        $currentTime = $now->format('H:i:s');
+        // Funciona 24/7 - siempre retorna true
+        return true;
+    }
+    
+    /**
+     * Verifica si hay números faltantes por ciudad/turno
+     */
+    private function checkMissingNumbers($date)
+    {
+        $missingNumbers = [];
         
-        // Horario de funcionamiento: 10:30:00 - 23:59:59
-        $startTime = '10:30:00';
-        $endTime = '23:59:59';
+        try {
+            // Obtener todas las ciudades disponibles
+            $winningNumbersService = new WinningNumbersService();
+            $availableCities = $winningNumbersService->getAvailableCities();
+            
+            // Mapear nombres de ciudades a códigos de BD
+            $cityMapping = [
+                'Ciudad' => 'NAC',
+                'Santa Fé' => 'SFE',
+                'Provincia' => 'PRO',
+                'Entre Ríos' => 'RIO',
+                'Córdoba' => 'COR',
+                'Corrientes' => 'CTE',
+                'Chaco' => 'CHA',
+                'Neuquén' => 'NQN',
+                'Misiones' => 'MIS',
+                'Mendoza' => 'MZA',
+                'Río Negro' => 'Rio',
+                'Tucumán' => 'Tucu',
+                'Santiago' => 'San',
+                'Jujuy' => 'JUJ',
+                'Salta' => 'Salt',
+                'Montevideo' => 'ORO',
+                'San Luis' => 'SLU',
+                'Chubut' => 'CHU',
+                'Formosa' => 'FOR',
+                'Catamarca' => 'CAT',
+                'San Juan' => 'SJU'
+            ];
+            
+            // Mapear nombres de turnos a extract_id
+            $turnMapping = [
+                'La Previa' => 1,
+                'Primera' => 2,
+                'Matutina' => 3,
+                'Vespertina' => 4,
+                'Nocturna' => 5
+            ];
+            
+            foreach ($availableCities as $cityName) {
+                $cityCode = $cityMapping[$cityName] ?? null;
+                if (!$cityCode) continue;
+                
+                // Definir los turnos a verificar según la ciudad
+                if (in_array($cityName, ['Jujuy', 'Salta'])) {
+                    $turns = ['Primera', 'Matutina', 'Vespertina', 'Nocturna'];
+                } else {
+                    $turns = ['La Previa', 'Primera', 'Matutina', 'Vespertina', 'Nocturna'];
+                }
+                
+                foreach ($turns as $turnName) {
+                    $extractId = $turnMapping[$turnName] ?? null;
+                    if (!$extractId) continue;
+                    
+                    // Buscar la ciudad en la BD
+                    $city = City::where('code', 'LIKE', $cityCode . '%')
+                               ->where('extract_id', $extractId)
+                               ->first();
+                    
+                    if (!$city) continue;
+                    
+                    // Verificar si tiene 20 números para esta fecha
+                    $numbersCount = Number::where('city_id', $city->id)
+                                         ->where('date', $date)
+                                         ->count();
+                    
+                    if ($numbersCount < 20) {
+                        $missingNumbers[] = "{$cityName} - {$turnName} ({$numbersCount}/20)";
+                    }
+                }
+            }
+            
+        } catch (\Exception $e) {
+            Log::error("Error verificando números faltantes: " . $e->getMessage());
+        }
         
-        return $currentTime >= $startTime && $currentTime <= $endTime;
+        return $missingNumbers;
+    }
+    
+    /**
+     * Crea una notificación específica para números ganadores de cabeza
+     */
+    private function createHeadNumberNotification($cityName, $turnName, $number, $date, $action)
+    {
+        try {
+            $actionText = $action === 'insertado' ? 'insertado' : 'actualizado';
+            $emoji = $action === 'insertado' ? '🎯' : '🔄';
+            
+            $title = "{$emoji} Número de Cabeza {$actionText}";
+            $message = "Se ha {$actionText} el resultado {$number} en el turno {$turnName} de la ciudad {$cityName}";
+            
+            SystemNotification::createNotification(
+                'success',
+                $title,
+                $message,
+                [
+                    'type' => 'head_number',
+                    'city' => $cityName,
+                    'turn' => $turnName,
+                    'number' => $number,
+                    'date' => $date,
+                    'action' => $action,
+                    'position' => 1
+                ]
+            );
+            
+            Log::info("Notificación de cabeza creada: {$cityName} - {$turnName} - {$number} ({$action})");
+            
+        } catch (\Exception $e) {
+            Log::error("Error creando notificación de cabeza: " . $e->getMessage());
+        }
     }
 }
