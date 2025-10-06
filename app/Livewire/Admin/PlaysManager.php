@@ -1049,11 +1049,47 @@ public function addRow()
             'isChecked' => $this->isChecked ?? false,
         ];
 
-        // **Eliminamos la validación de duplicados** para permitir la creación de jugadas duplicadas.
-        // No se verifica si la jugada ya existe, permitiendo que se creen múltiples jugadas con los mismos datos.
+        // **Protección robusta contra duplicados** (manuales y automáticos)
+        
+        // 1. Generar clave única para esta jugada específica
+        $playHash = md5(auth()->id() . $this->formatNumber($validatedData['number']) . 
+                       ($validatedData['position'] ?? 1) . $currentLotteryString . 
+                       $validatedData['numberR'] . $validatedData['positionR']);
+        
+        // 2. Verificar si ya existe un bloqueo activo para esta jugada
+        $lockKey = 'play_creation_' . $playHash;
+        if (\Cache::has($lockKey)) {
+            $this->dispatch('notify', message: 'Jugada en proceso. Espere un momento...', type: 'info');
+            return;
+        }
+        
+        // 3. Crear bloqueo temporal (3 segundos)
+        \Cache::put($lockKey, true, 3);
+        
+        try {
+            // 4. Verificar duplicados en base de datos (últimos 5 segundos)
+            $recentPlay = Play::where('user_id', auth()->id())
+                ->where('number', $this->formatNumber($validatedData['number']))
+                ->where('position', $validatedData['position'] ?? 1)
+                ->where('lottery', $currentLotteryString)
+                ->where('numberR', $validatedData['numberR'])
+                ->where('positionR', $validatedData['positionR'])
+                ->where('created_at', '>=', now()->subSeconds(5))
+                ->first();
 
-        // Crear la nueva jugada sin validación de duplicados
-        $newPlay = Play::create($playDataToCreate);
+            if ($recentPlay) {
+                \Cache::forget($lockKey); // Liberar bloqueo
+                $this->dispatch('notify', message: 'Jugada duplicada detectada. Espere unos segundos.', type: 'warning');
+                return;
+            }
+
+            // 5. Crear la nueva jugada
+            $newPlay = Play::create($playDataToCreate);
+            
+        } finally {
+            // 6. Liberar bloqueo siempre (incluso si hay error)
+            \Cache::forget($lockKey);
+        }
 
         // Agregar la jugada recién creada a la lista de jugadas
         $this->rows->push($newPlay);
