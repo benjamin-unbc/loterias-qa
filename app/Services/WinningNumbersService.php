@@ -181,6 +181,13 @@ class WinningNumbersService
                 'Vespertina' => 3,
                 'Nocturna' => 8  // Montevideo tiene estructura similar a Ciudad
             ],
+            'Santa Fé' => [
+                'La Previa' => 0,
+                'Primera' => 1,
+                'Matutina' => 2,
+                'Vespertina' => 3,
+                'Nocturna' => 4  // Santa Fe usa estructura estándar
+            ],
             'default' => [
                 'La Previa' => 0,
                 'Primera' => 1,

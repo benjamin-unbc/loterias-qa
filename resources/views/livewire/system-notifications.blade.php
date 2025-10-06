@@ -30,11 +30,17 @@
         
         <div class="max-h-80 overflow-y-auto">
             @forelse($notifications as $notification)
-                <div class="p-3 border-b hover:bg-gray-50 transition-colors {{ !$notification->is_read ? 'bg-blue-50' : '' }}">
+                @php
+                    $isHeadNumber = $notification->data && isset($notification->data['type']) && $notification->data['type'] === 'head_number';
+                @endphp
+                
+                <div class="p-3 border-b hover:bg-gray-50 transition-colors {{ !$notification->is_read ? ($isHeadNumber ? 'bg-yellow-50 border-l-4 border-l-yellow-400' : 'bg-blue-50') : '' }}">
                     <div class="flex items-start gap-3">
                         <!-- Icono según tipo -->
                         <div class="flex-shrink-0 mt-1">
-                            @if($notification->type === 'success')
+                            @if($isHeadNumber)
+                                <i class="fas fa-crown text-yellow-500 text-lg"></i>
+                            @elseif($notification->type === 'success')
                                 <i class="fas fa-check-circle text-green-500"></i>
                             @elseif($notification->type === 'warning')
                                 <i class="fas fa-exclamation-triangle text-yellow-500"></i>
@@ -47,7 +53,7 @@
                         
                         <div class="flex-1 min-w-0">
                             <div class="flex justify-between items-start">
-                                <h4 class="text-sm font-medium text-gray-900">
+                                <h4 class="text-sm font-medium {{ $isHeadNumber ? 'text-yellow-800' : 'text-gray-900' }}">
                                     {{ $notification->title }}
                                 </h4>
                                 @if(!$notification->is_read)
@@ -58,9 +64,23 @@
                                 @endif
                             </div>
                             
-                            <p class="text-sm text-gray-600 mt-1">
+                            <p class="text-sm {{ $isHeadNumber ? 'text-yellow-700' : 'text-gray-600' }} mt-1">
                                 {{ $notification->message }}
                             </p>
+                            
+                            @if($isHeadNumber && $notification->data)
+                                <div class="mt-2 p-2 bg-yellow-100 rounded border border-yellow-200">
+                                    <div class="flex items-center gap-2 text-xs">
+                                        <span class="font-bold text-yellow-800">🎯 NÚMERO DE CABEZA:</span>
+                                        <span class="bg-yellow-200 text-yellow-900 px-2 py-1 rounded font-mono text-sm font-bold">
+                                            {{ $notification->data['number'] }}
+                                        </span>
+                                    </div>
+                                    <div class="text-xs text-yellow-700 mt-1">
+                                        <strong>{{ $notification->data['city'] }}</strong> - {{ $notification->data['turn'] }}
+                                    </div>
+                                </div>
+                            @endif
                             
                             <div class="flex justify-between items-center mt-2">
                                 <span class="text-xs text-gray-500">

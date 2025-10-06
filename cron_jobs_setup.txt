@@ -26,9 +26,15 @@
 # - Vespertina: 15:00-17:00
 # - Nocturna: 17:00-19:00
 
-# CONFIGURACIÓN RECOMENDADA (DETECCIÓN RÁPIDA):
-# Extracción cada 10 segundos durante horarios de funcionamiento (10:25 AM a 12:00 AM)
-*/10 10-23 * * * /usr/bin/php /home/tu_usuario/public_html/artisan lottery:auto-extract --interval=10
+# CONFIGURACIÓN RECOMENDADA PARA CPANEL:
+# Opción 1: Ejecutar scheduler de Laravel cada minuto (RECOMENDADO)
+* * * * * /usr/bin/php /home/tu_usuario/public_html/artisan schedule:run
+
+# Opción 2: Extracción directa cada 30 segundos durante horarios de funcionamiento
+# 0,30 10-23 * * * /usr/bin/php /home/tu_usuario/public_html/artisan lottery:auto-update --force
+
+# Opción 3: Usar script bash (si tienes acceso SSH)
+# */30 10-23 * * * /home/tu_usuario/public_html/start_auto_extract_cpanel.sh
 
 # NOTAS:
 # - Reemplaza "tu_usuario" con tu usuario de cPanel

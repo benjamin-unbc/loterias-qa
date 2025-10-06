@@ -15,10 +15,9 @@ class Kernel extends ConsoleKernel
         $schedule->command('playssent:update-status')->everyMinute();
         $schedule->command('fetch:plays-sent')->everyMinute();
         
-        // Actualización automática de números ganadores cada 30 segundos de 10:30 a 23:59
+        // Actualización automática de números ganadores cada 30 segundos (24/7)
         $schedule->command('lottery:auto-update')
                  ->everyThirtySeconds()
-                 ->between('10:30', '23:59')
                  ->withoutOverlapping()
                  ->runInBackground();
     }
