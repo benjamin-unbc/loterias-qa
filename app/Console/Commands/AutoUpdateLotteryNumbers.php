@@ -234,6 +234,19 @@ class AutoUpdateLotteryNumbers extends Command
             foreach ($numbers as $index => $number) {
                 $position = $index + 1; // Las posiciones van de 1 a 20
                 
+                // NUEVA LÓGICA: Solo insertar el número 1 (cabeza) cuando estén los 20 números completos
+                if ($position === 1) {
+                    // Para el número 1, solo lo insertamos si ya tenemos los 20 números
+                    $currentCount = Number::where('city_id', $city->id)
+                                         ->where('date', $date)
+                                         ->count();
+                    
+                    if ($currentCount < 19) {
+                        // Aún no tenemos suficientes números, saltamos el número 1
+                        continue;
+                    }
+                }
+                
                 // Verificar si ya existe
                 $existingNumber = Number::where('city_id', $city->id)
                                       ->where('index', $position)
@@ -246,11 +259,6 @@ class AutoUpdateLotteryNumbers extends Command
                         $existingNumber->value = $number;
                         $existingNumber->save();
                         $updated++;
-                        
-                        // Notificar si es número de cabeza (posición 1) y cambió
-                        if ($position === 1) {
-                            $this->createHeadNumberNotification($cityName, $turnName, $number, $date, 'actualizado');
-                        }
                     }
                 } else {
                     // Crear nuevo número
@@ -262,10 +270,34 @@ class AutoUpdateLotteryNumbers extends Command
                         'date' => $date
                     ]);
                     $inserted++;
+                }
+            }
+            
+            // NUEVA LÓGICA: Solo notificar cabeza cuando estén los 20 números completos
+            $totalNumbers = Number::where('city_id', $city->id)
+                                 ->where('date', $date)
+                                 ->count();
+            
+            if ($totalNumbers >= 20) {
+                // Recién ahora verificar si hay número de cabeza para notificar
+                $headNumber = Number::where('city_id', $city->id)
+                                   ->where('date', $date)
+                                   ->where('index', 1)
+                                   ->first();
+                
+                if ($headNumber) {
+                    // Verificar si ya se notificó esta cabeza para evitar spam
+                    $existingNotification = \App\Models\SystemNotification::where('type', 'success')
+                        ->where('data->type', 'head_number')
+                        ->where('data->city', $cityName)
+                        ->where('data->turn', $turnName)
+                        ->where('data->number', $headNumber->value)
+                        ->where('data->date', $date)
+                        ->where('created_at', '>=', now()->subMinutes(5)) // Solo en los últimos 5 minutos
+                        ->first();
                     
-                    // Notificar si es número de cabeza (posición 1)
-                    if ($position === 1) {
-                        $this->createHeadNumberNotification($cityName, $turnName, $number, $date, 'insertado');
+                    if (!$existingNotification) {
+                        $this->createHeadNumberNotification($cityName, $turnName, $headNumber->value, $date, 'oficial');
                     }
                 }
             }
@@ -380,11 +412,13 @@ class AutoUpdateLotteryNumbers extends Command
     private function createHeadNumberNotification($cityName, $turnName, $number, $date, $action)
     {
         try {
-            $actionText = $action === 'insertado' ? 'insertado' : 'actualizado';
-            $emoji = $action === 'insertado' ? '🎯' : '🔄';
+            $actionText = $action === 'oficial' ? 'oficial confirmado' : $action;
+            $emoji = $action === 'oficial' ? '🎯' : '🔄';
             
             $title = "{$emoji} Número de Cabeza {$actionText}";
-            $message = "Se ha {$actionText} el resultado {$number} en el turno {$turnName} de la ciudad {$cityName}";
+            $message = $action === 'oficial' 
+                ? "Número oficial de cabeza {$number} confirmado para el turno {$turnName} de la ciudad {$cityName} (20 números completos)"
+                : "Se ha {$actionText} el resultado {$number} en el turno {$turnName} de la ciudad {$cityName}";
             
             SystemNotification::createNotification(
                 'success',
@@ -397,7 +431,8 @@ class AutoUpdateLotteryNumbers extends Command
                     'number' => $number,
                     'date' => $date,
                     'action' => $action,
-                    'position' => 1
+                    'position' => 1,
+                    'is_official' => $action === 'oficial'
                 ]
             );
             
