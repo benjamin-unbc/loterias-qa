@@ -69,9 +69,6 @@
                         <th scope="col" class="px-6 py-3">Lot</th>
                         <th scope="col" class="px-6 py-3">Pago</th>
                         <th scope="col" class="px-6 py-3">Importe</th>
-                        @if(!Auth::user()->hasRole('Cliente'))
-                            <th scope="col" class="px-6 py-3 text-center">ID Usuario</th>
-                        @endif
                         <th scope="col" class="px-6 py-3 text-center">Acciones</th>
                     </tr>
                 </thead>
@@ -103,13 +100,6 @@
                                     ${{ number_format($playItem->amount ?? 0, 2, ',', '.') }}
                                 @endif
                             </td>
-                            @if(!Auth::user()->hasRole('Cliente'))
-                                <td class="px-6 py-4 {{ $playItem->status === 'I' ? 'line-through' : ''}} text-center">
-                                    <span class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-                                        {{ $playItem->user_id }}
-                                    </span>
-                                </td>
-                            @endif
                             <td class="px-2 py-4 flex gap-1 items-center justify-center">
                                 <button wire:click='viewApus("{{ $playItem->ticket }}")'
                                         class="font-medium text-center text-yellow-200 bg-gray-700 p-1 px-2 rounded-md
@@ -128,7 +118,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ Auth::user()->hasRole('Cliente') ? '8' : '9' }}" class="px-6 py-4 text-center text-gray-500">
+                            <td colspan="8" class="px-6 py-4 text-center text-gray-500">
                                 No hay jugadas enviadas
                             </td>
                         </tr>
