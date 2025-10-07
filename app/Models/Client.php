@@ -67,6 +67,29 @@ class Client extends Authenticatable
     }
 
     /**
+     * Get the associated user by email
+     */
+    public function associatedUser()
+    {
+        return $this->hasOne(User::class, 'email', 'correo');
+    }
+
+    /**
+     * Delete the client and its associated user
+     */
+    public function deleteWithAssociatedUser()
+    {
+        // Eliminar el usuario asociado si existe
+        $associatedUser = $this->associatedUser;
+        if ($associatedUser) {
+            $associatedUser->delete();
+        }
+        
+        // Eliminar el cliente
+        return $this->delete();
+    }
+
+    /**
      * Scope for searching clients
      */
     public function scopeSearch($query, $search)

@@ -36,11 +36,17 @@ class ShowClients extends Component
         Gate::authorize('eliminar clientes');
         $clientId = $this->deletingClientId;
 
-        Client::where('id', $clientId)->delete();
+        // Obtener el cliente y eliminar junto con su usuario asociado
+        $client = Client::find($clientId);
+        
+        if ($client) {
+            $client->deleteWithAssociatedUser();
+        }
+
         $this->showConfirmationModal = false;
         $this->deletingClientId = null;
 
-        banner_message("Cliente eliminado exitosamente!", 'success');
+        banner_message("Cliente y usuario asociado eliminados exitosamente!", 'success');
 
         $this->redirectRoute('clients.show');
     }

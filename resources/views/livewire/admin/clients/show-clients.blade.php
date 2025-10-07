@@ -122,7 +122,7 @@
                             Eliminar Cliente
                         </x-slot>
                         <x-slot name="content">
-                            ¿Estás seguro que deseas eliminar este cliente? Esta acción no se puede deshacer.
+                            ¿Estás seguro que deseas eliminar este cliente? También se eliminará el usuario asociado. Esta acción no se puede deshacer.
                         </x-slot>
                         <x-slot name="footer">
                             <button wire:click="deleteClient"
