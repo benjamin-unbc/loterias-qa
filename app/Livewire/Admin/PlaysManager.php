@@ -1751,9 +1751,18 @@ public function addRow()
         try {
             $playsCount = $plays->count();
             
-            // Optimización: usar una sola consulta para obtener el siguiente ticket
-            $nextTicketNumber = DB::select("SELECT COALESCE(MAX(CAST(ticket AS UNSIGNED)), 0) + 1 as next_ticket FROM plays_sent")[0]->next_ticket;
-            $ticket = str_pad($nextTicketNumber, 5, '0', STR_PAD_LEFT);
+            // Determinar el sistema de numeración basado en si el usuario es nuevo o existente
+            $currentUser = auth()->user();
+            $isNewUser = $this->isNewUser($currentUser);
+            
+            if ($isNewUser) {
+                // Sistema nuevo: ID-XXXX (ej: 23-0001, 23-0002)
+                $ticket = $this->generateNewUserTicket($currentUser->id);
+            } else {
+                // Sistema actual: XXXX (ej: 00001, 00002)
+                $nextTicketNumber = DB::select("SELECT COALESCE(MAX(CAST(ticket AS UNSIGNED)), 0) + 1 as next_ticket FROM plays_sent")[0]->next_ticket;
+                $ticket = str_pad($nextTicketNumber, 5, '0', STR_PAD_LEFT);
+            }
 
             $uniqueCodeForTicket = $this->generateUniqueCode();
 
@@ -2012,6 +2021,45 @@ public function addRow()
         } while (PlaysSentModel::where('code', $code)->exists() || Ticket::where('code', $code)->exists());
 
         return $code;
+    }
+
+    /**
+     * Determina si un usuario es "nuevo" basado en su fecha de creación
+     * Los usuarios creados después del 1 de enero de 2025 se consideran nuevos
+     */
+    private function isNewUser($user): bool
+    {
+        // Fecha límite para considerar usuarios como "nuevos"
+        $cutoffDate = '2025-01-01 00:00:00';
+        
+        return $user->created_at >= $cutoffDate;
+    }
+
+    /**
+     * Genera un número de ticket para usuarios nuevos con formato ID-XXXX
+     * Ejemplo: 23-0001, 23-0002, etc.
+     */
+    private function generateNewUserTicket($userId): string
+    {
+        // Buscar el último ticket del usuario con formato ID-XXXX
+        $lastTicket = DB::select("
+            SELECT ticket 
+            FROM plays_sent 
+            WHERE ticket LIKE ? 
+            ORDER BY CAST(SUBSTRING_INDEX(ticket, '-', -1) AS UNSIGNED) DESC 
+            LIMIT 1
+        ", ["{$userId}-%"])[0] ?? null;
+
+        if ($lastTicket) {
+            // Extraer el número secuencial del último ticket
+            $lastNumber = (int) substr($lastTicket->ticket, strpos($lastTicket->ticket, '-') + 1);
+            $nextNumber = $lastNumber + 1;
+        } else {
+            // Primer ticket del usuario
+            $nextNumber = 1;
+        }
+
+        return $userId . '-' . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
     }
 
 
