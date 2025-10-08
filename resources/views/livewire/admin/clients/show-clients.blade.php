@@ -102,6 +102,13 @@
                             </span>
                         </td>
                         <td class="px-6 py-4 text-left flex space-x-2 text-lg">
+                            @can('ver clientes')
+                            <button wire:click="$dispatch('openClientDetails', { clientId: {{ $client->id }} })"
+                                class="font-medium text-white hover:text-yellow-200 transition-colors duration-200"
+                                title="Ver detalles del cliente">
+                                <i class="fa-solid fa-eye"></i>
+                            </button>
+                            @endcan
                             @can('editar clientes')
                             <a href="{{ route('clients.store', $client->id) }}"
                                 class="font-medium text-white hover:underline"><i
@@ -144,4 +151,7 @@
             @endif
         </div>
     </div>
+    
+    <!-- Modal de detalles del cliente -->
+    @livewire('admin.clients.client-details-modal')
 </div>
