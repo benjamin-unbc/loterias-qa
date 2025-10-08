@@ -249,24 +249,39 @@ class Extracts extends Component
 
     public function resetFilters()
     {
-        // Resetear a la fecha de hoy (que es donde se muestran los números actualizados)
-        $today = Carbon::today()->toDateString();
-        $this->filterDate   = $today;
-        $this->selectedDate = $today;
-        
-        // Resetear filtros de ciudad y horarios si es administrador
-        if ($this->isAdmin) {
-            $this->initializeFilters();
-            // Resetear filtros jerárquicos
-            $this->selectedCityLotteries = [];
-            $this->selectedCityFilter = null;
-            $this->selectedAllLotteries = collect($this->allLotteries)->pluck('id')->toArray();
-            $this->savedCityLotteries = [];
-            $this->savedCityFilter = null;
-            $this->hasUnsavedChanges = false;
+        try {
+            // Resetear a la fecha de hoy (que es donde se muestran los números actualizados)
+            $today = Carbon::today()->toDateString();
+            $this->filterDate   = $today;
+            $this->selectedDate = $today;
+            
+            // ELIMINAR TODOS LOS VALORES EXISTENTES PARA LA FECHA DE HOY
+            $deletedCount = Number::where('date', $today)->delete();
+            
+            Log::info("Extracts - resetFilters: Eliminados {$deletedCount} números para fecha {$today}");
+            
+            // Resetear filtros de ciudad y horarios si es administrador
+            if ($this->isAdmin) {
+                $this->initializeFilters();
+                // Resetear filtros jerárquicos
+                $this->selectedCityLotteries = [];
+                $this->selectedCityFilter = null;
+                $this->selectedAllLotteries = collect($this->allLotteries)->pluck('id')->toArray();
+                $this->savedCityLotteries = [];
+                $this->savedCityFilter = null;
+                $this->hasUnsavedChanges = false;
+            }
+            
+            // EMPEZAR A INSERTAR NUEVAMENTE LOS VALORES DESDE LA WEB
+            $this->dispatch('notify', message: "🔄 Eliminando valores existentes y extrayendo nuevos números desde la web...", type: 'info');
+            
+            // Ejecutar la extracción automática para insertar nuevos valores
+            $this->detectAndShowNewNumbers();
+            
+        } catch (\Exception $e) {
+            Log::error('Error en resetFilters: ' . $e->getMessage());
+            $this->dispatch('notify', message: 'Error al reiniciar: ' . $e->getMessage(), type: 'error');
         }
-        
-        $this->loadData();
     }
     
     /**

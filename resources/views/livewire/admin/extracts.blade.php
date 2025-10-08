@@ -197,14 +197,6 @@
                             class="bg-[#22272b] w-fit border border-green-300 text-sm px-5 py-1 rounded-md text-green-400 hover:bg-green-100/20 duration-200">
                             Reiniciar
                         </button>
-                        @if($isAdmin)
-                        <button wire:click="toggleFilters"
-                            class="bg-[#22272b] w-fit border border-blue-300 text-sm px-5 py-1 rounded-md text-blue-400 hover:bg-blue-100/20 duration-200 flex items-center gap-2">
-                            <i class="fa-solid fa-filter"></i>
-                            Filtros
-                            <i class="fa-solid fa-chevron-{{ $showFilters ? 'up' : 'down' }} text-xs"></i>
-                        </button>
-                        @endif
                         <!-- Botón de prueba para llenar los campos -->
                         {{-- <button onclick="fillTestNumbers()"
                             class="text-sm px-3 py-1 border border-purple-500 bg-purple-500 text-white rounded-md flex items-center gap-2 hover:border-purple-600/90 hover:bg-purple-600/90 duration-200">
