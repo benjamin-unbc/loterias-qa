@@ -244,7 +244,7 @@
                             $dateToUse = $filterDate ?? \Carbon\Carbon::today()->toDateString();
                             
                             // Siempre mostrar los números automáticos, tanto para "solo cabeza" como "extracto completo"
-                            $todayNumbers = $city->numbers->where('date', $dateToUse)->keyBy('index');
+                            $todayNumbers = $city->numbers->where('date', $dateToUse)->sortBy('index')->keyBy('index');
                             @endphp
                             <!-- Se muestran 20 campos (índices del 1 al 20) en dos columnas -->
                             <div class="min-w-[260px] grid grid-cols-{{ $showFullExtract ? '2' : '1' }} gap-2">

@@ -635,8 +635,8 @@ class Extracts extends Component
                 'Montevideo' => [
                     'La Previa' => 'ORO1015',
                     'Primera' => 'ORO1500',
-                    'Matutina' => 'ORO1500',
-                    'Vespertina' => 'ORO1500',
+                    'Matutina' => 'ORO1800',    // Matutina de Montevideo va a Vespertina (ORO1800)
+                    'Vespertina' => 'ORO1800',  // Vespertina de Montevideo va a Vespertina (ORO1800)
                     'Nocturna' => 'ORO2100'
                 ],
                 'San Luis' => [

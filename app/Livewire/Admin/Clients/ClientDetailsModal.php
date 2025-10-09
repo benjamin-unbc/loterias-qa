@@ -37,6 +37,13 @@ class ClientDetailsModal extends Component
     // Paginación
     public $jugadasPerPage = 10;
     public $resultadosPerPage = 10;
+    
+    // Vista de extractos
+    public $showFullExtract = false;
+    
+    // Modal de ticket
+    public $showTicketModal = false;
+    public $selectedTicket = null;
 
     protected $listeners = ['openClientDetails' => 'openModal'];
 
@@ -186,6 +193,36 @@ class ClientDetailsModal extends Component
 
         return $query->sum('aciert');
     }
+    
+    public function getTotalImporteResultadosProperty()
+    {
+        if (!$this->client || !$this->client->associatedUser) {
+            return 0;
+        }
+
+        $query = Result::where('user_id', $this->client->associatedUser->id);
+
+        if ($this->resultadosDate) {
+            $query->whereDate('date', $this->resultadosDate);
+        }
+
+        return $query->sum('import');
+    }
+    
+    public function getTotalAciertosResultadosProperty()
+    {
+        if (!$this->client || !$this->client->associatedUser) {
+            return 0;
+        }
+
+        $query = Result::where('user_id', $this->client->associatedUser->id);
+
+        if ($this->resultadosDate) {
+            $query->whereDate('date', $this->resultadosDate);
+        }
+
+        return $query->sum('aciert');
+    }
 
     public function getLiquidacionesProperty()
     {
@@ -307,6 +344,56 @@ class ClientDetailsModal extends Component
             'total_aciert' => $prevTotalAciert,
             'total_gana_pase' => $prevTotalGanaPase,
         ];
+    }
+
+    public function toggleExtractView()
+    {
+        $this->showFullExtract = !$this->showFullExtract;
+    }
+    
+    public function viewTicket($jugadaId)
+    {
+        try {
+            // Buscar la jugada enviada
+            $this->selectedTicket = PlaysSentModel::with(['apus', 'ticket'])->find($jugadaId);
+            
+            if ($this->selectedTicket) {
+                $this->showTicketModal = true;
+                \Log::info('Ticket modal opened for ID: ' . $jugadaId, [
+                    'ticket' => $this->selectedTicket->ticket,
+                    'apus_count' => $this->selectedTicket->apus->count()
+                ]);
+            } else {
+                \Log::warning('Ticket not found for ID: ' . $jugadaId);
+            }
+        } catch (\Exception $e) {
+            \Log::error('Error opening ticket modal: ' . $e->getMessage());
+        }
+    }
+    
+    public function closeTicketModal()
+    {
+        $this->showTicketModal = false;
+        $this->selectedTicket = null;
+    }
+
+    public function shareTicket($ticketNumber)
+    {
+        // Implementar lógica de compartir ticket si es necesario
+        \Log::info('Sharing ticket: ' . $ticketNumber);
+    }
+    
+    public function search()
+    {
+        // Método para buscar resultados
+        $this->resetPage();
+    }
+    
+    public function resetFilter()
+    {
+        // Método para resetear filtros
+        $this->resultadosDate = now()->toDateString();
+        $this->resetPage();
     }
 
     public function render()

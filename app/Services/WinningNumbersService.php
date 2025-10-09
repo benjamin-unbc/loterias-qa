@@ -17,6 +17,7 @@ class WinningNumbersService
         try {
             $this->log('Iniciando extracción de números ganadores para: ' . $city);
             
+            
             // Mapear nombres de ciudades a URLs
             $cityUrl = $this->getCityUrl($city);
             
@@ -130,6 +131,9 @@ class WinningNumbersService
             if (in_array($city, ['Jujuy', 'Salta'])) {
                 // Jujuy y Salta tienen Primera, Matutina, Vespertina y Nocturna
                 $turns = ['Primera', 'Matutina', 'Vespertina', 'Nocturna'];
+            } elseif ($city === 'Montevideo') {
+                // Montevideo solo tiene Matutina y Nocturna (pero se mapean a Vespertina y Nocturna)
+                $turns = ['Matutina', 'Nocturna'];
             } else {
                 // Las demás ciudades tienen todos los turnos
                 $turns = ['La Previa', 'Primera', 'Matutina', 'Vespertina', 'Nocturna'];
@@ -175,11 +179,11 @@ class WinningNumbersService
                 'Nocturna' => 8
             ],
             'Montevideo' => [
-                'La Previa' => 0,
-                'Primera' => 1,
-                'Matutina' => 2,
-                'Vespertina' => 3,
-                'Nocturna' => 8  // Montevideo tiene estructura similar a Ciudad
+                'La Previa' => null,  // No existe en Montevideo
+                'Primera' => null,    // No existe en Montevideo
+                'Matutina' => 4,      // Datos de la tabla "Matutina" de la web (tabla #4)
+                'Vespertina' => null, // No existe en Montevideo
+                'Nocturna' => 8       // Datos de la tabla "Nocturna" de la web (tabla #8)
             ],
             'Santa Fé' => [
                 'La Previa' => 0,

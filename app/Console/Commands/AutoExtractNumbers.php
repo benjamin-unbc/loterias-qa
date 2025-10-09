@@ -149,6 +149,11 @@ class AutoExtractNumbers extends Command
                 'Nocturna' => 5
             ];
             
+            // Mapeo especial para Montevideo
+            if ($cityName === 'Montevideo') {
+                $turnMapping['Matutina'] = 4; // Matutina de Montevideo va a Vespertina (extract_id 4)
+            }
+            
             $cityCode = $cityMapping[$cityName] ?? null;
             $extractId = $turnMapping[$turnName] ?? null;
             
