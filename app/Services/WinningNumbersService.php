@@ -17,8 +17,8 @@ class WinningNumbersService
         try {
             $this->log('Iniciando extracción de números ganadores para: ' . $city);
             
-            // Delegar Tucumán al servicio especializado
-            if ($city === 'Tucumán') {
+            // Delegar Tucumán al servicio especializado (maneja tanto con tilde como sin tilde)
+            if ($city === 'Tucumán' || $city === 'Tucuman') {
                 $this->log('Usando servicio especializado para Tucumán desde laquinieladetucuman.com.ar');
                 $tucumanService = new \App\Services\TucumanWinningNumbersService();
                 return $tucumanService->extractWinningNumbers();
