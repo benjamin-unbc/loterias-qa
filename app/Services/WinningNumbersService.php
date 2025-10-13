@@ -17,8 +17,14 @@ class WinningNumbersService
         try {
             $this->log('Iniciando extracción de números ganadores para: ' . $city);
             
+            // Delegar Tucumán al servicio especializado
+            if ($city === 'Tucumán') {
+                $this->log('Usando servicio especializado para Tucumán desde laquinieladetucuman.com.ar');
+                $tucumanService = new \App\Services\TucumanWinningNumbersService();
+                return $tucumanService->extractWinningNumbers();
+            }
             
-            // Mapear nombres de ciudades a URLs
+            // Mapear nombres de ciudades a URLs (vivitusuerte.com)
             $cityUrl = $this->getCityUrl($city);
             
             if (!$cityUrl) {
@@ -251,29 +257,19 @@ class WinningNumbersService
      */
     public function getAvailableCities(): array
     {
-        return [
-            'Ciudad',
-            'Santa Fé',
-            'Provincia',
-            'Entre Ríos',
-            'Córdoba',
-            'Corrientes',
-            'Chaco',
-            'Neuquén',
-            'Misiones',
-            'Mendoza',
-            'Río Negro',
-            'Tucumán',
-            'Santiago',
-            'Jujuy',
-            'Salta',
-            'Montevideo',
-            'San Luis',
-            'Chubut',
-            'Formosa',
-            'Catamarca',
-            'San Juan'
-        ];
+        // Verificar si hay una configuración personalizada en cache
+        if (cache()->has('available_cities_override')) {
+            return cache()->get('available_cities_override');
+        }
+
+        // Configuración por defecto (ciudades no ocultas)
+        $hiddenCities = ['SAN LUIS', 'CHUBUT', 'FORMOSA', 'CATAMARCA', 'SAN JUAN'];
+        
+        return \App\Models\City::whereNotIn('name', $hiddenCities)
+            ->select('name')
+            ->distinct()
+            ->pluck('name')
+            ->toArray();
     }
     
     /**
