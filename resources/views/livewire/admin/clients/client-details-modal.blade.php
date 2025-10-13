@@ -141,9 +141,10 @@
                                             </td>
                                             <td class="px-4 py-3">
                                                 <button wire:click="viewTicket({{ $jugada->id }})" 
-                                                        class="text-blue-400 hover:text-blue-300 transition-colors duration-200"
+                                                        class="font-medium text-center text-yellow-200 bg-gray-700 p-1 px-2 rounded-md
+                                                               hover:underline hover:bg-gray-700/50 duration-200"
                                                         title="Ver ticket">
-                                                    <i class="fa-solid fa-eye"></i>
+                                                    <i class="fa-solid fa-rug rotate-90"></i>
                                                 </button>
                                             </td>
                                         </tr>
