@@ -178,28 +178,49 @@ class AutoUpdateLotteryNumbers extends Command
         $updated = 0;
         
         try {
-            // Mapear nombres de ciudades a códigos de BD
+            // Mapear nombres de ciudades a códigos de BD (maneja tanto mayúsculas como formato correcto)
             $cityMapping = [
+                'CIUDAD' => 'NAC',
                 'Ciudad' => 'NAC',
+                'SANTA FE' => 'SFE',
                 'Santa Fé' => 'SFE',
+                'PROVINCIA' => 'PRO',
                 'Provincia' => 'PRO',
+                'ENTRE RIOS' => 'RIO',
                 'Entre Ríos' => 'RIO',
+                'CORDOBA' => 'COR',
                 'Córdoba' => 'COR',
+                'CORRIENTES' => 'CTE',
                 'Corrientes' => 'CTE',
+                'CHACO' => 'CHA',
                 'Chaco' => 'CHA',
+                'NEUQUEN' => 'NQN',
                 'Neuquén' => 'NQN',
+                'MISIONES' => 'MIS',
                 'Misiones' => 'MIS',
+                'MENDOZA' => 'MZA',
                 'Mendoza' => 'MZA',
+                'RÍO NEGRO' => 'Rio',
                 'Río Negro' => 'Rio',
+                'TUCUMAN' => 'Tucu',
                 'Tucumán' => 'Tucu',
+                'SANTIAGO' => 'San',
                 'Santiago' => 'San',
+                'JUJUY' => 'JUJ',
                 'Jujuy' => 'JUJ',
+                'SALTA' => 'Salt',
                 'Salta' => 'Salt',
+                'MONTEVIDEO' => 'ORO',
                 'Montevideo' => 'ORO',
+                'SAN LUIS' => 'SLU',
                 'San Luis' => 'SLU',
+                'CHUBUT' => 'CHU',
                 'Chubut' => 'CHU',
+                'FORMOSA' => 'FOR',
                 'Formosa' => 'FOR',
+                'CATAMARCA' => 'CAT',
                 'Catamarca' => 'CAT',
+                'SAN JUAN' => 'SJU',
                 'San Juan' => 'SJU'
             ];
             
@@ -340,28 +361,49 @@ class AutoUpdateLotteryNumbers extends Command
             $winningNumbersService = new WinningNumbersService();
             $availableCities = $winningNumbersService->getAvailableCities();
             
-            // Mapear nombres de ciudades a códigos de BD
+            // Mapear nombres de ciudades a códigos de BD (maneja tanto mayúsculas como formato correcto)
             $cityMapping = [
+                'CIUDAD' => 'NAC',
                 'Ciudad' => 'NAC',
+                'SANTA FE' => 'SFE',
                 'Santa Fé' => 'SFE',
+                'PROVINCIA' => 'PRO',
                 'Provincia' => 'PRO',
+                'ENTRE RIOS' => 'RIO',
                 'Entre Ríos' => 'RIO',
+                'CORDOBA' => 'COR',
                 'Córdoba' => 'COR',
+                'CORRIENTES' => 'CTE',
                 'Corrientes' => 'CTE',
+                'CHACO' => 'CHA',
                 'Chaco' => 'CHA',
+                'NEUQUEN' => 'NQN',
                 'Neuquén' => 'NQN',
+                'MISIONES' => 'MIS',
                 'Misiones' => 'MIS',
+                'MENDOZA' => 'MZA',
                 'Mendoza' => 'MZA',
+                'RÍO NEGRO' => 'Rio',
                 'Río Negro' => 'Rio',
+                'TUCUMAN' => 'Tucu',
                 'Tucumán' => 'Tucu',
+                'SANTIAGO' => 'San',
                 'Santiago' => 'San',
+                'JUJUY' => 'JUJ',
                 'Jujuy' => 'JUJ',
+                'SALTA' => 'Salt',
                 'Salta' => 'Salt',
+                'MONTEVIDEO' => 'ORO',
                 'Montevideo' => 'ORO',
+                'SAN LUIS' => 'SLU',
                 'San Luis' => 'SLU',
+                'CHUBUT' => 'CHU',
                 'Chubut' => 'CHU',
+                'FORMOSA' => 'FOR',
                 'Formosa' => 'FOR',
+                'CATAMARCA' => 'CAT',
                 'Catamarca' => 'CAT',
+                'SAN JUAN' => 'SJU',
                 'San Juan' => 'SJU'
             ];
             

@@ -527,14 +527,28 @@ class Extracts extends Component
         $updated = 0;
         
         try {
-            // Mapear nombres de ciudades y turnos a códigos exactos de BD
+            // Mapear nombres de ciudades y turnos a códigos exactos de BD (maneja tanto mayúsculas como formato correcto)
             $cityTurnMapping = [
+                'CIUDAD' => [
+                    'La Previa' => 'NAC1015',
+                    'Primera' => 'NAC1200',
+                    'Matutina' => 'NAC1500',
+                    'Vespertina' => 'NAC1800',
+                    'Nocturna' => 'NAC2100'
+                ],
                 'Ciudad' => [
                     'La Previa' => 'NAC1015',
                     'Primera' => 'NAC1200',
                     'Matutina' => 'NAC1500',
                     'Vespertina' => 'NAC1800',
                     'Nocturna' => 'NAC2100'
+                ],
+                'SANTA FE' => [
+                    'La Previa' => 'SFE1015',
+                    'Primera' => 'SFE1200',
+                    'Matutina' => 'SFE1500',
+                    'Vespertina' => 'SFE1800',
+                    'Nocturna' => 'SFE2100'
                 ],
                 'Santa Fé' => [
                     'La Previa' => 'SFE1015',
@@ -543,12 +557,26 @@ class Extracts extends Component
                     'Vespertina' => 'SFE1800',
                     'Nocturna' => 'SFE2100'
                 ],
+                'PROVINCIA' => [
+                    'La Previa' => 'PRO1015',
+                    'Primera' => 'PRO1200',
+                    'Matutina' => 'PRO1500',
+                    'Vespertina' => 'PRO1800',
+                    'Nocturna' => 'PRO2100'
+                ],
                 'Provincia' => [
                     'La Previa' => 'PRO1015',
                     'Primera' => 'PRO1200',
                     'Matutina' => 'PRO1500',
                     'Vespertina' => 'PRO1800',
                     'Nocturna' => 'PRO2100'
+                ],
+                'ENTRE RIOS' => [
+                    'La Previa' => 'RIO1015',
+                    'Primera' => 'RIO1200',
+                    'Matutina' => 'RIO1500',
+                    'Vespertina' => 'RIO1800',
+                    'Nocturna' => 'RIO2100'
                 ],
                 'Entre Ríos' => [
                     'La Previa' => 'RIO1015',
@@ -557,12 +585,26 @@ class Extracts extends Component
                     'Vespertina' => 'RIO1800',
                     'Nocturna' => 'RIO2100'
                 ],
+                'CORDOBA' => [
+                    'La Previa' => 'COR1015',
+                    'Primera' => 'COR1200',
+                    'Matutina' => 'COR1500',
+                    'Vespertina' => 'COR1800',
+                    'Nocturna' => 'COR2100'
+                ],
                 'Córdoba' => [
                     'La Previa' => 'COR1015',
                     'Primera' => 'COR1200',
                     'Matutina' => 'COR1500',
                     'Vespertina' => 'COR1800',
                     'Nocturna' => 'COR2100'
+                ],
+                'CORRIENTES' => [
+                    'La Previa' => 'CTE1015',
+                    'Primera' => 'CTE1200',
+                    'Matutina' => 'CTE1500',
+                    'Vespertina' => 'CTE1800',
+                    'Nocturna' => 'CTE2100'
                 ],
                 'Corrientes' => [
                     'La Previa' => 'CTE1015',
@@ -571,12 +613,26 @@ class Extracts extends Component
                     'Vespertina' => 'CTE1800',
                     'Nocturna' => 'CTE2100'
                 ],
+                'CHACO' => [
+                    'La Previa' => 'CHA1015',
+                    'Primera' => 'CHA1200',
+                    'Matutina' => 'CHA1500',
+                    'Vespertina' => 'CHA1800',
+                    'Nocturna' => 'CHA2100'
+                ],
                 'Chaco' => [
                     'La Previa' => 'CHA1015',
                     'Primera' => 'CHA1200',
                     'Matutina' => 'CHA1500',
                     'Vespertina' => 'CHA1800',
                     'Nocturna' => 'CHA2100'
+                ],
+                'NEUQUEN' => [
+                    'La Previa' => 'NQN1015',
+                    'Primera' => 'NQN1200',
+                    'Matutina' => 'NQN1500',
+                    'Vespertina' => 'NQN1800',
+                    'Nocturna' => 'NQN2100'
                 ],
                 'Neuquén' => [
                     'La Previa' => 'NQN1015',
@@ -585,12 +641,26 @@ class Extracts extends Component
                     'Vespertina' => 'NQN1800',
                     'Nocturna' => 'NQN2100'
                 ],
+                'MISIONES' => [
+                    'La Previa' => 'MIS1030',
+                    'Primera' => 'MIS1215',
+                    'Matutina' => 'MIS1500',
+                    'Vespertina' => 'MIS1800',
+                    'Nocturna' => 'MIS2115'
+                ],
                 'Misiones' => [
                     'La Previa' => 'MIS1030',
                     'Primera' => 'MIS1215',
                     'Matutina' => 'MIS1500',
                     'Vespertina' => 'MIS1800',
                     'Nocturna' => 'MIS2115'
+                ],
+                'MENDOZA' => [
+                    'La Previa' => 'MZA1015',
+                    'Primera' => 'MZA1200',
+                    'Matutina' => 'MZA1500',
+                    'Vespertina' => 'MZA1800',
+                    'Nocturna' => 'MZA2100'
                 ],
                 'Mendoza' => [
                     'La Previa' => 'MZA1015',
@@ -599,12 +669,26 @@ class Extracts extends Component
                     'Vespertina' => 'MZA1800',
                     'Nocturna' => 'MZA2100'
                 ],
+                'RÍO NEGRO' => [
+                    'La Previa' => 'Rio1015',
+                    'Primera' => 'Rio1200',
+                    'Matutina' => 'Rio1500',
+                    'Vespertina' => 'Rio1800',
+                    'Nocturna' => 'Rio2100'
+                ],
                 'Río Negro' => [
                     'La Previa' => 'Rio1015',
                     'Primera' => 'Rio1200',
                     'Matutina' => 'Rio1500',
                     'Vespertina' => 'Rio1800',
                     'Nocturna' => 'Rio2100'
+                ],
+                'TUCUMAN' => [
+                    'La Previa' => 'Tucu1130',
+                    'Primera' => 'Tucu1430',
+                    'Matutina' => 'Tucu1730',
+                    'Vespertina' => 'Tucu1930',
+                    'Nocturna' => 'Tucu2200'
                 ],
                 'Tucumán' => [
                     'La Previa' => 'Tucu1130',
@@ -613,6 +697,13 @@ class Extracts extends Component
                     'Vespertina' => 'Tucu1930',
                     'Nocturna' => 'Tucu2200'
                 ],
+                'SANTIAGO' => [
+                    'La Previa' => 'San1015',
+                    'Primera' => 'San1200',
+                    'Matutina' => 'San1500',
+                    'Vespertina' => 'San1945',
+                    'Nocturna' => 'San2200'
+                ],
                 'Santiago' => [
                     'La Previa' => 'San1015',
                     'Primera' => 'San1200',
@@ -620,17 +711,36 @@ class Extracts extends Component
                     'Vespertina' => 'San1945',
                     'Nocturna' => 'San2200'
                 ],
+                'JUJUY' => [
+                    'Primera' => 'JUJ1200',
+                    'Matutina' => 'JUJ1500',
+                    'Vespertina' => 'JUJ1800',
+                    'Nocturna' => 'JUJ2100'
+                ],
                 'Jujuy' => [
                     'Primera' => 'JUJ1200',
                     'Matutina' => 'JUJ1500',
                     'Vespertina' => 'JUJ1800',
                     'Nocturna' => 'JUJ2100'
                 ],
+                'SALTA' => [
+                    'Primera' => 'Salt1130',
+                    'Matutina' => 'Salt1400',
+                    'Vespertina' => 'Salt1730',
+                    'Nocturna' => 'Salt2100'
+                ],
                 'Salta' => [
                     'Primera' => 'Salt1130',
                     'Matutina' => 'Salt1400',
                     'Vespertina' => 'Salt1730',
                     'Nocturna' => 'Salt2100'
+                ],
+                'MONTEVIDEO' => [
+                    'La Previa' => 'ORO1015',
+                    'Primera' => 'ORO1500',
+                    'Matutina' => 'ORO1800',    // Matutina de Montevideo va a Vespertina (ORO1800)
+                    'Vespertina' => 'ORO1800',  // Vespertina de Montevideo va a Vespertina (ORO1800)
+                    'Nocturna' => 'ORO2100'
                 ],
                 'Montevideo' => [
                     'La Previa' => 'ORO1015',
@@ -639,12 +749,26 @@ class Extracts extends Component
                     'Vespertina' => 'ORO1800',  // Vespertina de Montevideo va a Vespertina (ORO1800)
                     'Nocturna' => 'ORO2100'
                 ],
+                'SAN LUIS' => [
+                    'La Previa' => 'SLU1015',
+                    'Primera' => 'SLU1200',
+                    'Matutina' => 'SLU1500',
+                    'Vespertina' => 'SLU1800',
+                    'Nocturna' => 'SLU2100'
+                ],
                 'San Luis' => [
                     'La Previa' => 'SLU1015',
                     'Primera' => 'SLU1200',
                     'Matutina' => 'SLU1500',
                     'Vespertina' => 'SLU1800',
                     'Nocturna' => 'SLU2100'
+                ],
+                'CHUBUT' => [
+                    'La Previa' => 'CHU1015',
+                    'Primera' => 'CHU1200',
+                    'Matutina' => 'CHU1500',
+                    'Vespertina' => 'CHU1800',
+                    'Nocturna' => 'CHU2100'
                 ],
                 'Chubut' => [
                     'La Previa' => 'CHU1015',
@@ -653,6 +777,13 @@ class Extracts extends Component
                     'Vespertina' => 'CHU1800',
                     'Nocturna' => 'CHU2100'
                 ],
+                'FORMOSA' => [
+                    'La Previa' => 'FOR1015',
+                    'Primera' => 'FOR1200',
+                    'Matutina' => 'FOR1500',
+                    'Vespertina' => 'FOR1800',
+                    'Nocturna' => 'FOR2100'
+                ],
                 'Formosa' => [
                     'La Previa' => 'FOR1015',
                     'Primera' => 'FOR1200',
@@ -660,12 +791,26 @@ class Extracts extends Component
                     'Vespertina' => 'FOR1800',
                     'Nocturna' => 'FOR2100'
                 ],
+                'CATAMARCA' => [
+                    'La Previa' => 'CAT1015',
+                    'Primera' => 'CAT1200',
+                    'Matutina' => 'CAT1500',
+                    'Vespertina' => 'CAT1800',
+                    'Nocturna' => 'CAT2100'
+                ],
                 'Catamarca' => [
                     'La Previa' => 'CAT1015',
                     'Primera' => 'CAT1200',
                     'Matutina' => 'CAT1500',
                     'Vespertina' => 'CAT1800',
                     'Nocturna' => 'CAT2100'
+                ],
+                'SAN JUAN' => [
+                    'La Previa' => 'SJU1015',
+                    'Primera' => 'SJU1200',
+                    'Matutina' => 'SJU1500',
+                    'Vespertina' => 'SJU1800',
+                    'Nocturna' => 'SJU2100'
                 ],
                 'San Juan' => [
                     'La Previa' => 'SJU1015',
