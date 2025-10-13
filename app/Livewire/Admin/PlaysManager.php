@@ -1926,63 +1926,112 @@ public function addRow()
 
     public function addRowWithDerived()
 {
-    $basePlay = Play::where('user_id', auth()->id())
-        ->whereRaw('LENGTH(REPLACE(number, "*", "")) IN (3,4)')
-        ->orderBy('id', 'desc')
-        ->first();
-
-    if (!$basePlay) {
-        $this->dispatch('notify', message: 'Debe haber una jugada principal de 3 o 4 dígitos para generar derivadas.', type: 'error');
+    // 1. Crear una clave de bloqueo única para este usuario y operación
+    $lockKey = 'addRowWithDerived_lock_' . auth()->id();
+    
+    // 2. Verificar si ya hay una operación en curso (evitar clics rápidos)
+    if (\Cache::has($lockKey)) {
+        // En lugar de mostrar mensaje, simplemente ignorar el clic (más rápido)
         return;
     }
+    
+    // 3. Establecer bloqueo por 200ms (muy rápido para bajadas consecutivas)
+    \Cache::put($lockKey, true, 0.2);
+    
+    try {
+        $basePlay = Play::where('user_id', auth()->id())
+            ->whereRaw('LENGTH(REPLACE(number, "*", "")) IN (3,4)')
+            ->orderBy('id', 'desc')
+            ->first();
 
-    $cleanBaseNumber = str_replace('*', '', $basePlay->number);
+        if (!$basePlay) {
+            $this->dispatch('notify', message: 'Debe haber una jugada principal de 3 o 4 dígitos para generar derivadas.', type: 'error');
+            return;
+        }
 
-    if (!ctype_digit($cleanBaseNumber) || !in_array(strlen($cleanBaseNumber), [3, 4])) {
-        $this->dispatch('notify', message: 'La jugada principal para derivar debe tener 3 o 4 dígitos numéricos (sin contar asteriscos).', type: 'error');
-        return;
+        $cleanBaseNumber = str_replace('*', '', $basePlay->number);
+
+        if (!ctype_digit($cleanBaseNumber) || !in_array(strlen($cleanBaseNumber), [3, 4])) {
+            $this->dispatch('notify', message: 'La jugada principal para derivar debe tener 3 o 4 dígitos numéricos (sin contar asteriscos).', type: 'error');
+            return;
+        }
+
+        if ($this->currentBasePlayId !== $basePlay->id) {
+            $this->currentBasePlayId = $basePlay->id;
+            $this->currentDerivedCount = 0;
+        }
+
+        $allDerivedRaw = $this->getSpecialDerivedNumbers($cleanBaseNumber);
+        $derivedNumbersToCreate = array_slice($allDerivedRaw, 1);
+
+        if (empty($derivedNumbersToCreate)) {
+            $this->dispatch('notify', message: 'No hay jugadas derivadas definidas para este número base.', type: 'info');
+            return;
+        }
+
+        // Verificar si ya se crearon todas las jugadas derivadas posibles
+        if ($this->currentDerivedCount >= count($derivedNumbersToCreate)) {
+            $this->dispatch('notify', message: 'Ya se crearon todas las jugadas derivadas posibles para la base actual.', type: 'info');
+            return;
+        }
+
+        $newDerivedNumberFormatted = $derivedNumbersToCreate[$this->currentDerivedCount];
+
+        // 4. Verificación ultra-rápida: solo verificar la jugada específica en los últimos 1 segundo
+        $duplicatePlay = Play::where('user_id', auth()->id())
+            ->where('number', $newDerivedNumberFormatted)
+            ->where('position', $basePlay->position)
+            ->where('lottery', $basePlay->lottery)
+            ->where('numberR', $basePlay->numberR)
+            ->where('positionR', $basePlay->positionR)
+            ->where('created_at', '>=', now()->subSeconds(1))
+            ->first();
+
+        if ($duplicatePlay) {
+            // Silenciosamente ignorar duplicados
+            return;
+        }
+
+        // 5. Verificación ultra-rápida: contar derivadas existentes en los últimos 1.5 segundos
+        $existingDerivedCount = Play::where('user_id', auth()->id())
+            ->where('position', $basePlay->position)
+            ->where('lottery', $basePlay->lottery)
+            ->where('numberR', $basePlay->numberR)
+            ->where('positionR', $basePlay->positionR)
+            ->where('created_at', '>=', now()->subSeconds(1.5))
+            ->count();
+
+        if ($existingDerivedCount >= count($derivedNumbersToCreate)) {
+            // Silenciosamente ignorar si ya se crearon todas
+            return;
+        }
+
+        // 6. Crear la nueva jugada derivada
+        $newPlay = Play::create([
+            'user_id' => auth()->id(),
+            'type' => $basePlay->type,
+            'number' => $newDerivedNumberFormatted,
+            'position' => $basePlay->position,
+            'import' => $basePlay->import,
+            'lottery' => $basePlay->lottery,
+            'numberR' => $basePlay->numberR,
+            'positionR' => $basePlay->positionR,
+            'isChecked' => $basePlay->isChecked,
+        ]);
+
+        // Incrementar contador (más simple y rápido)
+        $this->currentDerivedCount++;
+        
+        $this->rows = $this->getAndSortPlays();
+        $this->needsTotalRecalculation = true;
+        $this->dispatch('scroll-to-last-play', ['playId' => $newPlay->id]);
+        $this->dispatch('notify', message: "Jugada derivada '{$newDerivedNumberFormatted}' creada correctamente.", type: 'success');
+        $this->dispatch('focusInput', ['selector' => '#number']);
+        
+    } finally {
+        // 7. Liberar bloqueo siempre (incluso si hay error)
+        \Cache::forget($lockKey);
     }
-
-    if ($this->currentBasePlayId !== $basePlay->id) {
-        $this->currentBasePlayId = $basePlay->id;
-        $this->currentDerivedCount = 0;
-    }
-
-    $allDerivedRaw = $this->getSpecialDerivedNumbers($cleanBaseNumber);
-    $derivedNumbersToCreate = array_slice($allDerivedRaw, 1);
-
-    if (empty($derivedNumbersToCreate)) {
-        $this->dispatch('notify', message: 'No hay jugadas derivadas definidas para este número base.', type: 'info');
-        return;
-    }
-
-    if ($this->currentDerivedCount >= count($derivedNumbersToCreate)) {
-        $this->dispatch('notify', message: 'Ya se crearon todas las jugadas derivadas posibles para la base actual.', type: 'info');
-        return;
-    }
-
-    $newDerivedNumberFormatted = $derivedNumbersToCreate[$this->currentDerivedCount];
-
-    // **Eliminamos la validación de duplicados** para las jugadas derivadas
-    // Esto permite que se cree una jugada derivada duplicada sin ningún problema.
-    $newPlay = Play::create([
-        'user_id' => auth()->id(),
-        'type' => $basePlay->type,
-        'number' => $newDerivedNumberFormatted,
-        'position' => $basePlay->position,
-        'import' => $basePlay->import,
-        'lottery' => $basePlay->lottery,
-        'numberR' => $basePlay->numberR,
-        'positionR' => $basePlay->positionR,
-        'isChecked' => $basePlay->isChecked,
-    ]);
-
-    $this->currentDerivedCount++;
-    $this->rows = $this->getAndSortPlays();
-    $this->needsTotalRecalculation = true;
-    $this->dispatch('scroll-to-last-play', ['playId' => $newPlay->id]);
-    $this->dispatch('notify', message: "Jugada derivada '{$newDerivedNumberFormatted}' creada correctamente.", type: 'success');
-    $this->dispatch('focusInput', ['selector' => '#number']);
 }
 
 
