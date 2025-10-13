@@ -34,9 +34,8 @@ class Liquidations extends Component
     }
 
     /**
-     * Calcula los datos de liquidación según el tipo de usuario
-     * - Administradores: Ven liquidaciones globales del sistema
-     * - Clientes: Ven solo sus liquidaciones individuales
+     * Calcula los datos de liquidación para el usuario autenticado
+     * Todos los usuarios (incluyendo administradores) solo ven sus propios resultados
      * 
      * @return array Datos de liquidación filtrados por usuario
      */
@@ -49,14 +48,8 @@ class Liquidations extends Component
         $selectedDate = Carbon::parse($this->date);
         $user = auth()->user();
         
-        // Determinar si es administrador o cliente
-        $isAdmin = $user->hasAnyRole(['Administrador']);
-        
-        if ($isAdmin) {
-            return $this->computeGlobalLiquidationData($selectedDate);
-        } else {
-            return $this->computeClientLiquidationData($user, $selectedDate);
-        }
+        // Todos los usuarios solo ven sus propios resultados
+        return $this->computeClientLiquidationData($user, $selectedDate);
     }
 
     /**
@@ -231,33 +224,13 @@ class Liquidations extends Component
 
     /**
      * Busca y calcula los datos de liquidación
-     * Solo guarda liquidaciones globales para administradores
-     * Los clientes solo ven sus datos sin guardar en la tabla global
+     * Todos los usuarios solo ven sus datos individuales sin guardar en la tabla global
      */
     public function search()
     {
         $this->resetPage();
-
-        $data = $this->computeLiquidationData();
-        $user = auth()->user();
-
-        // Solo los administradores pueden guardar liquidaciones globales
-        // Los clientes solo ven sus datos calculados en tiempo real
-        if ($user->hasAnyRole(['Administrador'])) {
-            DailyLiquidation::updateOrCreate(
-                ['date' => $this->date],
-                [
-                    'total_apus'      => $data['totalApus'],
-                    'comision'        => $data['comision'],
-                    'total_aciert'    => $data['totalAciert'],
-                    'total_gana_pase' => $data['totalGanaPase'],
-                    'anteri'          => $data['anteri'],
-                    'ud_recibe'       => $data['udRecibe'],
-                    'ud_deja'         => $data['udDeja'],
-                    'arrastre'        => $data['arrastre'],
-                ]
-            );
-        }
+        // Los datos se calculan en tiempo real para cada usuario individual
+        // No se guardan liquidaciones globales ya que cada usuario ve solo sus datos
     }
 
     public function resetFilter()

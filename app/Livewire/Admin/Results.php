@@ -33,17 +33,15 @@ class Results extends Component
         // 1. Total Recaudado (Debe ser igual al de Jugadas Enviadas)
         // Se calcula desde PlaysSentModel sumando el 'amount' total de la jugada.
         $playsSentQuery = PlaysSentModel::query()->whereDate('date', $this->date)->where('status', '!=', 'I');
-        if (!$user->hasAnyRole(['Administrador'])) {
-            $playsSentQuery->where('user_id', $user->id);
-        }
+        // Todos los usuarios solo ven sus propios resultados
+        $playsSentQuery->where('user_id', $user->id);
         $totalImporte = (float) $playsSentQuery->sum('amount');
 
         // 2. Total Aciertos (Suma de los premios a pagar)
         // Se calcula desde la tabla de resultados (Result) sumando la columna 'aciert'.
         $resultsQueryForTotals = Result::query()->whereDate('date', $this->date);
-        if (!$user->hasAnyRole(['Administrador'])) {
-            $resultsQueryForTotals->where('user_id', $user->id);
-        }
+        // Todos los usuarios solo ven sus propios resultados
+        $resultsQueryForTotals->where('user_id', $user->id);
         $totalAciertos = (float) $resultsQueryForTotals->sum('aciert');
 
         // --- CONSULTA PARA LA TABLA PAGINADA ---
@@ -63,9 +61,8 @@ class Results extends Component
             )
             ->whereDate('date', $this->date);
 
-        if (!$user->hasAnyRole(['Administrador'])) {
-            $resultsQuery->where('user_id', $user->id);
-        }
+        // Todos los usuarios solo ven sus propios resultados
+        $resultsQuery->where('user_id', $user->id);
         $results = $resultsQuery->groupBy('ticket', 'number', 'position', 'numR', 'posR', 'import', 'user_id', 'date')
             ->paginate($this->cant);
         // --- LOGS PARA DEPURACIÓN ---
