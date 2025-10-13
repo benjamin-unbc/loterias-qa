@@ -1063,18 +1063,18 @@ public function addRow()
             return;
         }
         
-        // 3. Crear bloqueo temporal (3 segundos)
-        \Cache::put($lockKey, true, 3);
+        // 3. Crear bloqueo temporal mínimo (0.1 segundos) para evitar duplicados
+        \Cache::put($lockKey, true, 0.1);
         
         try {
-            // 4. Verificar duplicados en base de datos (últimos 5 segundos)
+            // 4. Verificar duplicados en base de datos (últimos 1 segundo)
             $recentPlay = Play::where('user_id', auth()->id())
                 ->where('number', $this->formatNumber($validatedData['number']))
                 ->where('position', $validatedData['position'] ?? 1)
                 ->where('lottery', $currentLotteryString)
                 ->where('numberR', $validatedData['numberR'])
                 ->where('positionR', $validatedData['positionR'])
-                ->where('created_at', '>=', now()->subSeconds(5))
+                ->where('created_at', '>=', now()->subSeconds(1))
                 ->first();
 
             if ($recentPlay) {
@@ -1951,8 +1951,8 @@ public function addRow()
         return;
     }
     
-    // 4. Establecer bloqueo por 1.5 segundos (como solicitado)
-    \Cache::put($lockKey, true, 1.5);
+    // 4. Establecer bloqueo mínimo (0.1 segundos) para evitar duplicados pero permitir ejecución rápida
+    \Cache::put($lockKey, true, 0.1);
     
     try {
         $basePlay = Play::where('user_id', auth()->id())
@@ -1987,22 +1987,22 @@ public function addRow()
 
         // Verificar si ya se crearon todas las jugadas derivadas posibles
         if ($this->currentDerivedCount >= count($derivedNumbersToCreate)) {
-            // Marcar que se completó la última derivada y bloquear completamente
-            \Cache::put($lastDerivedKey, true, 3600); // Bloquear por 1 hora
+            // Marcar que se completó la última derivada y bloquear por tiempo mínimo
+            \Cache::put($lastDerivedKey, true, 5); // Bloquear solo por 5 segundos
             $this->dispatch('notify', message: 'Ya se crearon todas las jugadas derivadas posibles para la base actual.', type: 'info');
             return;
         }
 
         $newDerivedNumberFormatted = $derivedNumbersToCreate[$this->currentDerivedCount];
 
-        // 4. Verificación estricta: verificar duplicados en los últimos 3 segundos
+        // 4. Verificación rápida: verificar duplicados en los últimos 0.5 segundos
         $duplicatePlay = Play::where('user_id', auth()->id())
             ->where('number', $newDerivedNumberFormatted)
             ->where('position', $basePlay->position)
             ->where('lottery', $basePlay->lottery)
             ->where('numberR', $basePlay->numberR)
             ->where('positionR', $basePlay->positionR)
-            ->where('created_at', '>=', now()->subSeconds(3))
+            ->where('created_at', '>=', now()->subSeconds(0.5))
             ->first();
 
         if ($duplicatePlay) {
@@ -2010,13 +2010,13 @@ public function addRow()
             return;
         }
 
-        // 5. Verificación estricta: contar derivadas existentes en los últimos 5 segundos
+        // 5. Verificación rápida: contar derivadas existentes en los últimos 1 segundo
         $existingDerivedCount = Play::where('user_id', auth()->id())
             ->where('position', $basePlay->position)
             ->where('lottery', $basePlay->lottery)
             ->where('numberR', $basePlay->numberR)
             ->where('positionR', $basePlay->positionR)
-            ->where('created_at', '>=', now()->subSeconds(5))
+            ->where('created_at', '>=', now()->subSeconds(1))
             ->count();
 
         if ($existingDerivedCount >= count($derivedNumbersToCreate)) {
@@ -2024,7 +2024,7 @@ public function addRow()
             return;
         }
 
-        // 6. Verificación adicional: verificar si la última jugada creada es exactamente la misma
+        // 6. Verificación simplificada: solo verificar si la última jugada es exactamente la misma (más rápido)
         $lastPlay = Play::where('user_id', auth()->id())
             ->where('number', $newDerivedNumberFormatted)
             ->where('position', $basePlay->position)
@@ -2034,8 +2034,8 @@ public function addRow()
             ->orderBy('id', 'desc')
             ->first();
 
-        if ($lastPlay && $lastPlay->created_at->diffInSeconds(now()) < 2) {
-            // Si la última jugada es exactamente igual y fue creada hace menos de 2 segundos, ignorar
+        if ($lastPlay && $lastPlay->created_at->diffInSeconds(now()) < 0.2) {
+            // Si la última jugada es exactamente igual y fue creada hace menos de 0.2 segundos, ignorar
             return;
         }
 
@@ -2057,8 +2057,8 @@ public function addRow()
         
         // Verificar si esta fue la última derivada posible y bloquear
         if ($this->currentDerivedCount >= count($derivedNumbersToCreate)) {
-            // Esta fue la última derivada, bloquear completamente
-            \Cache::put($lastDerivedKey, true, 3600); // Bloquear por 1 hora
+            // Esta fue la última derivada, bloquear por tiempo mínimo
+            \Cache::put($lastDerivedKey, true, 5); // Bloquear solo por 5 segundos
         }
         
         $this->rows = $this->getAndSortPlays();
