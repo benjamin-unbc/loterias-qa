@@ -26,6 +26,7 @@ class Client extends Authenticatable
         'nombre_fantasia',
         'password',
         'is_active',
+        'commission_percentage',
         'profile_photo_path'
     ];
 
@@ -45,6 +46,7 @@ class Client extends Authenticatable
      */
     protected $casts = [
         'is_active' => 'boolean',
+        'commission_percentage' => 'decimal:2',
     ];
 
     /**

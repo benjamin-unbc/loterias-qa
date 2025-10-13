@@ -528,7 +528,7 @@
                                                         <p>{{ number_format($liquidacionData['totalApus'], 2) }}</p>
                                                     </div>
                                                     <div class="flex justify-between">
-                                                        <h4 class="font-medium">COMIS. J. 20%:</h4>
+                                                        <h4 class="font-medium">COMIS. J. {{ $client->commission_percentage ?? 20.00 }}%:</h4>
                                                         <p>{{ number_format($liquidacionData['comision'], 2) }}</p>
                                                     </div>
                                                     <div class="flex justify-between">

@@ -145,7 +145,10 @@ class Liquidations extends Component
         $nocheTotalApus    = (float) (clone $apusQuery)->where('timeApu', '21:00')->sum('import');
         $totalApus = $previaTotalApus + $mananaTotalApus + $matutinaTotalApus + $tardeTotalApus + $nocheTotalApus;
         
-        $comision = $totalApus * 0.20;
+        // Obtener la comisión personalizada del cliente
+        $client = \App\Models\Client::where('correo', $user->email)->first();
+        $commissionPercentage = $client ? $client->commission_percentage : 20.00;
+        $comision = $totalApus * ($commissionPercentage / 100);
         $totalGanaPase = $totalApus - $comision - $totalAciert;
         
         // Para clientes, calcular arrastre basado en sus datos históricos
@@ -207,7 +210,11 @@ class Liquidations extends Component
             return null; // No hay datos del cliente en la fecha anterior
         }
         
-        $prevComision = $prevTotalApus * 0.20;
+        // Obtener la comisión personalizada del cliente para el cálculo anterior
+        $user = \App\Models\User::find($userId);
+        $client = \App\Models\Client::where('correo', $user->email)->first();
+        $commissionPercentage = $client ? $client->commission_percentage : 20.00;
+        $prevComision = $prevTotalApus * ($commissionPercentage / 100);
         $prevTotalGanaPase = $prevTotalApus - $prevComision - $prevTotalAciert;
         
         // Para simplificar, asumimos que el cliente no tiene arrastre previo

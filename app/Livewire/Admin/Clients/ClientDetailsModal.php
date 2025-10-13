@@ -279,7 +279,9 @@ class ClientDetailsModal extends Component
         
         $totalApus = $previaTotalApus + $mananaTotalApus + $matutinaTotalApus + $tardeTotalApus + $nocheTotalApus;
         
-        $comision = $totalApus * 0.20;
+        // Obtener la comisión personalizada del cliente
+        $commissionPercentage = $this->client->commission_percentage ?? 20.00;
+        $comision = $totalApus * ($commissionPercentage / 100);
         $totalGanaPase = $totalApus - $comision - $totalAciert;
         
         // Para clientes, calcular arrastre basado en sus datos históricos
@@ -331,7 +333,9 @@ class ClientDetailsModal extends Component
             return null; // No hay datos del cliente en la fecha anterior
         }
         
-        $prevComision = $prevTotalApus * 0.20;
+        // Obtener la comisión personalizada del cliente para el cálculo anterior
+        $commissionPercentage = $this->client->commission_percentage ?? 20.00;
+        $prevComision = $prevTotalApus * ($commissionPercentage / 100);
         $prevTotalGanaPase = $prevTotalApus - $prevComision - $prevTotalAciert;
         
         // Para simplificar, asumimos que el cliente no tiene arrastre previo
