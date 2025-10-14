@@ -172,7 +172,7 @@ class WinningNumbersService
             if (in_array($city, ['Jujuy', 'Salta'])) {
                 // Jujuy y Salta tienen Primera, Matutina, Vespertina y Nocturna
                 $turns = ['Primera', 'Matutina', 'Vespertina', 'Nocturna'];
-            } elseif ($city === 'Montevideo') {
+            } elseif (strtoupper($city) === 'MONTEVIDEO') {
                 // Montevideo solo tiene Matutina y Nocturna (pero se mapean a Vespertina y Nocturna)
                 $turns = ['Matutina', 'Nocturna'];
             } else {
@@ -229,9 +229,16 @@ class WinningNumbersService
             'Montevideo' => [
                 'La Previa' => null,  // No existe en Montevideo
                 'Primera' => null,    // No existe en Montevideo
-                'Matutina' => 4,      // Datos de la tabla "Matutina" de la web (tabla #4)
+                'Matutina' => 4,      // Datos de la tabla "Matutina" de la web van a Vespertina (tabla #4)
                 'Vespertina' => null, // No existe en Montevideo
-                'Nocturna' => 8       // Datos de la tabla "Nocturna" de la web (tabla #8)
+                'Nocturna' => 8       // Datos de la tabla "Nocturna" de la web van a Nocturna (tabla #8)
+            ],
+            'MONTEVIDEO' => [
+                'La Previa' => null,  // No existe en Montevideo
+                'Primera' => null,    // No existe en Montevideo
+                'Matutina' => 4,      // Datos de la tabla "Matutina" de la web van a Vespertina (tabla #4)
+                'Vespertina' => null, // No existe en Montevideo
+                'Nocturna' => 8       // Datos de la tabla "Nocturna" de la web van a Nocturna (tabla #8)
             ],
             'Santa Fé' => [
                 'La Previa' => 0,

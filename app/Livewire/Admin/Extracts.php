@@ -737,17 +737,17 @@ class Extracts extends Component
                 ],
                 'MONTEVIDEO' => [
                     'La Previa' => 'ORO1015',
-                    'Primera' => 'ORO1500',
-                    'Matutina' => 'ORO1800',    // Matutina de Montevideo va a Vespertina (ORO1800)
-                    'Vespertina' => 'ORO1800',  // Vespertina de Montevideo va a Vespertina (ORO1800)
-                    'Nocturna' => 'ORO2100'
+                    'Primera' => 'ORO1800',
+                    'Matutina' => 'ORO1800',    // Matutina de Montevideo va a Vespertina (ORO1800 = extract_id 4)
+                    'Vespertina' => 'ORO1800',  // Vespertina de Montevideo va a Vespertina (ORO1800 = extract_id 4)
+                    'Nocturna' => 'ORO2100'     // Nocturna de Montevideo va a Nocturna (ORO2100 = extract_id 5)
                 ],
                 'Montevideo' => [
                     'La Previa' => 'ORO1015',
-                    'Primera' => 'ORO1500',
-                    'Matutina' => 'ORO1800',    // Matutina de Montevideo va a Vespertina (ORO1800)
-                    'Vespertina' => 'ORO1800',  // Vespertina de Montevideo va a Vespertina (ORO1800)
-                    'Nocturna' => 'ORO2100'
+                    'Primera' => 'ORO1800',
+                    'Matutina' => 'ORO1800',    // Matutina de Montevideo va a Vespertina (ORO1800 = extract_id 4)
+                    'Vespertina' => 'ORO1800',  // Vespertina de Montevideo va a Vespertina (ORO1800 = extract_id 4)
+                    'Nocturna' => 'ORO2100'     // Nocturna de Montevideo va a Nocturna (ORO2100 = extract_id 5)
                 ],
                 'SAN LUIS' => [
                     'La Previa' => 'SLU1015',
@@ -829,7 +829,13 @@ class Extracts extends Component
             }
             
             // Buscar la ciudad en la BD por código exacto
+            // NOTA: Para Montevideo, necesitamos considerar el extract_id correcto
             $city = City::where('code', $cityCode)->first();
+            
+            // Si es Montevideo y el código es ORO1800, asegurar que sea extract_id 4 (Vespertina)
+            if ($cityName === 'Montevideo' && $cityCode === 'ORO1800' && $city && $city->extract_id !== 4) {
+                $city = City::where('code', 'ORO1800')->where('extract_id', 4)->first();
+            }
             
             if (!$city) {
                 Log::warning("Extracts - No se encontró ciudad en BD: {$cityCode}");
@@ -1130,14 +1136,11 @@ class Extracts extends Component
             if (!empty($tableData)) {
                 Log::info("Tabla {$tableIndex} parseada:", ['headers' => $tableData['headers'], 'rows_count' => count($tableData['rows'])]);
                 
-                // Mapear índice de tabla a extract_id (turno)
-                $extractId = $this->mapTableIndexToExtractId($tableIndex);
-                Log::info("Tabla {$tableIndex} mapeada a extract_id: {$extractId}");
-                
-                $numbers = $this->extractNumbersFromTable($tableData, $tableIndex, $extractId);
+                // Extraer números de la tabla (el mapeo se hace dentro del método)
+                $numbers = $this->extractNumbersFromTable($tableData, $tableIndex);
                 $extractedNumbers = array_merge($extractedNumbers, $numbers);
                 
-                Log::info("Números extraídos de tabla {$tableIndex} (extract_id {$extractId}):", ['count' => count($numbers)]);
+                Log::info("Números extraídos de tabla {$tableIndex}:", ['count' => count($numbers)]);
             } else {
                 Log::info("Tabla {$tableIndex} vacía o no parseable");
             }
@@ -1150,15 +1153,24 @@ class Extracts extends Component
     /**
      * Mapea el índice de tabla al extract_id correcto
      */
-    private function mapTableIndexToExtractId($tableIndex)
+    private function mapTableIndexToExtractId($tableIndex, $cityName = null)
     {
-        // Mapeo de índice de tabla a extract_id (turno)
+        // Mapeo específico para Montevideo (estructura diferente)
+        if ($cityName && (stripos($cityName, 'Montevideo') !== false)) {
+            $montevideoMapping = [
+                4 => 4, // Tabla 4 = VESPERTINA (datos de Matutina van a Vespertina)
+                8 => 5, // Tabla 8 = NOCTURNA (datos de Nocturna van a Nocturna)
+            ];
+            return $montevideoMapping[$tableIndex] ?? null;
+        }
+        
+        // Mapeo genérico para otras ciudades
         $tableToExtractMapping = [
-            0 => 1, // Tabla 1 = PREVIA
-            1 => 2, // Tabla 2 = PRIMERO  
-            2 => 3, // Tabla 3 = MATUTINA
-            3 => 4, // Tabla 4 = VESPERTINA
-            4 => 5, // Tabla 5 = NOCTURNA
+            0 => 1, // Tabla 0 = PREVIA
+            1 => 2, // Tabla 1 = PRIMERO  
+            2 => 3, // Tabla 2 = MATUTINA
+            3 => 4, // Tabla 3 = VESPERTINA
+            4 => 5, // Tabla 4 = NOCTURNA
         ];
         
         return $tableToExtractMapping[$tableIndex] ?? 1; // Default a PREVIA si no se encuentra
@@ -1208,7 +1220,7 @@ class Extracts extends Component
     /**
      * Extrae números ganadores de una tabla procesada
      */
-    private function extractNumbersFromTable($tableData, $tableIndex = 0, $extractId = 1)
+    private function extractNumbersFromTable($tableData, $tableIndex = 0)
     {
         $numbers = [];
         $headers = $tableData['headers'];
@@ -1243,12 +1255,21 @@ class Extracts extends Component
             'T. del fuego' => 'TDF'
         ];
         
-        Log::info("Procesando tabla {$tableIndex} para extract_id {$extractId}:", ['headers' => $headers, 'rows_count' => count($rows)]);
+        Log::info("Procesando tabla {$tableIndex}:", ['headers' => $headers, 'rows_count' => count($rows)]);
         
         foreach ($rows as $rowIndex => $row) {
             if (empty($row)) continue;
             
             $cityName = trim($row[0]);
+            
+            // Determinar el extract_id basándose en la ciudad y el índice de tabla
+            $extractId = $this->mapTableIndexToExtractId($tableIndex, $cityName);
+            
+            if (!$extractId) {
+                Log::info("No se encontró mapeo para tabla {$tableIndex} y ciudad {$cityName}");
+                continue;
+            }
+            
             Log::info("Tabla {$tableIndex} (extract_id {$extractId}) - Fila {$rowIndex}:", ['city_name' => $cityName, 'row' => $row]);
             
             // Buscar coincidencia exacta primero
@@ -1304,7 +1325,7 @@ class Extracts extends Component
             }
         }
         
-        Log::info("Total números extraídos de tabla {$tableIndex} (extract_id {$extractId}):", ['count' => count($numbers)]);
+        Log::info("Total números extraídos de tabla {$tableIndex}:", ['count' => count($numbers)]);
         return $numbers;
     }
 
