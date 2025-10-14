@@ -30,7 +30,7 @@ class CitiesTableSeeder extends Seeder
             ['extract_id' => 2, 'name' => 'SANTA FE', 'code' => 'SFE1200', 'time' => '12:00'],
             ['extract_id' => 2, 'name' => 'CORDOBA', 'code' => 'COR1200', 'time' => '12:00'],
             ['extract_id' => 2, 'name' => 'PROVINCIA', 'code' => 'PRO1200', 'time' => '12:00'],
-            ['extract_id' => 2, 'name' => 'MONTEVIDEO', 'code' => 'ORO1500', 'time' => '15:00'],
+            ['extract_id' => 2, 'name' => 'MONTEVIDEO', 'code' => 'ORO1800', 'time' => '18:00'],
             ['extract_id' => 2, 'name' => 'CORRIENTES', 'code' => 'CTE1200', 'time' => '12:00'],
             ['extract_id' => 2, 'name' => 'CHACO', 'code' => 'CHA1200', 'time' => '12:00'],
             ['extract_id' => 2, 'name' => 'MENDOZA', 'code' => 'MZA1200', 'time' => '12:00'],

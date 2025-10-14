@@ -139,9 +139,9 @@ class PlaysManager extends Component
 
         '12:00' => ['Q', 'CH2', 'W', 'M1', 'M', 'R', 'T', 'K'],
 
-        '15:00' => ['A', 'CH3', 'E', 'M2', 'Ct3', 'D', 'L', 'J', 'S'],
+        '15:00' => ['A', 'CH3', 'E', 'M2', 'Ct3', 'D', 'L', 'J'],
 
-        '18:00' => ['F', 'CH4', 'B', 'M3', 'Z', 'V', 'H', 'U'],
+        '18:00' => ['F', 'CH4', 'B', 'M3', 'Z', 'V', 'H', 'U', 'S'],
 
         '21:00' => ['N', 'CH5', 'P', 'M4', 'G', 'I', 'C', 'Y', 'O'],
 
@@ -181,7 +181,7 @@ class PlaysManager extends Component
         'D' => 'SFE1500',
         'L' => 'COR1500',
         'J' => 'RIO1500',
-        'S' => 'ORO1500',
+        'S' => 'ORO1800',
 
         'F' => 'NAC1800',
         'CH4' => 'CHA1800',
@@ -285,7 +285,7 @@ class PlaysManager extends Component
                 $this->selected["{$h}_col_" . ($colIdx + 1)] = false;
             }
 
-            if (in_array($h, ['15:00', '21:00'])) {
+            if (in_array($h, ['18:00', '21:00'])) {
 
                 $this->selected["{$h}_oro"] = false;
             }
@@ -873,7 +873,7 @@ public function editRow($id)
                     if ($col !== false) $this->selected["{$time}_col_" . ($col + 1)] = true;
                 }
             }
-            if ($code === 'S') $this->selected["15:00_oro"] = true;
+            if ($code === 'S') $this->selected["18:00_oro"] = true;
             elseif ($code === 'O') $this->selected["21:00_oro"] = true;
         }
 
@@ -1263,13 +1263,13 @@ public function addRow()
                     $this->checkboxCodes = array_values(array_diff($this->checkboxCodes, [$codeValue]));
                 }
 
-                if (in_array($time, ['15:00', '21:00'])) {
+                if (in_array($time, ['18:00', '21:00'])) {
 
                     $oroKeyInSelected = "{$time}_oro";
 
                     if (isset($this->selected[$oroKeyInSelected]) && $this->selected[$oroKeyInSelected]) $this->selected[$oroKeyInSelected] = false;
 
-                    $oroCode = $time === '15:00' ? 'S' : 'O';
+                    $oroCode = $time === '18:00' ? 'S' : 'O';
 
                     $this->checkboxCodes = array_values(array_diff($this->checkboxCodes, [$oroCode]));
                 }
@@ -1322,7 +1322,7 @@ public function addRow()
 
 
 
-            if (in_array($hora, ['15:00', '21:00'])) {
+            if (in_array($hora, ['18:00', '21:00'])) {
 
                 $oroKey = "{$hora}_oro";
 
@@ -1333,7 +1333,7 @@ public function addRow()
                     $anyCheckboxChanged = true;
                 }
 
-                $codesToUpdate[] = $hora === '15:00' ? 'S' : 'O';
+                $codesToUpdate[] = $hora === '18:00' ? 'S' : 'O';
             }
         }
 
@@ -1383,9 +1383,9 @@ public function addRow()
 
 
 
-        if (in_array($time, ['15:00', '21:00'])) {
+        if (in_array($time, ['18:00', '21:00'])) {
 
-            $oroCode = $time === '15:00' ? 'S' : 'O';
+            $oroCode = $time === '18:00' ? 'S' : 'O';
 
             $currentCodesInRow[] = $oroCode;
 
@@ -1514,10 +1514,10 @@ public function addRow()
 
     {
 
-        if (!in_array($time, ['15:00', '21:00']) || $this->isDisabled($time)) return;
+        if (!in_array($time, ['18:00', '21:00']) || $this->isDisabled($time)) return;
 
 
-        $oroCode = $time === '15:00' ? 'S' : 'O';
+        $oroCode = $time === '18:00' ? 'S' : 'O';
 
         $key = "{$time}_oro";
 
@@ -1588,7 +1588,7 @@ public function addRow()
             }
         }
 
-        if ($allCheckedInRow && in_array($time, ['15:00', '21:00'])) {
+        if ($allCheckedInRow && in_array($time, ['18:00', '21:00'])) {
 
             $oroKey = "{$time}_oro";
 
@@ -1677,7 +1677,7 @@ public function addRow()
                 $this->selected["{$h}_col_" . ($colIdx + 1)] = false;
             }
 
-            if (in_array($h, ['15:00', '21:00'])) {
+            if (in_array($h, ['18:00', '21:00'])) {
 
                 $this->selected["{$h}_oro"] = false;
             }
@@ -1882,7 +1882,7 @@ public function addRow()
 
             if ($code === 'S') {
 
-                $selectedTimes[] = '15:00';
+                $selectedTimes[] = '18:00';
 
                 continue;
             }
@@ -1914,7 +1914,7 @@ public function addRow()
 
     {
 
-        if ($lotteryUiCode === 'S') return '15:00';
+        if ($lotteryUiCode === 'S') return '18:00';
 
         if ($lotteryUiCode === 'O') return '21:00';
 

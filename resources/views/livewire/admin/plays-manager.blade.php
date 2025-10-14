@@ -87,7 +87,7 @@
                                                     aria-label="Seleccionar opción {{ $horario['time'] }} - Columna {{ $col }}">
                                             </td>
                                         @endfor
-                                        @if (in_array($horario['time'], ['15:00', '21:00']))
+                                        @if (in_array($horario['time'], ['18:00', '21:00']))
                                             <td class="p-1">
                                                 <input type="checkbox" id="time-{{ $horario['time'] }}-col-oro"
                                                     class="w-5 h-5 2xl:w-6 2xl:h-6 bg-[#22272b] rounded border border-gray-300 {{ $horario['checkboxClass'] }}"
