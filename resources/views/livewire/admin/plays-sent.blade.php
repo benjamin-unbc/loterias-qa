@@ -164,6 +164,29 @@
 
                             
                             <x-slot name="content">
+                                {{-- DEBUG INFO --}}
+                                @if(session('debug_info') && session('debug_info')['ticket'] === '24-0008')
+                                    <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4 no-print">
+                                        <h4 class="font-bold">DEBUG INFO - Raw APUs:</h4>
+                                        <p><strong>Count:</strong> {{ session('debug_info')['raw_apus_count'] }}</p>
+                                        <p><strong>Loterías únicas en BD:</strong> {{ implode(', ', session('debug_info')['unique_lotteries']) }}</p>
+                                        <details class="mt-2">
+                                            <summary class="cursor-pointer font-semibold">Ver datos completos</summary>
+                                            <pre class="mt-2 text-xs overflow-auto max-h-40">{{ json_encode(session('debug_info')['raw_apus_data'], JSON_PRETTY_PRINT) }}</pre>
+                                        </details>
+                                    </div>
+                                @endif
+                                
+                                @if(session('debug_groups') && session('debug_groups')['ticket'] === '24-0008')
+                                    <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-4 no-print">
+                                        <h4 class="font-bold">DEBUG INFO - Processed Groups:</h4>
+                                        <details class="mt-2">
+                                            <summary class="cursor-pointer font-semibold">Ver grupos procesados</summary>
+                                            <pre class="mt-2 text-xs overflow-auto max-h-40">{{ json_encode(session('debug_groups')['processed_groups'], JSON_PRETTY_PRINT) }}</pre>
+                                        </details>
+                                    </div>
+                                @endif
+                                
                                 <div class="flex items-center justify-between gap-2 no-print z-10 mt-3" id="buttonsContainer">
                                     <a href="/"
                                        class="w-full text-sm px-3 py-1 bg-teal-500 text-white rounded-md flex justify-center
