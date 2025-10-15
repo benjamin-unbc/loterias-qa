@@ -102,6 +102,8 @@ class PlaysManager extends Component
     public $currentBasePlayId = null;
 
     public $currentDerivedCount = 0;
+    
+    public $isCreatingDerived = false;
 
 
 
@@ -2211,24 +2213,30 @@ public function addRow()
 
     public function addRowWithDerived()
 {
-    // 1. Crear una clave de bloqueo única para este usuario y operación
+    // 1. Verificar si ya hay una operación en curso (evitar clics rápidos)
+    if ($this->isCreatingDerived) {
+        return;
+    }
+    
+    // 2. Crear una clave de bloqueo única para este usuario y operación
     $lockKey = 'addRowWithDerived_lock_' . auth()->id();
     $lastDerivedKey = 'lastDerivedCompleted_' . auth()->id();
     
-    // 2. Verificar si ya hay una operación en curso (evitar clics rápidos)
+    // 3. Verificar si ya hay una operación en curso (evitar clics rápidos)
     if (\Cache::has($lockKey)) {
         // En lugar de mostrar mensaje, simplemente ignorar el clic (más rápido)
         return;
     }
     
-    // 3. Verificar si se completó la última derivada y bloquear completamente
+    // 4. Verificar si se completó la última derivada y bloquear completamente
     if (\Cache::has($lastDerivedKey)) {
         // La última derivada ya se completó, bloquear completamente
         return;
     }
     
-    // 4. Establecer bloqueo mínimo (0.1 segundos) para evitar duplicados pero permitir ejecución rápida
-    \Cache::put($lockKey, true, 0.1);
+    // 5. Marcar como procesando y establecer bloqueo más largo (0.5 segundos)
+    $this->isCreatingDerived = true;
+    \Cache::put($lockKey, true, 0.5);
     
     try {
         $basePlay = Play::where('user_id', auth()->id())
@@ -2271,18 +2279,20 @@ public function addRow()
 
         $newDerivedNumberFormatted = $derivedNumbersToCreate[$this->currentDerivedCount];
 
-        // 4. Verificación rápida: verificar duplicados en los últimos 0.5 segundos
+        // 4. Verificación robusta: verificar duplicados en los últimos 2 segundos
         $duplicatePlay = Play::where('user_id', auth()->id())
             ->where('number', $newDerivedNumberFormatted)
             ->where('position', $basePlay->position)
             ->where('lottery', $basePlay->lottery)
             ->where('numberR', $basePlay->numberR)
             ->where('positionR', $basePlay->positionR)
-            ->where('created_at', '>=', now()->subSeconds(0.5))
+            ->where('created_at', '>=', now()->subSeconds(2))
             ->first();
 
         if ($duplicatePlay) {
             // Silenciosamente ignorar duplicados
+            \Cache::forget($lockKey);
+            $this->isCreatingDerived = false;
             return;
         }
 
@@ -2300,7 +2310,7 @@ public function addRow()
             return;
         }
 
-        // 6. Verificación simplificada: solo verificar si la última jugada es exactamente la misma (más rápido)
+        // 6. Verificación estricta: verificar si la última jugada es exactamente la misma
         $lastPlay = Play::where('user_id', auth()->id())
             ->where('number', $newDerivedNumberFormatted)
             ->where('position', $basePlay->position)
@@ -2310,8 +2320,10 @@ public function addRow()
             ->orderBy('id', 'desc')
             ->first();
 
-        if ($lastPlay && $lastPlay->created_at->diffInSeconds(now()) < 0.2) {
-            // Si la última jugada es exactamente igual y fue creada hace menos de 0.2 segundos, ignorar
+        if ($lastPlay && $lastPlay->created_at->diffInSeconds(now()) < 1.0) {
+            // Si la última jugada es exactamente igual y fue creada hace menos de 1 segundo, ignorar
+            \Cache::forget($lockKey);
+            $this->isCreatingDerived = false;
             return;
         }
 
@@ -2343,9 +2355,15 @@ public function addRow()
         $this->dispatch('notify', message: "Jugada derivada '{$newDerivedNumberFormatted}' creada correctamente.", type: 'success');
         $this->dispatch('focusInput', ['selector' => '#number']);
         
-    } finally {
-        // 8. Liberar bloqueo siempre (incluso si hay error)
+    } catch (\Exception $e) {
+        // En caso de error, liberar el bloqueo y notificar
         \Cache::forget($lockKey);
+        \Log::error('Error al crear jugada derivada: ' . $e->getMessage());
+        $this->dispatch('notify', message: 'Error al crear jugada derivada.', type: 'error');
+    } finally {
+        // Asegurar que el bloqueo se libere siempre y resetear el estado
+        \Cache::forget($lockKey);
+        $this->isCreatingDerived = false;
     }
 }
 

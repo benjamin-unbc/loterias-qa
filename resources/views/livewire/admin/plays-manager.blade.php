@@ -267,8 +267,20 @@
                             <div class="overflow-x-auto" x-data
                                 x-on:keydown.window="
                                     if (event.key === 'PageDown') { event.preventDefault(); @this.call('sendPlays'); }
-                                    if (event.key === '+' || (event.key === '=' && event.shiftKey)) { event.preventDefault(); @this.call('addRowWithDerived'); }
+                                    if (event.key === '+' || (event.key === '=' && event.shiftKey)) { 
+                                        if (@this.isCreatingDerived) return;
+                                        event.preventDefault(); 
+                                        @this.call('addRowWithDerived'); 
+                                    }
                                 ">
+                                @if($isCreatingDerived)
+                                    <div class="bg-blue-500/20 border border-blue-500/50 rounded-md p-2 mb-2 mx-2">
+                                        <div class="flex items-center justify-center gap-2 text-blue-300">
+                                            <i class="fa-solid fa-spinner fa-spin"></i>
+                                            <span class="text-sm font-medium">Creando jugada derivada...</span>
+                                        </div>
+                                    </div>
+                                @endif
                                 <table
                                     class="w-full text-sm text-left rtl:text-right text-white dark:text-gray-400 relative">
                                     <thead class="text-xs text-white uppercase bg-gray-600 sticky top-0 z-10">
