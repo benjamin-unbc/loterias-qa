@@ -133,7 +133,7 @@ class ClientDetailsModal extends Component
             $query->whereDate('date', $this->resultadosDate);
         }
 
-        return $query->select([
+        $results = $query->select([
                 'ticket',
                 'lottery',
                 'number',
@@ -146,6 +146,12 @@ class ClientDetailsModal extends Component
             ])
             ->orderBy('created_at', 'desc')
             ->paginate($this->resultadosPerPage);
+
+        // Filtrar resultados según la configuración de quinielas
+        $filteredResults = $this->filterResultsByQuinielasConfig($results->getCollection());
+        $results->setCollection($filteredResults);
+
+        return $results;
     }
 
     public function getExtractosProperty()
@@ -154,9 +160,23 @@ class ClientDetailsModal extends Component
             return collect();
         }
 
-        return Extract::with(['cities.numbers' => function($query) {
-            $query->where('date', $this->extractosDate);
+        // Obtener extractos con ciudades y números (igual que en el módulo de extractos original)
+        $hiddenCities = ['SAN LUIS', 'CHUBUT', 'FORMOSA', 'CATAMARCA', 'SAN JUAN'];
+        $extracts = Extract::with(['cities' => function($query) use ($hiddenCities) {
+            $query->whereNotIn('name', $hiddenCities)
+                  ->with(['numbers' => function($subQuery) {
+                      $subQuery->where('date', $this->extractosDate);
+                  }]);
         }])->get();
+
+        // Filtrar ciudades usando la misma lógica que el módulo de extractos original
+        $extracts->each(function($extract) {
+            $extract->cities = $extract->cities->filter(function($city) use ($extract) {
+                return $this->isCityAndScheduleConfiguredInQuinielas($city->name, $extract->name);
+            });
+        });
+
+        return $extracts;
     }
 
     public function getTotalJugadasProperty()
@@ -236,7 +256,10 @@ class ClientDetailsModal extends Component
             $query->whereDate('date', $this->liquidacionesDate);
         }
 
-        return $query->orderBy('created_at', 'desc')->get();
+        $results = $query->orderBy('created_at', 'desc')->get();
+
+        // Filtrar resultados según la configuración de quinielas
+        return $this->filterResultsByQuinielasConfig($results);
     }
 
     public function getLiquidacionDataProperty()
@@ -398,6 +421,156 @@ class ClientDetailsModal extends Component
         // Método para resetear filtros
         $this->resultadosDate = now()->toDateString();
         $this->resetPage();
+    }
+
+    /**
+     * Verifica si una ciudad y horario específico están configurados en Quinielas
+     * (Copiado exactamente del módulo de extractos)
+     */
+    public function isCityAndScheduleConfiguredInQuinielas($cityName, $extractName)
+    {
+        try {
+            $config = \App\Models\GlobalQuinielasConfiguration::where('city_name', $cityName)->first();
+            if (!$config || empty($config->selected_schedules)) {
+                return false;
+            }
+            
+            // Mapeo específico por ciudad y extracto
+            $cityExtractMapping = [
+                'Tucuman' => [
+                    'PREVIA' => ['11:30'],      // Tucu1130
+                    'PRIMERO' => ['14:30'],     // Tucu1430
+                    'MATUTINO' => ['17:30'],    // Tucu1730
+                    'VESPERTINO' => ['19:30'],  // Tucu1930
+                    'NOCTURNO' => ['22:00']     // Tucu2200
+                ],
+                'Santiago' => [
+                    'PREVIA' => ['10:15'],      // San1015
+                    'PRIMERO' => ['12:00'],     // San1200
+                    'MATUTINO' => ['15:00'],    // San1500
+                    'VESPERTINO' => ['19:45'],  // San1945
+                    'NOCTURNO' => ['22:00']     // San2200
+                ],
+                'SALTA' => [
+                    'PREVIA' => ['11:30'],      // Salt1130
+                    'PRIMERO' => ['14:00'],     // Salt1400
+                    'MATUTINO' => ['17:30'],    // Salt1730
+                    'VESPERTINO' => ['21:00'],  // Salt2100
+                    'NOCTURNO' => []
+                ],
+                'JUJUY' => [
+                    'PREVIA' => [],
+                    'PRIMERO' => ['12:00'],     // JUJ1200
+                    'MATUTINO' => ['15:00'],    // JUJ1500
+                    'VESPERTINO' => ['18:00'],  // JUJ1800
+                    'NOCTURNO' => ['21:00']     // JUJ2100
+                ],
+                'MISIONES' => [
+                    'PREVIA' => ['10:30'],      // MIS1030
+                    'PRIMERO' => ['12:15'],     // MIS1215
+                    'MATUTINO' => ['15:00'],    // MIS1500
+                    'VESPERTINO' => ['18:00'],  // MIS1800
+                    'NOCTURNO' => ['21:15']     // MIS2115
+                ],
+                'NEUQUEN' => [
+                    'PREVIA' => ['10:15'],      // NQN1015
+                    'PRIMERO' => ['12:00'],     // NQN1200
+                    'MATUTINO' => ['15:00'],    // NQN1500
+                    'VESPERTINO' => ['18:00'],  // NQN1800
+                    'NOCTURNO' => ['21:00']     // NQN2100
+                ],
+                'Río Negro' => [
+                    'PREVIA' => ['10:15'],      // Rio1015
+                    'PRIMERO' => ['12:00'],     // Rio1200
+                    'MATUTINO' => ['15:00'],    // Rio1500
+                    'VESPERTINO' => ['18:00'],  // Rio1800
+                    'NOCTURNO' => ['21:00']     // Rio2100
+                ]
+            ];
+            
+            // Mapeo por defecto para ciudades estándar
+            $defaultMapping = [
+                'PREVIA' => ['10:15'],
+                'PRIMERO' => ['12:00'],
+                'MATUTINO' => ['15:00'],
+                'VESPERTINO' => ['18:00'],
+                'NOCTURNO' => ['21:00']
+            ];
+            
+            // Obtener el mapeo específico para la ciudad o usar el por defecto
+            $cityMapping = $cityExtractMapping[$cityName] ?? $defaultMapping;
+            $schedulesForExtract = $cityMapping[$extractName] ?? [];
+            
+            // Verificar si alguno de los horarios del extracto está seleccionado
+            foreach ($schedulesForExtract as $schedule) {
+                if (in_array($schedule, $config->selected_schedules)) {
+                    return true;
+                }
+            }
+            
+            return false;
+            
+        } catch (\Exception $e) {
+            \Log::error("Error verificando configuración de Quinielas para {$cityName} - {$extractName}: " . $e->getMessage());
+            return true; // Por defecto, mostrar si hay error
+        }
+    }
+
+    /**
+     * Filtra resultados según la configuración de quinielas
+     * Solo muestra loterías que están configuradas en GlobalQuinielasConfiguration
+     */
+    private function filterResultsByQuinielasConfig($results)
+    {
+        // Obtener configuración de quinielas
+        $savedPreferences = \App\Models\GlobalQuinielasConfiguration::all()
+            ->keyBy('city_name')
+            ->map(function($config) {
+                return $config->selected_schedules;
+            });
+
+        // Mapeo de códigos de sistema a nombres de ciudad
+        $systemCodeToCity = [
+            'NAC' => 'BUENOS AIRES',
+            'CHA' => 'CHACO', 
+            'PRO' => 'ENTRE RIOS',
+            'MZA' => 'MENDOZA',
+            'CTE' => 'CORRIENTES',
+            'SFE' => 'SANTA FE',
+            'COR' => 'CORDOBA',
+            'RIO' => 'LA RIOJA',
+            'ORO' => 'MONTEVIDEO',
+            'NQN' => 'NEUQUEN',
+            'MIS' => 'MISIONES',
+            'JUJ' => 'JUJUY',
+            'Salt' => 'SALTA',
+            'Rio' => 'RIO NEGRO',
+            'Tucu' => 'TUCUMAN',
+            'San' => 'SAN LUIS'
+        ];
+
+        return $results->filter(function($result) use ($savedPreferences, $systemCodeToCity) {
+            $lotteryCodes = explode(',', $result->lottery);
+            
+            foreach ($lotteryCodes as $code) {
+                $code = trim($code);
+                
+                // Extraer prefijo de ciudad del código de sistema (ej: "CHA" de "CHA1800")
+                if (preg_match('/^([A-Za-z]+)\d{4}$/', $code, $matches)) {
+                    $cityPrefix = $matches[1];
+                    $cityName = $systemCodeToCity[$cityPrefix] ?? null;
+                    
+                    if ($cityName && isset($savedPreferences[$cityName])) {
+                        $selectedSchedules = $savedPreferences[$cityName];
+                        if (!empty($selectedSchedules)) {
+                            return true; // Al menos una lotería está configurada
+                        }
+                    }
+                }
+            }
+            
+            return false; // Ninguna lotería está configurada
+        });
     }
 
     public function render()
