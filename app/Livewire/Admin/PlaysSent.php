@@ -68,7 +68,7 @@ class PlaysSent extends Component
         $this->showTicketModal = true;
     }
 
-    // Standardized codes array (consistent with LotteryResultProcessor)
+    // Standardized codes array (consistent with LotteryResultProcessor and PlaysManager)
     public $codes = [
         'AB' => 'NAC1015', 'CH1' => 'CHA1015', 'QW' => 'PRO1015', 'M10' => 'MZA1015', '!' => 'CTE1015',
         'ER' => 'SFE1015', 'SD' => 'COR1015', 'RT' => 'RIO1015', 'Q' => 'NAC1200', 'CH2' => 'CHA1200',
@@ -125,6 +125,7 @@ public function viewApus($ticket)
         ->orderBy('id', 'asc')
         ->get();
 
+
     if ($rawApus->isEmpty()) {
         $this->apusData = collect();
         $this->groups = collect();
@@ -140,6 +141,7 @@ public function viewApus($ticket)
 
     // OPTIMIZACIÓN 3: Procesamiento optimizado de agrupaciones
     $this->processApusData($rawApus);
+
 
     // OPTIMIZACIÓN 4: Consulta paralela para el play (ya no bloquea el procesamiento)
     $this->play = PlaysSentModel::select(['ticket', 'code', 'date', 'time', 'user_id', 'amount'])
@@ -161,14 +163,14 @@ public function viewApus($ticket)
  */
 private function processApusData($rawApus)
 {
-    // OPTIMIZACIÓN 6: Agrupación optimizada con menos operaciones
+    // Agrupar por original_play_id para mantener las jugadas juntas
     $groupedByPlayId = $rawApus->groupBy('original_play_id');
     
     $processedGroups = $groupedByPlayId->map(function ($groupOfApusFromSameOriginalPlay) {
-        // Tomar la primera apuesta del grupo como representativa
+        // Tomar la primera apuesta del grupo como representativa para los datos básicos
         $representativeApu = $groupOfApusFromSameOriginalPlay->first();
         
-        // OPTIMIZACIÓN 7: Procesamiento más eficiente de códigos de lotería
+        // Obtener TODOS los códigos de lotería únicos de este grupo
         $lotteryCodes = $groupOfApusFromSameOriginalPlay
             ->pluck('lottery')
             ->filter()
@@ -176,6 +178,7 @@ private function processApusData($rawApus)
             ->values()
             ->toArray();
         
+        // Determinar la cadena de loterías para mostrar
         $determinedLotteryKeyString = $this->determineLottery($lotteryCodes);
 
         return [
@@ -190,7 +193,7 @@ private function processApusData($rawApus)
         ];
     });
 
-    // OPTIMIZACIÓN 8: Agrupación final optimizada
+    // Agrupar por la cadena de loterías para mostrar
     $this->groups = $processedGroups
         ->groupBy('codes_display_string')
         ->map(function ($items, $key) {
@@ -199,9 +202,9 @@ private function processApusData($rawApus)
                 'numbers' => $items->pluck('numbers')->flatten(1)->all(),
             ];
         })
-        // OPTIMIZACIÓN 9: Ordenamiento optimizado con caché de posiciones
+        // Ordenar por el orden deseado de loterías
         ->sortBy(function ($group, $key) {
-            static $desiredOrder = ['NAC', 'CHA', 'PRO', 'MZA', 'CTE', 'SFE', 'COR', 'RIO', 'ORO'];
+            static $desiredOrder = ['NAC', 'CHA', 'PRO', 'MZA', 'CTE', 'SFE', 'COR', 'RIO', 'ORO', 'NQN', 'MIS', 'JUJ', 'Salt', 'Rio', 'Tucu', 'San'];
             static $positionCache = [];
             
             if (!isset($positionCache[$key])) {
@@ -216,31 +219,42 @@ private function processApusData($rawApus)
 }
 
     // Use the same determineLottery logic as PlaysManager
-    protected function determineLottery(array $selectedUiCodes): string
+    protected function determineLottery(array $selectedCodes): string
     {
-        $systemCodes = [];
-        foreach ($selectedUiCodes as $uiCode) {
-            $uiCode = trim($uiCode);
-            if (isset($this->codes[$uiCode])) {
-                $systemCodes[] = $this->codes[$uiCode];
+        $displayCodes = [];
+        
+        foreach ($selectedCodes as $code) {
+            $code = trim($code);
+            
+            // Si el código ya es un código del sistema (ej: "CHA1800"), procesarlo directamente
+            if (preg_match('/^[A-Za-z]+\d{4}$/', $code)) {
+                $prefix = substr($code, 0, -4); // Extracts 'CHA' from 'CHA1800'
+                $timeSuffix = $this->getTimeSuffixFromSystemCode($code); // Gets '18' from 'CHA1800'
+                $displayCodes[] = $prefix . $timeSuffix; // Combines to 'CHA18'
+            }
+            // Si es un código de UI (ej: "CH4"), convertirlo usando el mapeo
+            elseif (isset($this->codes[$code])) {
+                $systemCode = $this->codes[$code];
+                $prefix = substr($systemCode, 0, -4); // Extracts 'CHA' from 'CHA1800'
+                $timeSuffix = $this->getTimeSuffixFromSystemCode($systemCode); // Gets '18' from 'CHA1800'
+                $displayCodes[] = $prefix . $timeSuffix; // Combines to 'CHA18'
             }
         }
-        $displayCodes = [];
-        foreach ($systemCodes as $systemCode) {
-            $prefix = substr($systemCode, 0, -4); // Extracts 'NAC' from 'NAC1015'
-            $timeSuffix = $this->getTimeSuffixFromSystemCode($systemCode); // Gets '10' from 'NAC1015'
-            $displayCodes[] = $prefix . $timeSuffix; // Combines to 'NAC10'
-        }
-        $desiredOrder = ['NAC', 'CHA', 'PRO', 'MZA', 'CTE', 'SFE', 'COR', 'RIO', 'ORO'];
+        
+        $desiredOrder = ['NAC', 'CHA', 'PRO', 'MZA', 'CTE', 'SFE', 'COR', 'RIO', 'ORO', 'NQN', 'MIS', 'JUJ', 'Salt', 'Rio', 'Tucu', 'San'];
         $uniqueDisplayCodes = array_unique($displayCodes);
+        
         usort($uniqueDisplayCodes, function ($a, $b) use ($desiredOrder) {
             $prefixA = substr($a, 0, -2);
             $prefixB = substr($b, 0, -2);
             $posA = array_search($prefixA, $desiredOrder);
             $posB = array_search($prefixB, $desiredOrder);
-            if ($posB === false) return -1;
+            if ($posA === false) $posA = 999;
+            if ($posB === false) $posB = 999;
             return $posA - $posB;
         });
+        
+        
         return implode(', ', $uniqueDisplayCodes);
     }
 
