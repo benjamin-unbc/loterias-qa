@@ -671,17 +671,27 @@
                     $rawApus = $selectedTicket->apus->sortBy('original_play_id')->sortBy('id');
                     $groupedByPlayId = $rawApus->groupBy('original_play_id');
                     
-                    // Códigos exactos del componente PlaysSent
+                    // Códigos completos del componente PlaysSent (actualizados)
                     $codes = [
                         'AB' => 'NAC1015', 'CH1' => 'CHA1015', 'QW' => 'PRO1015', 'M10' => 'MZA1015', '!' => 'CTE1015',
                         'ER' => 'SFE1015', 'SD' => 'COR1015', 'RT' => 'RIO1015', 'Q' => 'NAC1200', 'CH2' => 'CHA1200',
                         'W' => 'PRO1200', 'M1' => 'MZA1200', 'M' => 'CTE1200', 'R' => 'SFE1200', 'T' => 'COR1200',
                         'K' => 'RIO1200', 'A' => 'NAC1500', 'CH3' => 'CHA1500', 'E' => 'PRO1500', 'M2' => 'MZA1500',
-                        'Ct3' => 'CTE1500', 'D' => 'SFE1500', 'L' => 'COR1500', 'J' => 'RIO1500', 'S' => 'ORO1500',
+                        'Ct3' => 'CTE1500', 'D' => 'SFE1500', 'L' => 'COR1500', 'J' => 'RIO1500', 'S' => 'ORO1800',
+                        'ORO1500' => 'ORO1800', // Mapeo especial para Montevideo 18:00
+                        'ORO1800' => 'ORO1800', // Mapeo directo para Montevideo 18:00
                         'F' => 'NAC1800', 'CH4' => 'CHA1800', 'B' => 'PRO1800', 'M3' => 'MZA1800', 'Z' => 'CTE1800',
                         'V' => 'SFE1800', 'H' => 'COR1800', 'U' => 'RIO1800', 'N' => 'NAC2100', 'CH5' => 'CHA2100',
                         'P' => 'PRO2100', 'M4' => 'MZA2100', 'G' => 'CTE2100', 'I' => 'SFE2100', 'C' => 'COR2100',
-                        'Y' => 'RIO2100', 'O' => 'ORO2100'
+                        'Y' => 'RIO2100', 'O' => 'ORO2100',
+                        // Nuevos códigos para las loterías adicionales
+                        'NQN1015' => 'NQN1015', 'MIS1030' => 'MIS1030', 'Rio1015' => 'Rio1015', 'Tucu1130' => 'Tucu1130', 'San1015' => 'San1015',
+                        'NQN1200' => 'NQN1200', 'MIS1215' => 'MIS1215', 'JUJ1200' => 'JUJ1200', 'Salt1130' => 'Salt1130', 'Rio1200' => 'Rio1200',
+                        'Tucu1430' => 'Tucu1430', 'San1200' => 'San1200', 'NQN1500' => 'NQN1500', 'MIS1500' => 'MIS1500', 'JUJ1500' => 'JUJ1500',
+                        'Salt1400' => 'Salt1400', 'Rio1500' => 'Rio1500', 'Tucu1730' => 'Tucu1730', 'San1500' => 'San1500', 'NQN1800' => 'NQN1800',
+                        'MIS1800' => 'MIS1800', 'JUJ1800' => 'JUJ1800', 'Salt1730' => 'Salt1730', 'Rio1800' => 'Rio1800', 'Tucu1930' => 'Tucu1930',
+                        'San1945' => 'San1945', 'NQN2100' => 'NQN2100', 'JUJ2100' => 'JUJ2100', 'Rio2100' => 'Rio2100', 'Salt2100' => 'Salt2100',
+                        'Tucu2200' => 'Tucu2200', 'MIS2115' => 'MIS2115', 'San2200' => 'San2200'
                     ];
                     
                     $processedGroups = $groupedByPlayId->map(function ($groupOfApusFromSameOriginalPlay) use ($codes) {
@@ -694,31 +704,42 @@
                             ->values()
                             ->toArray();
                         
-                        // Usar la misma lógica determineLottery
-                        $systemCodes = [];
-                        foreach ($lotteryCodes as $uiCode) {
-                            $uiCode = trim($uiCode);
-                            if (isset($codes[$uiCode])) {
-                                $systemCodes[] = $codes[$uiCode];
+                        // Usar la misma lógica determineLottery mejorada
+                        $displayCodes = [];
+                        
+                        foreach ($lotteryCodes as $code) {
+                            $code = trim($code);
+                            
+                            // Si el código ya es un código del sistema (ej: "CHA1800"), procesarlo directamente
+                            if (preg_match('/^[A-Za-z]+\d{4}$/', $code)) {
+                                $prefix = substr($code, 0, -4); // Extracts 'CHA' from 'CHA1800'
+                                preg_match('/\d{4}$/', $code, $matches); // Finds the 4-digit time suffix (e.g., '1800')
+                                $timeSuffix = isset($matches[0]) ? substr($matches[0], 0, 2) : ''; // Gets '18' from '1800'
+                                $displayCodes[] = $prefix . $timeSuffix; // Combines to 'CHA18'
+                            }
+                            // Si es un código de UI (ej: "CH4"), convertirlo usando el mapeo
+                            elseif (isset($codes[$code])) {
+                                $systemCode = $codes[$code];
+                                $prefix = substr($systemCode, 0, -4); // Extracts 'CHA' from 'CHA1800'
+                                preg_match('/\d{4}$/', $systemCode, $matches); // Finds the 4-digit time suffix (e.g., '1800')
+                                $timeSuffix = isset($matches[0]) ? substr($matches[0], 0, 2) : ''; // Gets '18' from '1800'
+                                $displayCodes[] = $prefix . $timeSuffix; // Combines to 'CHA18'
                             }
                         }
-                        $displayCodes = [];
-                        foreach ($systemCodes as $systemCode) {
-                            $prefix = substr($systemCode, 0, -4); // Extracts 'NAC' from 'NAC1015'
-                            preg_match('/\d{4}$/', $systemCode, $matches); // Finds the 4-digit time suffix (e.g., '1015')
-                            $timeSuffix = isset($matches[0]) ? substr($matches[0], 0, 2) : ''; // Gets '10' from '1015'
-                            $displayCodes[] = $prefix . $timeSuffix; // Combines to 'NAC10'
-                        }
-                        $desiredOrder = ['NAC', 'CHA', 'PRO', 'MZA', 'CTE', 'SFE', 'COR', 'RIO', 'ORO'];
+                        
+                        $desiredOrder = ['NAC', 'CHA', 'PRO', 'MZA', 'CTE', 'SFE', 'COR', 'RIO', 'ORO', 'NQN', 'MIS', 'JUJ', 'Salt', 'Rio', 'Tucu', 'San'];
                         $uniqueDisplayCodes = array_unique($displayCodes);
+                        
                         usort($uniqueDisplayCodes, function ($a, $b) use ($desiredOrder) {
                             $prefixA = substr($a, 0, -2);
                             $prefixB = substr($b, 0, -2);
                             $posA = array_search($prefixA, $desiredOrder);
                             $posB = array_search($prefixB, $desiredOrder);
-                            if ($posB === false) return -1;
+                            if ($posA === false) $posA = 999;
+                            if ($posB === false) $posB = 999;
                             return $posA - $posB;
                         });
+                        
                         $determinedLotteryKeyString = implode(', ', $uniqueDisplayCodes);
 
                         return [
@@ -742,7 +763,7 @@
                             ];
                         })
                         ->sortBy(function ($group, $key) {
-                            static $desiredOrder = ['NAC', 'CHA', 'PRO', 'MZA', 'CTE', 'SFE', 'COR', 'RIO', 'ORO'];
+                            static $desiredOrder = ['NAC', 'CHA', 'PRO', 'MZA', 'CTE', 'SFE', 'COR', 'RIO', 'ORO', 'NQN', 'MIS', 'JUJ', 'Salt', 'Rio', 'Tucu', 'San'];
                             $firstLotteryInGroup = explode(', ', $key)[0];
                             $prefix = substr($firstLotteryInGroup, 0, -2);
                             return array_search($prefix, $desiredOrder) ?: 999;
