@@ -42,7 +42,11 @@ class Results extends Component
         $resultsQueryForTotals = Result::query()->whereDate('date', $this->date);
         // Todos los usuarios solo ven sus propios resultados
         $resultsQueryForTotals->where('user_id', $user->id);
-        $totalAciertos = (float) $resultsQueryForTotals->sum('aciert');
+        $allResults = $resultsQueryForTotals->get();
+        
+        // Filtrar resultados según la configuración de quinielas
+        $filteredResults = $this->filterResultsByQuinielasConfig($allResults);
+        $totalAciertos = (float) $filteredResults->sum('aciert');
 
         // --- CONSULTA PARA LA TABLA PAGINADA ---
         // Se agrupan los resultados para no mostrar tickets repetidos y sumar correctamente los aciertos por jugada.
@@ -63,8 +67,20 @@ class Results extends Component
 
         // Todos los usuarios solo ven sus propios resultados
         $resultsQuery->where('user_id', $user->id);
-        $results = $resultsQuery->groupBy('ticket', 'number', 'position', 'numR', 'posR', 'import', 'user_id', 'date')
-            ->paginate($this->cant);
+        $allResultsPaginated = $resultsQuery->groupBy('ticket', 'number', 'position', 'numR', 'posR', 'import', 'user_id', 'date')
+            ->get();
+        
+        // Filtrar resultados paginados según la configuración de quinielas
+        $filteredResultsPaginated = $this->filterResultsByQuinielasConfig($allResultsPaginated);
+        
+        // Crear una paginación manual con los resultados filtrados
+        $results = new \Illuminate\Pagination\LengthAwarePaginator(
+            $filteredResultsPaginated->forPage(\Illuminate\Pagination\Paginator::resolveCurrentPage(), $this->cant),
+            $filteredResultsPaginated->count(),
+            $this->cant,
+            \Illuminate\Pagination\Paginator::resolveCurrentPage(),
+            ['path' => request()->url()]
+        );
         // --- LOGS PARA DEPURACIÓN ---
         Log::info("Results - Total Recaudado (PlaysSent) para {$this->date}: " . $totalImporte);
         Log::info("Results - Total Aciertos (Results) para {$this->date}: " . $totalAciertos);
@@ -91,5 +107,62 @@ class Results extends Component
         $this->date = date('Y-m-d');
         $this->resetPage();
         // Livewire se encarga de volver a renderizar automáticamente.
+    }
+
+    /**
+     * Filtra resultados según la configuración de quinielas
+     * Solo muestra loterías que están configuradas en GlobalQuinielasConfiguration
+     */
+    private function filterResultsByQuinielasConfig($results)
+    {
+        // Obtener configuración de quinielas
+        $savedPreferences = \App\Models\GlobalQuinielasConfiguration::all()
+            ->keyBy('city_name')
+            ->map(function($config) {
+                return $config->selected_schedules;
+            });
+
+        // Mapeo de códigos de sistema a nombres de ciudad
+        $systemCodeToCity = [
+            'NAC' => 'BUENOS AIRES',
+            'CHA' => 'CHACO', 
+            'PRO' => 'ENTRE RIOS',
+            'MZA' => 'MENDOZA',
+            'CTE' => 'CORRIENTES',
+            'SFE' => 'SANTA FE',
+            'COR' => 'CORDOBA',
+            'RIO' => 'LA RIOJA',
+            'ORO' => 'MONTEVIDEO',
+            'NQN' => 'NEUQUEN',
+            'MIS' => 'MISIONES',
+            'JUJ' => 'JUJUY',
+            'Salt' => 'SALTA',
+            'Rio' => 'RIO NEGRO',
+            'Tucu' => 'TUCUMAN',
+            'San' => 'SAN LUIS'
+        ];
+
+        return $results->filter(function($result) use ($savedPreferences, $systemCodeToCity) {
+            $lotteryCodes = explode(',', $result->lottery);
+            
+            foreach ($lotteryCodes as $code) {
+                $code = trim($code);
+                
+                // Extraer prefijo de ciudad del código de sistema (ej: "CHA" de "CHA1800")
+                if (preg_match('/^([A-Za-z]+)\d{4}$/', $code, $matches)) {
+                    $cityPrefix = $matches[1];
+                    $cityName = $systemCodeToCity[$cityPrefix] ?? null;
+                    
+                    if ($cityName && isset($savedPreferences[$cityName])) {
+                        $selectedSchedules = $savedPreferences[$cityName];
+                        if (!empty($selectedSchedules)) {
+                            return true; // Al menos una lotería está configurada
+                        }
+                    }
+                }
+            }
+            
+            return false; // Ninguna lotería está configurada
+        });
     }
 }
