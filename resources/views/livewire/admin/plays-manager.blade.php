@@ -1,6 +1,6 @@
 <div>
     <div class=" bg-[#1b1f22] w-full h-screen max-h-screen p-3 md:p-4 flex flex-col justify-between gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div class="flex flex-col gap-3 rounded-lg item text-sm sm:w-full w-full lg:w-3/6  max-w-4xl">
+        <div class="flex flex-col gap-3 rounded-lg item text-sm w-full max-w-6xl mx-auto">
 
             <div class="flex justify-between items-center gap-2 pb-2">
                 <h2 class="font-bold text-xl text-white">Gestor de jugada</h2>
@@ -39,69 +39,110 @@
                 </p>
             </div>
 
+
             <div class="flex flex-col gap-2 border-2 border-transparent rounded-lg duration-200 {{ $editingRowId ? 'bg-[#343f328f] p-3 border-white/20 border-dashed' : '' }}">
-                <div class="flex items-center justify-center">
-                    <div id="lottery-selection-box"
-                        class="flex items-center justify-center border-2 border-transparent bg-[#22272b] {{ $editingRowId ? 'p-3 border-white/20 border-dashed' : '' }} rounded-lg p-2 md:p-3 w-full md:max-w-sm 2xl:max-w-md">
-                        <table class="w-full text-center rounded-lg text-xs sm:text-sm max-w-full overflow-x-auto">
-                            <thead>
-                                <tr class="text-[10px] md:text-xs">
-                                    <th class="md:ps-1 py-1 flex items-center gap-1 sm:gap-2">
+                <div class="w-full overflow-x-auto flex justify-center">
+                    <div class="min-w-full inline-block align-middle">
+                        <table class="text-center text-xs sm:text-sm bg-[#22272b] rounded-lg min-w-fit">
+                        <thead>
+                            <tr class="bg-[#1a1a1a]">
+                                <th class="sticky left-0 bg-[#1a1a1a] z-20 p-1 sm:p-2 min-w-[80px] sm:min-w-[90px] shadow-lg">
+                                    <div class="flex items-center justify-center gap-2 sm:gap-4">
                                         <input type="checkbox" id="all"
-                                            class="w-5 h-5 2xl:w-6 2xl:h-6 bg-[#22272b] cursor-pointer border border-gray-300 rounded text-green-400 focus:ring-green-400"
+                                            class="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7 bg-[#22272b] cursor-pointer border border-gray-400 rounded text-green-400 focus:ring-green-400"
                                             wire:click="toggleAllCheckboxes($event.target.checked)"
                                             aria-label="Seleccionar todos los horarios">
-                                        <label for="all"
-                                            class="font-medium select-none text-white text-[11px] sm:text-xs md:text-sm">Todos</label>
-                                    </th>
-                                    @foreach (['NAC', 'CHA', 'PRO', 'MZA', 'CTE', 'SFE', 'COR', 'RIO', 'ORO'] as $col)
-                                        <th class="text-[10px] sm:text-[10px] md:text-xs text-white">{{ $col }}
-                                        </th>
-                                    @endforeach
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach ($horariosConEstado as $horario)
-                                    <tr data-time="{{ $horario['time'] }}" class="h-full">
-                                        <td
-                                            class="pt-[5px] pb-[4px] me-3 font-medium flex items-center h-full gap-1 sm:gap-2 md:p-1">
+                                        <label for="all" class="font-medium select-none text-white text-xs sm:text-sm">Todos</label>
+                                    </div>
+                                </th>
+                                    @if(isset($lotteryGroups) && !empty($lotteryGroups))
+                                        @php
+                                            // Obtener todas las loterías únicas para los headers
+                                            $allLotteries = collect($lotteryGroups)->flatten(1)->unique('name')->sortBy('name');
+                                            
+                                            // Obtener configuración global de quinielas
+                                            $savedPreferences = \App\Models\GlobalQuinielasConfiguration::all()
+                                                ->keyBy('city_name')
+                                                ->map(function($config) {
+                                                    return $config->selected_schedules;
+                                                });
+                                            
+                                            // Filtrar loterías según las preferencias guardadas
+                                            $filteredLotteries = $allLotteries->filter(function($lottery) use ($savedPreferences) {
+                                                $selectedSchedules = $savedPreferences[$lottery['name']] ?? [];
+                                                return !empty($selectedSchedules);
+                                            });
+                                        @endphp
+                                        @foreach ($filteredLotteries as $lottery)
+                                            <th class="text-white px-1 py-1 sm:py-2 min-w-[35px] sm:min-w-[45px] bg-[#1a1a1a] text-xs font-medium">
+                                                {{ $lottery['abbreviation'] ?? $lottery['name'] }}
+                                            </th>
+                                        @endforeach
+                                    @endif
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($horariosConEstado as $horario)
+                                <tr data-time="{{ $horario['time'] }}" class="hover:bg-[#333333]">
+                                    <td class="sticky left-0 bg-[#22272b] z-20 p-1 sm:p-2 min-w-[80px] sm:min-w-[90px] shadow-lg">
+                                        <div class="flex items-center justify-center gap-2 sm:gap-4">
                                             <input type="checkbox" id="time-{{ $horario['time'] }}-all"
-                                                class="w-5 h-5 2xl:w-6 2xl:h-6 bg-[#22272b] rounded border border-gray-300 {{ $horario['checkboxClass'] }}"
+                                                class="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7 bg-[#22272b] rounded border border-gray-400 {{ $horario['checkboxClass'] }}"
                                                 {{ $horario['disabledAttr'] }}
                                                 wire:model="selected.{{ $horario['time'] }}"
                                                 wire:click="toggleRowCheckboxes('{{ $horario['time'] }}', $event.target.checked)"
                                                 aria-label="Seleccionar horario {{ $horario['time'] }}">
                                             <label for="time-{{ $horario['time'] }}-all"
-                                                class="select-none text-[11px] sm:text-xs md:text-sm text-white {{ $horario['textClass'] }}">
+                                                class="select-none text-white text-xs sm:text-sm {{ $horario['textClass'] }}">
                                                 {{ $horario['time'] }}
                                             </label>
-                                        </td>
-                                        @for ($col = 1; $col <= 8; $col++)
+                                        </div>
+                                    </td>
+                                    @if(isset($lotteryGroups) && !empty($lotteryGroups))
+                                        @php
+                                            // Filtrar solo las ciudades que tienen al menos un horario seleccionado
+                                            $allLotteries = collect($lotteryGroups)->flatten(1)->unique('name')->sortBy('name');
+                                            
+                                            // Obtener configuración global de quinielas
+                                            $savedPreferences = \App\Models\GlobalQuinielasConfiguration::all()
+                                                ->keyBy('city_name')
+                                                ->map(function($config) {
+                                                    return $config->selected_schedules;
+                                                });
+                                            
+                                            // Filtrar loterías según las preferencias guardadas
+                                            $filteredLotteries = $allLotteries->filter(function($lottery) use ($savedPreferences) {
+                                                $selectedSchedules = $savedPreferences[$lottery['name']] ?? [];
+                                                return !empty($selectedSchedules);
+                                            });
+                                        @endphp
+                                        @foreach ($filteredLotteries as $lottery)
+                                            @php
+                                                // Verificar si esta lotería debe aparecer en este horario usando preferencias guardadas
+                                                $shouldShow = in_array($horario['time'], $savedPreferences[$lottery['name']] ?? []);
+                                                $lotteryInTime = collect($lotteryGroups[$horario['time']] ?? [])->firstWhere('name', $lottery['name']);
+                                                $colIndex = $lotteryInTime ? collect($lotteryGroups[$horario['time']])->search(function($item) use ($lottery) {
+                                                    return $item['name'] === $lottery['name'];
+                                                }) + 1 : null;
+                                            @endphp
                                             <td class="p-1">
-                                                <input type="checkbox"
-                                                    id="time-{{ $horario['time'] }}-col-{{ $col }}"
-                                                    class="w-5 h-5 2xl:w-6 2xl:h-6 bg-[#22272b] rounded border border-gray-300 {{ $horario['checkboxClass'] }}"
-                                                    {{ $horario['disabledAttr'] }}
-                                                    wire:model="selected.{{ $horario['time'] }}_col_{{ $col }}"
-                                                    wire:click="toggleColumnCheckbox('{{ $horario['time'] }}', {{ $col }}, $event.target.checked)"
-                                                    aria-label="Seleccionar opción {{ $horario['time'] }} - Columna {{ $col }}">
+                                                @if($shouldShow && $lotteryInTime && $colIndex)
+                                                    <input type="checkbox"
+                                                        id="time-{{ $horario['time'] }}-col-{{ $colIndex }}"
+                                                        class="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7 bg-[#22272b] rounded border border-gray-400 {{ $horario['checkboxClass'] }}"
+                                                        {{ $horario['disabledAttr'] }}
+                                                        wire:model="selected.{{ $horario['time'] }}_col_{{ $colIndex }}"
+                                                        wire:click="toggleColumnCheckbox('{{ $horario['time'] }}', {{ $colIndex }}, $event.target.checked)"
+                                                        aria-label="Seleccionar {{ $lottery['name'] }} para {{ $horario['time'] }}">
+                                                @else
+                                                    <div class="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7"></div>
+                                                @endif
                                             </td>
-                                        @endfor
-                                        @if (in_array($horario['time'], ['15:00', '21:00']))
-                                            <td class="p-1">
-                                                <input type="checkbox" id="time-{{ $horario['time'] }}-col-oro"
-                                                    class="w-5 h-5 2xl:w-6 2xl:h-6 bg-[#22272b] rounded border border-gray-300 {{ $horario['checkboxClass'] }}"
-                                                    {{ $horario['disabledAttr'] }}
-                                                    wire:model="selected.{{ $horario['time'] }}_oro"
-                                                    wire:click="toggleOroCheckbox('{{ $horario['time'] }}', $event.target.checked)"
-                                                    aria-label="Seleccionar opción ORO para {{ $horario['time'] }}">
-                                            </td>
-                                        @else
-                                            <td class="p-1 sm:p-2"></td>
-                                        @endif
-                                    </tr>
-                                @endforeach
-                            </tbody>
+                                        @endforeach
+                                    @endif
+                                </tr>
+                            @endforeach
+                        </tbody>
                         </table>
                     </div>
                 </div>

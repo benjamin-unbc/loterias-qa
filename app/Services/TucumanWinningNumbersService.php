@@ -94,9 +94,16 @@ class TucumanWinningNumbersService
                 'QUINIELA NOCTURNA' => 'Nocturna'        // 22:00 hs
             ];
             
-            // Buscar todas las tablas de resultados
-            $allTables = $xpath->query("//table[contains(@class, 'table-resultado')]");
+            // Buscar todas las tablas de resultados con diferentes selectores
+            $allTables = $xpath->query("//table[contains(@class, 'table-resultado')] | //table[contains(@class, 'resultado')] | //table[contains(@class, 'tabla')] | //table");
             $this->log("Encontradas " . $allTables->length . " tablas de resultados");
+            
+            // Si no encontramos tablas con las clases específicas, buscar por contenido
+            if ($allTables->length === 0) {
+                $this->log("No se encontraron tablas con clases específicas, buscando por contenido...");
+                $allTables = $xpath->query("//table");
+                $this->log("Encontradas " . $allTables->length . " tablas en total");
+            }
             
             // Procesar cada tabla en orden
             $tableIndex = 0;
@@ -113,6 +120,13 @@ class TucumanWinningNumbersService
                 }
             }
             
+            // Si no se extrajeron números de ningún turno, intentar método alternativo
+            $totalNumbers = array_sum(array_map('count', $turnsData));
+            if ($totalNumbers === 0) {
+                $this->log("No se extrajeron números con el método principal, intentando método alternativo...");
+                $turnsData = $this->extractNumbersAlternativeMethod($xpath);
+            }
+            
             return [
                 'city' => 'Tucumán',
                 'turns' => $turnsData,
@@ -124,6 +138,69 @@ class TucumanWinningNumbersService
             $this->log('Error parseando números ganadores: ' . $e->getMessage(), 'error');
             return null;
         }
+    }
+    
+    /**
+     * Método alternativo para extraer números cuando el método principal falla
+     */
+    private function extractNumbersAlternativeMethod(\DOMXPath $xpath): array
+    {
+        $turnsData = [];
+        
+        try {
+            $this->log("Intentando método alternativo de extracción...");
+            
+            // Buscar todos los elementos que contengan números de 4 dígitos
+            $numberElements = $xpath->query("//*[contains(text(), '7') or contains(text(), '8') or contains(text(), '9') or contains(text(), '0') or contains(text(), '1') or contains(text(), '2') or contains(text(), '3') or contains(text(), '4') or contains(text(), '5') or contains(text(), '6')]");
+            
+            $allNumbers = [];
+            foreach ($numberElements as $element) {
+                $text = trim($element->textContent);
+                // Buscar números de 4 dígitos
+                if (preg_match_all('/\b\d{4}\b/', $text, $matches)) {
+                    foreach ($matches[0] as $number) {
+                        if (strlen($number) === 4 && is_numeric($number)) {
+                            $allNumbers[] = $number;
+                        }
+                    }
+                }
+            }
+            
+            // Eliminar duplicados y tomar los primeros 20
+            $uniqueNumbers = array_unique($allNumbers);
+            $numbers = array_slice($uniqueNumbers, 0, 20);
+            
+            if (!empty($numbers)) {
+                $this->log("Método alternativo encontró " . count($numbers) . " números");
+                // Asignar todos los números a "La Previa" como fallback
+                $turnsData['La Previa'] = $numbers;
+                $turnsData['Primera'] = [];
+                $turnsData['Matutina'] = [];
+                $turnsData['Vespertina'] = [];
+                $turnsData['Nocturna'] = [];
+            } else {
+                $this->log("Método alternativo no encontró números");
+                $turnsData = [
+                    'La Previa' => [],
+                    'Primera' => [],
+                    'Matutina' => [],
+                    'Vespertina' => [],
+                    'Nocturna' => []
+                ];
+            }
+            
+        } catch (\Exception $e) {
+            $this->log('Error en método alternativo: ' . $e->getMessage(), 'error');
+            $turnsData = [
+                'La Previa' => [],
+                'Primera' => [],
+                'Matutina' => [],
+                'Vespertina' => [],
+                'Nocturna' => []
+            ];
+        }
+        
+        return $turnsData;
     }
     
     /**

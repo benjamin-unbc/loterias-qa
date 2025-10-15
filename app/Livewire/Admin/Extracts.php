@@ -697,6 +697,13 @@ class Extracts extends Component
                     'Vespertina' => 'Tucu1930',
                     'Nocturna' => 'Tucu2200'
                 ],
+                'Tucuman' => [
+                    'La Previa' => 'Tucu1130',
+                    'Primera' => 'Tucu1430',
+                    'Matutina' => 'Tucu1730',
+                    'Vespertina' => 'Tucu1930',
+                    'Nocturna' => 'Tucu2200'
+                ],
                 'SANTIAGO' => [
                     'La Previa' => 'San1015',
                     'Primera' => 'San1200',
@@ -1559,6 +1566,113 @@ class Extracts extends Component
     }
 
 
+
+
+    /**
+     * Verifica si una ciudad está configurada en Quinielas (tiene horarios seleccionados)
+     */
+    public function isCityConfiguredInQuinielas($cityName)
+    {
+        try {
+            $config = \App\Models\GlobalQuinielasConfiguration::where('city_name', $cityName)->first();
+            return $config && !empty($config->selected_schedules);
+        } catch (\Exception $e) {
+            \Log::error("Error verificando configuración de Quinielas para {$cityName}: " . $e->getMessage());
+            return true; // Por defecto, mostrar si hay error
+        }
+    }
+    
+    /**
+     * Verifica si una ciudad y horario específico están configurados en Quinielas
+     */
+    public function isCityAndScheduleConfiguredInQuinielas($cityName, $extractName)
+    {
+        try {
+            $config = \App\Models\GlobalQuinielasConfiguration::where('city_name', $cityName)->first();
+            if (!$config || empty($config->selected_schedules)) {
+                return false;
+            }
+            
+            // Mapeo específico por ciudad y extracto
+            $cityExtractMapping = [
+                'Tucuman' => [
+                    'PREVIA' => ['11:30'],      // Tucu1130
+                    'PRIMERO' => ['14:30'],     // Tucu1430
+                    'MATUTINO' => ['17:30'],    // Tucu1730
+                    'VESPERTINO' => ['19:30'],  // Tucu1930
+                    'NOCTURNO' => ['22:00']     // Tucu2200
+                ],
+                'Santiago' => [
+                    'PREVIA' => ['10:15'],      // San1015
+                    'PRIMERO' => ['12:00'],     // San1200
+                    'MATUTINO' => ['15:00'],    // San1500
+                    'VESPERTINO' => ['19:45'],  // San1945
+                    'NOCTURNO' => ['22:00']     // San2200
+                ],
+                'SALTA' => [
+                    'PREVIA' => ['11:30'],      // Salt1130
+                    'PRIMERO' => ['14:00'],     // Salt1400
+                    'MATUTINO' => ['17:30'],    // Salt1730
+                    'VESPERTINO' => ['21:00'],  // Salt2100
+                    'NOCTURNO' => []
+                ],
+                'JUJUY' => [
+                    'PREVIA' => [],
+                    'PRIMERO' => ['12:00'],     // JUJ1200
+                    'MATUTINO' => ['15:00'],    // JUJ1500
+                    'VESPERTINO' => ['18:00'],  // JUJ1800
+                    'NOCTURNO' => ['21:00']     // JUJ2100
+                ],
+                'MISIONES' => [
+                    'PREVIA' => ['10:30'],      // MIS1030
+                    'PRIMERO' => ['12:15'],     // MIS1215
+                    'MATUTINO' => ['15:00'],    // MIS1500
+                    'VESPERTINO' => ['18:00'],  // MIS1800
+                    'NOCTURNO' => ['21:15']     // MIS2115
+                ],
+                'NEUQUEN' => [
+                    'PREVIA' => ['10:15'],      // NQN1015
+                    'PRIMERO' => ['12:00'],     // NQN1200
+                    'MATUTINO' => ['15:00'],    // NQN1500
+                    'VESPERTINO' => ['18:00'],  // NQN1800
+                    'NOCTURNO' => ['21:00']     // NQN2100
+                ],
+                'Río Negro' => [
+                    'PREVIA' => ['10:15'],      // Rio1015
+                    'PRIMERO' => ['12:00'],     // Rio1200
+                    'MATUTINO' => ['15:00'],    // Rio1500
+                    'VESPERTINO' => ['18:00'],  // Rio1800
+                    'NOCTURNO' => ['21:00']     // Rio2100
+                ]
+            ];
+            
+            // Mapeo por defecto para ciudades estándar
+            $defaultMapping = [
+                'PREVIA' => ['10:15'],
+                'PRIMERO' => ['12:00'],
+                'MATUTINO' => ['15:00'],
+                'VESPERTINO' => ['18:00'],
+                'NOCTURNO' => ['21:00']
+            ];
+            
+            // Obtener el mapeo específico para la ciudad o usar el por defecto
+            $cityMapping = $cityExtractMapping[$cityName] ?? $defaultMapping;
+            $schedulesForExtract = $cityMapping[$extractName] ?? [];
+            
+            // Verificar si alguno de los horarios del extracto está seleccionado
+            foreach ($schedulesForExtract as $schedule) {
+                if (in_array($schedule, $config->selected_schedules)) {
+                    return true;
+                }
+            }
+            
+            return false;
+            
+        } catch (\Exception $e) {
+            \Log::error("Error verificando configuración de Quinielas para {$cityName} - {$extractName}: " . $e->getMessage());
+            return true; // Por defecto, mostrar si hay error
+        }
+    }
 
     public function render()
     {
