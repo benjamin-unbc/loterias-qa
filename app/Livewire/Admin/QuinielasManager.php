@@ -59,7 +59,25 @@ class QuinielasManager extends Component
             'MONTEVIDEO'   // ORO
         ];
         
-        foreach ($cities->groupBy('name') as $cityName => $cityData) {
+        // Ordenar las ciudades según el orden específico solicitado: NAC, CHA, PRO, MZA, CTE, SFE, COR, RIO, ORO
+        $orderedCities = [];
+        $citiesGrouped = $cities->groupBy('name');
+        
+        // Primero agregar las ciudades en el orden específico
+        foreach ($defaultSelectedLotteries as $cityName) {
+            if ($citiesGrouped->has($cityName)) {
+                $orderedCities[$cityName] = $citiesGrouped[$cityName];
+            }
+        }
+        
+        // Luego agregar las ciudades restantes en orden alfabético
+        foreach ($citiesGrouped as $cityName => $cityData) {
+            if (!in_array($cityName, $defaultSelectedLotteries)) {
+                $orderedCities[$cityName] = $cityData;
+            }
+        }
+        
+        foreach ($orderedCities as $cityName => $cityData) {
             $schedules = $cityData->pluck('time')->unique()->sort()->values()->toArray();
             
             // Filtrar visualmente el horario 18:00 de Montevideo
