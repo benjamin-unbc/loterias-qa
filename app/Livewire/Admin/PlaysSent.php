@@ -81,14 +81,14 @@ class PlaysSent extends Component
         'V' => 'SFE1800', 'H' => 'COR1800', 'U' => 'RIO1800', 'N' => 'NAC2100', 'CH5' => 'CHA2100',
         'P' => 'PRO2100', 'M4' => 'MZA2100', 'G' => 'CTE2100', 'I' => 'SFE2100', 'C' => 'COR2100',
         'Y' => 'RIO2100', 'O' => 'ORO2100',
-        // Nuevos códigos para las loterías adicionales
-        'NQN1015' => 'NQN1015', 'MIS1030' => 'MIS1030', 'Rio1015' => 'Rio1015', 'Tucu1130' => 'Tucu1130', 'San1015' => 'San1015',
-        'NQN1200' => 'NQN1200', 'MIS1215' => 'MIS1215', 'JUJ1200' => 'JUJ1200', 'Salt1130' => 'Salt1130', 'Rio1200' => 'Rio1200',
-        'Tucu1430' => 'Tucu1430', 'San1200' => 'San1200', 'NQN1500' => 'NQN1500', 'MIS1500' => 'MIS1500', 'JUJ1500' => 'JUJ1500',
-        'Salt1400' => 'Salt1400', 'Rio1500' => 'Rio1500', 'Tucu1730' => 'Tucu1730', 'San1500' => 'San1500', 'NQN1800' => 'NQN1800',
-        'MIS1800' => 'MIS1800', 'JUJ1800' => 'JUJ1800', 'Salt1730' => 'Salt1730', 'Rio1800' => 'Rio1800', 'Tucu1930' => 'Tucu1930',
-        'San1945' => 'San1945', 'NQN2100' => 'NQN2100', 'JUJ2100' => 'JUJ2100', 'Rio2100' => 'Rio2100', 'Salt2100' => 'Salt2100',
-        'Tucu2200' => 'Tucu2200', 'MIS2115' => 'MIS2115', 'San2200' => 'San2200'
+        // Nuevos códigos cortos para las loterías adicionales
+        'NQ1' => 'NQN1015', 'MI1' => 'MIS1030', 'RN1' => 'Rio1015', 'TU1' => 'Tucu1130', 'SG1' => 'San1015',
+        'NQ2' => 'NQN1200', 'MI2' => 'MIS1215', 'JU1' => 'JUJ1200', 'SA1' => 'Salt1130', 'RN2' => 'Rio1200',
+        'TU2' => 'Tucu1430', 'SG2' => 'San1200', 'NQ3' => 'NQN1500', 'MI3' => 'MIS1500', 'JU2' => 'JUJ1500',
+        'SA2' => 'Salt1400', 'RN3' => 'Rio1500', 'TU3' => 'Tucu1730', 'SG3' => 'San1500', 'NQ4' => 'NQN1800',
+        'MI4' => 'MIS1800', 'JU3' => 'JUJ1800', 'SA3' => 'Salt1730', 'RN4' => 'Rio1800', 'TU4' => 'Tucu1930',
+        'SG4' => 'San1945', 'NQ5' => 'NQN2100', 'JU4' => 'JUJ2100', 'RN5' => 'Rio2100', 'SA4' => 'Salt2100',
+        'TU5' => 'Tucu2200', 'MI5' => 'MIS2115', 'SG5' => 'San2200'
     ];
 
     // Helper to extract time suffix from system code (e.g., 'NAC1015' -> '1015')
@@ -202,15 +202,18 @@ private function processApusData($rawApus)
                 'numbers' => $items->pluck('numbers')->flatten(1)->all(),
             ];
         })
-        // Ordenar por el orden deseado de loterías
+        // Ordenar por el orden deseado de loterías (usando códigos cortos)
         ->sortBy(function ($group, $key) {
-            static $desiredOrder = ['NAC', 'CHA', 'PRO', 'MZA', 'CTE', 'SFE', 'COR', 'RIO', 'ORO', 'NQN', 'MIS', 'JUJ', 'Salt', 'Rio', 'Tucu', 'San'];
+            static $desiredOrder = ['AB', 'CH1', 'QW', 'M10', '!', 'ER', 'SD', 'RT', 'NQ1', 'MI1', 'RN1', 'TU1', 'SG1',
+                        'Q', 'CH2', 'W', 'M1', 'M', 'R', 'T', 'K', 'NQ2', 'MI2', 'JU1', 'SA1', 'RN2', 'TU2', 'SG2',
+                        'A', 'CH3', 'E', 'M2', 'Ct3', 'D', 'L', 'J', 'S', 'NQ3', 'MI3', 'JU2', 'SA2', 'RN3', 'TU3', 'SG3',
+                        'F', 'CH4', 'B', 'M3', 'Z', 'V', 'H', 'U', 'NQ4', 'MI4', 'JU3', 'SA3', 'RN4', 'TU4', 'SG4',
+                        'N', 'CH5', 'P', 'M4', 'G', 'I', 'C', 'Y', 'O', 'NQ5', 'JU4', 'RN5', 'SA4', 'TU5', 'MI5', 'SG5'];
             static $positionCache = [];
             
             if (!isset($positionCache[$key])) {
                 $firstLotteryInGroup = explode(', ', $key)[0];
-                $prefix = substr($firstLotteryInGroup, 0, -2);
-                $positionCache[$key] = array_search($prefix, $desiredOrder) ?: 999;
+                $positionCache[$key] = array_search($firstLotteryInGroup, $desiredOrder) ?: 999;
             }
             
             return $positionCache[$key];
@@ -218,42 +221,67 @@ private function processApusData($rawApus)
         ->values();
 }
 
-    // Use the same determineLottery logic as PlaysManager
+    // Use the same determineLottery logic as PlaysManager but with short codes
     protected function determineLottery(array $selectedCodes): string
     {
         $displayCodes = [];
         
+        // Debug temporal para ver qué códigos llegan
+        \Log::info('PlaysSent determineLottery - selectedCodes:', $selectedCodes);
+        
         foreach ($selectedCodes as $code) {
             $code = trim($code);
+            \Log::info("Processing code: '$code'");
             
-            // Si el código ya es un código del sistema (ej: "CHA1800"), procesarlo directamente
-            if (preg_match('/^[A-Za-z]+\d{4}$/', $code)) {
-                $prefix = substr($code, 0, -4); // Extracts 'CHA' from 'CHA1800'
-                $timeSuffix = $this->getTimeSuffixFromSystemCode($code); // Gets '18' from 'CHA1800'
-                $displayCodes[] = $prefix . $timeSuffix; // Combines to 'CHA18'
+            // Limpiar códigos malformados - extraer solo códigos válidos
+            if (preg_match_all('/[A-Za-z]+\d{4}/', $code, $matches)) {
+                // Si el código contiene múltiples códigos válidos, procesarlos por separado
+                foreach ($matches[0] as $validCode) {
+                    $shortCode = array_search($validCode, $this->codes);
+                    if ($shortCode !== false) {
+                        $displayCodes[] = $shortCode;
+                        \Log::info("Converted '$validCode' to '$shortCode'");
+                    } else {
+                        \Log::info("Not found in codes: '$validCode'");
+                    }
+                }
             }
-            // Si es un código de UI (ej: "CH4"), convertirlo usando el mapeo
+            // Si el código ya es un código del sistema válido (ej: "CHA1800"), convertirlo a código corto
+            elseif (preg_match('/^[A-Za-z]+\d{4}$/', $code)) {
+                $shortCode = array_search($code, $this->codes);
+                if ($shortCode !== false) {
+                    $displayCodes[] = $shortCode;
+                    \Log::info("Converted '$code' to '$shortCode'");
+                } else {
+                    \Log::info("Not found in codes: '$code'");
+                }
+            }
+            // Si es un código de UI (ej: "CH4"), ya es un código corto
             elseif (isset($this->codes[$code])) {
-                $systemCode = $this->codes[$code];
-                $prefix = substr($systemCode, 0, -4); // Extracts 'CHA' from 'CHA1800'
-                $timeSuffix = $this->getTimeSuffixFromSystemCode($systemCode); // Gets '18' from 'CHA1800'
-                $displayCodes[] = $prefix . $timeSuffix; // Combines to 'CHA18'
+                $displayCodes[] = $code; // Ya es un código corto
+                \Log::info("UI code found: '$code'");
+            } else {
+                \Log::info("Unknown code format: '$code'");
             }
         }
         
-        $desiredOrder = ['NAC', 'CHA', 'PRO', 'MZA', 'CTE', 'SFE', 'COR', 'RIO', 'ORO', 'NQN', 'MIS', 'JUJ', 'Salt', 'Rio', 'Tucu', 'San'];
+        \Log::info('Final displayCodes:', $displayCodes);
+        
+        $desiredOrder = ['AB', 'CH1', 'QW', 'M10', '!', 'ER', 'SD', 'RT', 'NQ1', 'MI1', 'RN1', 'TU1', 'SG1',
+                        'Q', 'CH2', 'W', 'M1', 'M', 'R', 'T', 'K', 'NQ2', 'MI2', 'JU1', 'SA1', 'RN2', 'TU2', 'SG2',
+                        'A', 'CH3', 'E', 'M2', 'Ct3', 'D', 'L', 'J', 'S', 'NQ3', 'MI3', 'JU2', 'SA2', 'RN3', 'TU3', 'SG3',
+                        'F', 'CH4', 'B', 'M3', 'Z', 'V', 'H', 'U', 'NQ4', 'MI4', 'JU3', 'SA3', 'RN4', 'TU4', 'SG4',
+                        'N', 'CH5', 'P', 'M4', 'G', 'I', 'C', 'Y', 'O', 'NQ5', 'JU4', 'RN5', 'SA4', 'TU5', 'MI5', 'SG5'];
+        
         $uniqueDisplayCodes = array_unique($displayCodes);
         
         usort($uniqueDisplayCodes, function ($a, $b) use ($desiredOrder) {
-            $prefixA = substr($a, 0, -2);
-            $prefixB = substr($b, 0, -2);
-            $posA = array_search($prefixA, $desiredOrder);
-            $posB = array_search($prefixB, $desiredOrder);
+            $posA = array_search($a, $desiredOrder);
+            $posB = array_search($b, $desiredOrder);
             if ($posA === false) $posA = 999;
             if ($posB === false) $posB = 999;
             return $posA - $posB;
         });
-        
         
         return implode(', ', $uniqueDisplayCodes);
     }

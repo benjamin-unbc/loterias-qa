@@ -154,6 +154,27 @@ class PlaysManager extends Component
 
 
 
+    // Mapeo de códigos del sistema a códigos cortos para mostrar
+    public $systemToShortCodes = [
+        'NAC1015' => 'AB', 'CHA1015' => 'CH1', 'PRO1015' => 'QW', 'MZA1015' => 'M10', 'CTE1015' => '!',
+        'SFE1015' => 'ER', 'COR1015' => 'SD', 'RIO1015' => 'RT', 'NAC1200' => 'Q', 'CHA1200' => 'CH2',
+        'PRO1200' => 'W', 'MZA1200' => 'M1', 'CTE1200' => 'M', 'SFE1200' => 'R', 'COR1200' => 'T',
+        'RIO1200' => 'K', 'NAC1500' => 'A', 'CHA1500' => 'CH3', 'PRO1500' => 'E', 'MZA1500' => 'M2',
+        'CTE1500' => 'Ct3', 'SFE1500' => 'D', 'COR1500' => 'L', 'RIO1500' => 'J', 'ORO1800' => 'S',
+        'NAC1800' => 'F', 'CHA1800' => 'CH4', 'PRO1800' => 'B', 'MZA1800' => 'M3', 'CTE1800' => 'Z',
+        'SFE1800' => 'V', 'COR1800' => 'H', 'RIO1800' => 'U', 'NAC2100' => 'N', 'CHA2100' => 'CH5',
+        'PRO2100' => 'P', 'MZA2100' => 'M4', 'CTE2100' => 'G', 'SFE2100' => 'I', 'COR2100' => 'C',
+        'RIO2100' => 'Y', 'ORO2100' => 'O',
+        // Nuevos códigos cortos para las loterías adicionales
+        'NQN1015' => 'NQ1', 'MIS1030' => 'MI1', 'Rio1015' => 'RN1', 'Tucu1130' => 'TU1', 'San1015' => 'SG1',
+        'NQN1200' => 'NQ2', 'MIS1215' => 'MI2', 'JUJ1200' => 'JU1', 'Salt1130' => 'SA1', 'Rio1200' => 'RN2',
+        'Tucu1430' => 'TU2', 'San1200' => 'SG2', 'NQN1500' => 'NQ3', 'MIS1500' => 'MI3', 'JUJ1500' => 'JU2',
+        'Salt1400' => 'SA2', 'Rio1500' => 'RN3', 'Tucu1730' => 'TU3', 'San1500' => 'SG3', 'NQN1800' => 'NQ4',
+        'MIS1800' => 'MI4', 'JUJ1800' => 'JU3', 'Salt1730' => 'SA3', 'Rio1800' => 'RN4', 'Tucu1930' => 'TU4',
+        'San1945' => 'SG4', 'NQN2100' => 'NQ5', 'JUJ2100' => 'JU4', 'Rio2100' => 'RN5', 'Salt2100' => 'SA4',
+        'Tucu2200' => 'TU5', 'MIS2115' => 'MI5', 'San2200' => 'SG5'
+    ];
+
     // Standardized codes array (consistent with LotteryResultProcessor)
 
     public $codesTicket = [
@@ -415,6 +436,23 @@ class PlaysManager extends Component
         }
         
 
+        // Ordenar las loterías dentro de cada horario por el orden específico solicitado: NAC, CHA, PRO, MZA, CTE, SFE, COR, RIO, ORO
+        $desiredOrder = ['CIUDAD', 'CHACO', 'PROVINCIA', 'MENDOZA', 'CORRIENTES', 'SANTA FE', 'CORDOBA', 'ENTRE RIOS', 'MONTEVIDEO'];
+        
+        foreach ($this->lotteryGroups as $time => &$lotteries) {
+            // Convertir Collection a array para usar usort
+            $lotteriesArray = $lotteries->toArray();
+            usort($lotteriesArray, function($a, $b) use ($desiredOrder) {
+                $posA = array_search($a['name'], $desiredOrder);
+                $posB = array_search($b['name'], $desiredOrder);
+                if ($posA === false) $posA = 999;
+                if ($posB === false) $posB = 999;
+                return $posA - $posB;
+            });
+            // Convertir de vuelta a Collection
+            $lotteries = collect($lotteriesArray);
+        }
+
         // Crear mapeo de códigos UI a códigos de BD
         $this->uiCodeMapping = [];
         foreach ($cities as $city) {
@@ -495,24 +533,33 @@ class PlaysManager extends Component
      */
     protected function generateAbbreviation($cityName, $extractName)
     {
-        // Mapeo de nombres de ciudades a abreviaciones cortas
-        $cityAbbreviations = [
-            'CIUDAD' => 'CIU',
-            'SANTA FE' => 'SFE', 
-            'PROVINCIA' => 'PRO',
-            'ENTRE RIOS' => 'ERI',
-            'CORDOBA' => 'COR',
-            'CORRIENTES' => 'CTE',
+        // Mapeo específico para las 9 loterías principales con abreviaciones exactas
+        $specificAbbreviations = [
+            'CIUDAD' => 'NAC',
             'CHACO' => 'CHA',
+            'PROVINCIA' => 'PRO',
+            'MENDOZA' => 'MZA',
+            'CORRIENTES' => 'CTE',
+            'SANTA FE' => 'SFE',
+            'CORDOBA' => 'COR',
+            'ENTRE RIOS' => 'RIO',
+            'MONTEVIDEO' => 'ORO'
+        ];
+        
+        // Si es una de las 9 loterías principales, usar la abreviación específica
+        if (isset($specificAbbreviations[$cityName])) {
+            return $specificAbbreviations[$cityName];
+        }
+        
+        // Para las demás loterías, mantener las abreviaciones actuales
+        $cityAbbreviations = [
             'NEUQUEN' => 'NEU',
             'MISIONES' => 'MIS',
-            'MENDOZA' => 'MEN',
             'Río Negro' => 'RNE',
             'Tucuman' => 'TUC',
             'Santiago' => 'SGO',
             'JUJUY' => 'JUJ',
             'SALTA' => 'SAL',
-            'MONTEVIDEO' => 'ORO',
             'SAN LUIS' => 'SLU',
             'CHUBUT' => 'CHU',
             'FORMOSA' => 'FOR',
@@ -520,24 +567,7 @@ class PlaysManager extends Component
             'SAN JUAN' => 'SJU'
         ];
 
-        // Mapeo de extractos a abreviaciones
-        $extractAbbreviations = [
-            'PREVIA' => '',
-            'PRIMERO' => '',
-            'MATUTINO' => '',
-            'VESPERTINO' => '',
-            'NOCTURNO' => ''
-        ];
-
-        $cityAbbr = $cityAbbreviations[$cityName] ?? substr($cityName, 0, 3);
-        $extractAbbr = $extractAbbreviations[$extractName] ?? '';
-        
-        // Para Montevideo, solo devolver "ORO" (ya está en el mapeo)
-        if ($cityName === 'MONTEVIDEO') {
-            return 'ORO';
-        }
-        
-        return $cityAbbr;
+        return $cityAbbreviations[$cityName] ?? substr($cityName, 0, 3);
     }
 
 
@@ -737,19 +767,23 @@ class PlaysManager extends Component
 
                 $systemCode = $this->uiCodeMapping[$uiCode];
 
-                $prefix = substr($systemCode, 0, -4); // Extracts 'NAC' from 'NAC1015'
-
-                $timeSuffix = $this->getTimeSuffixFromSystemCode($systemCode); // Gets '10' from 'NAC1015'
-
-                $displayCodes[] = $prefix . $timeSuffix; // Combines to 'NAC10'
+                // Convertir a código corto usando el mapeo
+                if (isset($this->systemToShortCodes[$systemCode])) {
+                    $displayCodes[] = $this->systemToShortCodes[$systemCode];
+                } else {
+                    // Fallback al método anterior si no existe el código corto
+                    $prefix = substr($systemCode, 0, -4); // Extracts 'NAC' from 'NAC1015'
+                    $timeSuffix = $this->getTimeSuffixFromSystemCode($systemCode); // Gets '10' from 'NAC1015'
+                    $displayCodes[] = $prefix . $timeSuffix; // Combines to 'NAC10'
+                }
 
             }
         }
 
 
-        // Custom sort based on a predefined order
+        // Custom sort based on a predefined order (usando códigos cortos)
 
-        $desiredOrder = ['NAC', 'CHA', 'PRO', 'MZA', 'CTE', 'SFE', 'COR', 'RIO', 'ORO', 'SLU', 'CHU', 'FOR', 'CAT', 'SJU'];
+        $desiredOrder = ['AB', 'CH1', 'QW', 'M10', '!', 'ER', 'SD', 'RT', 'Q', 'CH2', 'W', 'M1', 'M', 'R', 'T', 'K', 'A', 'CH3', 'E', 'M2', 'CT3', 'D', 'L', 'J', 'S', 'F', 'CH4', 'B', 'M3', 'Z', 'V', 'H', 'U', 'N', 'CH5', 'P', 'M4', 'G', 'I', 'C', 'Y', 'O'];
 
         $uniqueDisplayCodes = array_unique($displayCodes);
 
@@ -757,23 +791,13 @@ class PlaysManager extends Component
 
         usort($uniqueDisplayCodes, function ($a, $b) use ($desiredOrder) {
 
-            // Extract the lottery prefix for sorting (e.g., 'NAC' from 'NAC10')
+            // Buscar directamente los códigos cortos en el orden deseado
+            $posA = array_search($a, $desiredOrder);
+            $posB = array_search($b, $desiredOrder);
 
-            $prefixA = substr($a, 0, -2);
-
-            $prefixB = substr($b, 0, -2);
-
-
-
-            $posA = array_search($prefixA, $desiredOrder);
-
-            $posB = array_search($prefixB, $desiredOrder);
-
-
-
-            if ($posB === false) return -1;
-
-
+            // Si no se encuentra en el orden deseado, poner al final
+            if ($posA === false) $posA = 999;
+            if ($posB === false) $posB = 999;
 
             return $posA - $posB;
         });
@@ -1644,25 +1668,37 @@ public function addRow()
 
 
         if ($checked) {
-
-            $newCodes = array_values(array_unique(array_merge($this->checkboxCodes, $codesToUpdate)));
+            // Solo agregar códigos de loterías que están realmente marcadas en los checkboxes individuales
+            $actuallySelectedCodes = [];
+            foreach ($this->horarios as $hora) {
+                if ($this->isDisabled($hora)) continue;
+                
+                if (isset($this->lotteryGroups[$hora])) {
+                    foreach ($this->lotteryGroups[$hora] as $colIdx => $lottery) {
+                        $key = "{$hora}_col_" . ($colIdx + 1);
+                        
+                        // Verificar si esta lotería está configurada para este horario
+                        $cityName = $lottery['name'];
+                        $selectedSchedules = $globalConfig[$cityName] ?? [];
+                        
+                        // Solo agregar si está marcada Y está configurada para este horario
+                        if (in_array($hora, $selectedSchedules) && $this->selected[$key]) {
+                            $actuallySelectedCodes[] = $lottery['ui_code'];
+                        }
+                    }
+                }
+            }
+            
+            $newCodes = array_values(array_unique($actuallySelectedCodes));
 
             if ($this->checkboxCodes != $newCodes) {
-
                 $this->checkboxCodes = $newCodes;
-
                 $anyCheckboxChanged = true;
             }
         } else {
-
-            $newCodes = array_values(array_diff($this->checkboxCodes, $codesToUpdate));
-
-            if ($this->checkboxCodes != $newCodes) {
-
-                $this->checkboxCodes = $newCodes;
-
-                $anyCheckboxChanged = true;
-            }
+            // Al desmarcar "todos", limpiar todos los códigos
+            $this->checkboxCodes = [];
+            $anyCheckboxChanged = true;
         }
 
 
@@ -1680,6 +1716,12 @@ public function addRow()
 
         if ($this->isDisabled($time)) return;
 
+        // Obtener configuración global de quinielas
+        $globalConfig = GlobalQuinielasConfiguration::all()
+            ->keyBy('city_name')
+            ->map(function($config) {
+                return $config->selected_schedules;
+            });
 
         $currentCodesInRow = [];
 
@@ -1700,7 +1742,13 @@ public function addRow()
                     $anyCheckboxChanged = true;
                 }
 
-                $currentCodesInRow[] = $lottery['ui_code'];
+                // Solo agregar códigos de loterías que están configuradas para este horario
+                $cityName = $lottery['name'];
+                $selectedSchedules = $globalConfig[$cityName] ?? [];
+                
+                if (in_array($time, $selectedSchedules)) {
+                    $currentCodesInRow[] = $lottery['ui_code'];
+                }
             }
         }
 
@@ -1913,6 +1961,19 @@ public function addRow()
         $this->checkboxCodes = array_values(array_unique(array_filter($this->checkboxCodes)));
 
         $this->count = count($this->checkboxCodes);
+    }
+
+    /**
+     * Convierte códigos del sistema a códigos cortos para mostrar
+     */
+    protected function convertToShortCodes($systemCodes)
+    {
+        $shortCodes = [];
+        foreach ($systemCodes as $code) {
+            $shortCode = $this->systemToShortCodes[$code] ?? $code;
+            $shortCodes[] = $shortCode;
+        }
+        return $shortCodes;
     }
 
 
