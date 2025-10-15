@@ -234,6 +234,7 @@
                     <!-- Ciudades asociadas a este extracto -->
                     <div class="flex justify-between gap-3 overflow-x-auto w-full pb-2">
                         @foreach ($cities->where('extract_id', $extract->id) as $city)
+                            @if($this->isCityAndScheduleConfiguredInQuinielas($city->name, $extract->name))
                         <div class="bg-[#292f34] p-3 rounded-lg flex flex-col gap-3">
                             <p class="text-white font-medium flex flex-col text-center">
                                 {{ $city->name }}
@@ -315,6 +316,7 @@
                                     @endfor
                             </div>
                         </div>
+                            @endif
                         @endforeach
                     </div>
                 </div>
@@ -357,6 +359,7 @@
                 <div id="printContent" class="grid grid-cols-2 gap-2 w-full">
                     <!-- Ejemplo de impresión sólo para la 'PREVIA' (extract_id = 1) -->
                     @foreach ($cities->where('extract_id', 1) as $city)
+                        @if($this->isCityAndScheduleConfiguredInQuinielas($city->name, 'PREVIA'))
                     <div class="bg-[#2d3339] p-3 rounded-lg flex flex-col gap-3 w-full">
                         <p class="text-white font-medium flex flex-col text-center">
                             {{ $city->name }}
@@ -398,6 +401,7 @@
                             @endif
                         </div>
                     </div>
+                        @endif
                     @endforeach
                 </div>
             </x-slot>
