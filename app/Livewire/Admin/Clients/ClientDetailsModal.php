@@ -286,19 +286,27 @@ class ClientDetailsModal extends Component
         $selectedDate = \Carbon\Carbon::parse($this->liquidacionesDate);
 
         // Consulta de resultados filtrada por cliente
-        $totalAciert = (float) Result::whereDate('date', $this->liquidacionesDate)
-                                   ->where('user_id', $userId)
-                                   ->sum('aciert');
+        $resultsQuery = Result::whereDate('date', $this->liquidacionesDate)
+                             ->where('user_id', $userId);
+        $allResults = $resultsQuery->get();
+        
+        // Filtrar resultados según la configuración de quinielas
+        $filteredResults = $this->filterResultsByQuinielasConfig($allResults);
+        $totalAciert = (float) $filteredResults->sum('aciert');
 
         // Consulta de apuestas filtrada por cliente
         $apusQuery = \App\Models\ApusModel::whereDate('created_at', $this->liquidacionesDate)
                                          ->where('user_id', $userId);
+        $allApus = $apusQuery->get();
         
-        $previaTotalApus = (float) (clone $apusQuery)->where('timeApu', '10:15')->sum('import');
-        $mananaTotalApus = (float) (clone $apusQuery)->where('timeApu', '12:00')->sum('import');
-        $matutinaTotalApus = (float) (clone $apusQuery)->where('timeApu', '15:00')->sum('import');
-        $tardeTotalApus = (float) (clone $apusQuery)->where('timeApu', '18:00')->sum('import');
-        $nocheTotalApus = (float) (clone $apusQuery)->where('timeApu', '21:00')->sum('import');
+        // Filtrar apuestas según la configuración de quinielas
+        $filteredApus = $this->filterApusByQuinielasConfig($allApus);
+        
+        $previaTotalApus = (float) $filteredApus->where('timeApu', '10:15')->sum('import');
+        $mananaTotalApus = (float) $filteredApus->where('timeApu', '12:00')->sum('import');
+        $matutinaTotalApus = (float) $filteredApus->where('timeApu', '15:00')->sum('import');
+        $tardeTotalApus = (float) $filteredApus->where('timeApu', '18:00')->sum('import');
+        $nocheTotalApus = (float) $filteredApus->where('timeApu', '21:00')->sum('import');
         
         $totalApus = $previaTotalApus + $mananaTotalApus + $matutinaTotalApus + $tardeTotalApus + $nocheTotalApus;
         
@@ -328,7 +336,7 @@ class ClientDetailsModal extends Component
             'totalAciert' => $totalAciert,
             'totalGanaPase' => $totalGanaPase,
             'anteri' => $prevClientDeja,
-            'udRecibe' => $totalApus,
+            'udRecibe' => $totalAciert, // Corregido: debe ser totalAciert, no totalApus
             'udDeja' => $udDeja,
             'arrastre' => $arrastre,
             'previaTotalApus' => $previaTotalApus,
@@ -570,6 +578,57 @@ class ClientDetailsModal extends Component
             }
             
             return false; // Ninguna lotería está configurada
+        });
+    }
+
+    /**
+     * Filtra apuestas según la configuración de quinielas
+     * Solo muestra apuestas de loterías que están configuradas en GlobalQuinielasConfiguration
+     */
+    private function filterApusByQuinielasConfig($apus)
+    {
+        // Obtener configuración de quinielas
+        $savedPreferences = \App\Models\GlobalQuinielasConfiguration::all()
+            ->keyBy('city_name')
+            ->map(function($config) {
+                return $config->selected_schedules;
+            });
+
+        // Mapeo de códigos de sistema a nombres de ciudad
+        $systemCodeToCity = [
+            'NAC' => 'BUENOS AIRES',
+            'CHA' => 'CHACO', 
+            'PRO' => 'ENTRE RIOS',
+            'MZA' => 'MENDOZA',
+            'CTE' => 'CORRIENTES',
+            'SFE' => 'SANTA FE',
+            'COR' => 'CORDOBA',
+            'RIO' => 'LA RIOJA',
+            'ORO' => 'MONTEVIDEO',
+            'NQN' => 'NEUQUEN',
+            'MIS' => 'MISIONES',
+            'JUJ' => 'JUJUY',
+            'Salt' => 'SALTA',
+            'Rio' => 'RIO NEGRO',
+            'Tucu' => 'TUCUMAN',
+            'San' => 'SAN LUIS'
+        ];
+
+        return $apus->filter(function($apu) use ($savedPreferences, $systemCodeToCity) {
+            $lotteryCode = $apu->lottery;
+            
+            // Extraer prefijo de ciudad del código de sistema (ej: "CHA" de "CHA1800")
+            if (preg_match('/^([A-Za-z]+)\d{4}$/', $lotteryCode, $matches)) {
+                $cityPrefix = $matches[1];
+                $cityName = $systemCodeToCity[$cityPrefix] ?? null;
+                
+                if ($cityName && isset($savedPreferences[$cityName])) {
+                    $selectedSchedules = $savedPreferences[$cityName];
+                    return !empty($selectedSchedules);
+                }
+            }
+            
+            return false; // Lotería no está configurada
         });
     }
 

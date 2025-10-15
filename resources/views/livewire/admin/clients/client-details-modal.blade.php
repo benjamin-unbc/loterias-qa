@@ -664,10 +664,6 @@
                                                         <h4 class="font-medium">DEJA PASE:</h4>
                                                         <p>{{ number_format($liquidacionData['totalGanaPase'], 2) }}</p>
                                                     </div>
-                                                    <div class="flex justify-between">
-                                                        <h4 class="font-medium">TOTAL DEJA:</h4>
-                                                        <p>{{ number_format($liquidacionData['totalGanaPase'], 2) }}</p>
-                                                    </div>
                                                 </div>
 
                                                 <!-- Gener. deja y arrastre -->
