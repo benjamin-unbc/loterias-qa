@@ -2592,4 +2592,5 @@ public function addRow()
         $this->needsTotalRecalculation = false;
         return $this->cachedTotal;
     }
+
 }
