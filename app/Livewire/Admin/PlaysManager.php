@@ -12,6 +12,12 @@ use App\Models\PlaysSentModel;
 
 use App\Models\Ticket;
 
+use App\Models\City;
+
+use App\Models\Extract;
+
+use App\Models\GlobalQuinielasConfiguration;
+
 use Carbon\Carbon;
 
 use Illuminate\Support\Facades\URL;
@@ -25,6 +31,8 @@ use Livewire\WithFileUploads;
 use Illuminate\Support\Collection;
 
 use Illuminate\Support\Facades\DB;
+
+use Illuminate\Support\Facades\Auth;
 
 
 
@@ -42,11 +50,18 @@ class PlaysManager extends Component
 
     public $horaActual;
 
-    public $horarios = ['10:15', '12:00', '15:00', '18:00', '21:00'];
+    public $horarios = []; // Se cargará dinámicamente desde la BD
 
     public $selected = [];
 
     public $checkboxCodes = [];
+    
+    // Nuevas propiedades para manejar todas las loterías
+    public $allLotteries = []; // Todas las loterías con sus horarios
+    public $lotteryGroups = []; // Loterías agrupadas por horario
+    public $uiCodeMapping = []; // Mapeo de códigos UI a códigos de BD
+    public $citySchedules = []; // Horarios por ciudad (para lógica por defecto)
+    
 
 
 
@@ -87,6 +102,8 @@ class PlaysManager extends Component
     public $currentBasePlayId = null;
 
     public $currentDerivedCount = 0;
+    
+    public $isCreatingDerived = false;
 
 
 
@@ -133,21 +150,30 @@ class PlaysManager extends Component
 
 
 
-    public $codes = [
+    // El array $codes ya no se usa - se reemplazó por lotteryGroups dinámico
 
-        '10:15' => ['AB', 'CH1', 'QW', 'M10', '!', 'ER', 'SD', 'RT'],
 
-        '12:00' => ['Q', 'CH2', 'W', 'M1', 'M', 'R', 'T', 'K'],
 
-        '15:00' => ['A', 'CH3', 'E', 'M2', 'Ct3', 'D', 'L', 'J', 'S'],
-
-        '18:00' => ['F', 'CH4', 'B', 'M3', 'Z', 'V', 'H', 'U'],
-
-        '21:00' => ['N', 'CH5', 'P', 'M4', 'G', 'I', 'C', 'Y', 'O'],
-
+    // Mapeo de códigos del sistema a códigos cortos para mostrar
+    public $systemToShortCodes = [
+        'NAC1015' => 'AB', 'CHA1015' => 'CH1', 'PRO1015' => 'QW', 'MZA1015' => 'M10', 'CTE1015' => '!',
+        'SFE1015' => 'ER', 'COR1015' => 'SD', 'RIO1015' => 'RT', 'NAC1200' => 'Q', 'CHA1200' => 'CH2',
+        'PRO1200' => 'W', 'MZA1200' => 'M1', 'CTE1200' => 'M', 'SFE1200' => 'R', 'COR1200' => 'T',
+        'RIO1200' => 'K', 'NAC1500' => 'A', 'CHA1500' => 'CH3', 'PRO1500' => 'E', 'MZA1500' => 'M2',
+        'CTE1500' => 'Ct3', 'SFE1500' => 'D', 'COR1500' => 'L', 'RIO1500' => 'J', 'ORO1800' => 'S',
+        'NAC1800' => 'F', 'CHA1800' => 'CH4', 'PRO1800' => 'B', 'MZA1800' => 'M3', 'CTE1800' => 'Z',
+        'SFE1800' => 'V', 'COR1800' => 'H', 'RIO1800' => 'U', 'NAC2100' => 'N', 'CHA2100' => 'CH5',
+        'PRO2100' => 'P', 'MZA2100' => 'M4', 'CTE2100' => 'G', 'SFE2100' => 'I', 'COR2100' => 'C',
+        'RIO2100' => 'Y', 'ORO2100' => 'O',
+        // Nuevos códigos cortos para las loterías adicionales
+        'NQN1015' => 'NQ1', 'MIS1030' => 'MI1', 'Rio1015' => 'RN1', 'Tucu1130' => 'TU1', 'San1015' => 'SG1',
+        'NQN1200' => 'NQ2', 'MIS1215' => 'MI2', 'JUJ1200' => 'JU1', 'Salt1130' => 'SA1', 'Rio1200' => 'RN2',
+        'Tucu1430' => 'TU2', 'San1200' => 'SG2', 'NQN1500' => 'NQ3', 'MIS1500' => 'MI3', 'JUJ1500' => 'JU2',
+        'Salt1400' => 'SA2', 'Rio1500' => 'RN3', 'Tucu1730' => 'TU3', 'San1500' => 'SG3', 'NQN1800' => 'NQ4',
+        'MIS1800' => 'MI4', 'JUJ1800' => 'JU3', 'Salt1730' => 'SA3', 'Rio1800' => 'RN4', 'Tucu1930' => 'TU4',
+        'San1945' => 'SG4', 'NQN2100' => 'NQ5', 'JUJ2100' => 'JU4', 'Rio2100' => 'RN5', 'Salt2100' => 'SA4',
+        'Tucu2200' => 'TU5', 'MIS2115' => 'MI5', 'San2200' => 'SG5'
     ];
-
-
 
     // Standardized codes array (consistent with LotteryResultProcessor)
 
@@ -181,7 +207,9 @@ class PlaysManager extends Component
         'D' => 'SFE1500',
         'L' => 'COR1500',
         'J' => 'RIO1500',
-        'S' => 'ORO1500',
+        'S' => 'ORO1800', // Corregido: ORO1500 -> ORO1800
+        'ORO1500' => 'ORO1800', // Mapeo especial para Montevideo 18:00
+        'ORO1800' => 'ORO1800', // Mapeo directo para Montevideo 18:00
 
         'F' => 'NAC1800',
         'CH4' => 'CHA1800',
@@ -202,7 +230,42 @@ class PlaysManager extends Component
         'C' => 'COR2100',
 
         'Y' => 'RIO2100',
-        'O' => 'ORO2100'
+        'O' => 'ORO2100',
+
+        // Nuevos códigos para las loterías adicionales
+        'NQN1015' => 'NQN1015',
+        'MIS1030' => 'MIS1030',
+        'Rio1015' => 'Rio1015',
+        'Tucu1130' => 'Tucu1130',
+        'San1015' => 'San1015',
+        'NQN1200' => 'NQN1200',
+        'MIS1215' => 'MIS1215',
+        'JUJ1200' => 'JUJ1200',
+        'Salt1130' => 'Salt1130',
+        'Rio1200' => 'Rio1200',
+        'Tucu1430' => 'Tucu1430',
+        'San1200' => 'San1200',
+        'NQN1500' => 'NQN1500',
+        'MIS1500' => 'MIS1500',
+        'JUJ1500' => 'JUJ1500',
+        'Salt1400' => 'Salt1400',
+        'Rio1500' => 'Rio1500',
+        'Tucu1730' => 'Tucu1730',
+        'San1500' => 'San1500',
+        'NQN1800' => 'NQN1800',
+        'MIS1800' => 'MIS1800',
+        'JUJ1800' => 'JUJ1800',
+        'Salt1730' => 'Salt1730',
+        'Rio1800' => 'Rio1800',
+        'Tucu1930' => 'Tucu1930',
+        'San1945' => 'San1945',
+        'NQN2100' => 'NQN2100',
+        'JUJ2100' => 'JUJ2100',
+        'Rio2100' => 'Rio2100',
+        'Salt2100' => 'Salt2100',
+        'Tucu2200' => 'Tucu2200',
+        'MIS2115' => 'MIS2115',
+        'San2200' => 'San2200'
 
     ];
 
@@ -276,35 +339,236 @@ class PlaysManager extends Component
 
         $this->selected = [];
 
-        foreach ($this->horarios as $h) {
-
-            $this->selected[$h] = false;
-
-            foreach ($this->codes[$h] ?? [] as $colIdx => $codeValue) {
-
-                $this->selected["{$h}_col_" . ($colIdx + 1)] = false;
-            }
-
-            if (in_array($h, ['15:00', '21:00'])) {
-
-                $this->selected["{$h}_oro"] = false;
-            }
-        }
+        // Cargar todas las loterías y horarios desde la base de datos
+        $this->loadAllLotteriesAndSchedules();
 
         $this->checkboxCodes = [];
-
-        $this->rows = $this->getAndSortPlays();
-
-        $this->initialDefaultImport = '';
-
-        $this->lastImportValue = '';
-
-        $this->import = '';
-
+        
+        // Inicializar rows como colección vacía
+        $this->rows = collect();
+        
         $this->updateLotteryCount();
         $this->calculateTotal(); // Calcular total inicial
     }
 
+
+
+    /**
+     * Carga todas las loterías y horarios desde la base de datos
+     */
+    protected function loadAllLotteriesAndSchedules()
+    {
+        // Obtener todas las ciudades con sus extractos (horarios)
+        $cities = City::with('extract')
+            ->orderBy('extract_id')
+            ->orderBy('name')
+            ->get();
+
+        // Agrupar por horario (con mapeo especial para Montevideo)
+        $this->lotteryGroups = $cities->groupBy(function($city) {
+            // Mapeo especial para Montevideo: 18:00 se agrupa como 15:00
+            if ($city->name === 'MONTEVIDEO' && $city->time === '18:00') {
+                return '15:00';
+            }
+            return $city->time;
+        })->map(function($citiesInTime) {
+            return $citiesInTime->map(function($city) {
+                // Mapeo especial para Montevideo
+                if ($city->name === 'MONTEVIDEO') {
+                    // Si es Montevideo a las 18:00, mostrarlo como 15:00 pero con código ORO1800
+                    if ($city->time === '18:00') {
+                        return [
+                            'id' => $city->id,
+                            'name' => $city->name,
+                            'code' => $city->code, // Mantener ORO1800
+                            'time' => '15:00', // Mostrar como 15:00
+                            'extract_name' => $city->extract->name,
+                            'ui_code' => $this->generateUICode($city->name, '15:00'),
+                            'abbreviation' => $this->generateAbbreviation($city->name, $city->extract->name)
+                        ];
+                    }
+                    // Si es Montevideo a las 21:00, mantenerlo normal
+                    if ($city->time === '21:00') {
+                        return [
+                            'id' => $city->id,
+                            'name' => $city->name,
+                            'code' => $city->code,
+                            'time' => $city->time,
+                            'extract_name' => $city->extract->name,
+                            'ui_code' => $this->generateUICode($city->name, $city->time),
+                            'abbreviation' => $this->generateAbbreviation($city->name, $city->extract->name)
+                        ];
+                    }
+                    // Si es Montevideo en cualquier otro horario, no mostrarlo
+                    return null;
+                }
+                
+                // Para todas las demás ciudades, mantener normal
+                return [
+                    'id' => $city->id,
+                    'name' => $city->name,
+                    'code' => $city->code,
+                    'time' => $city->time,
+                    'extract_name' => $city->extract->name,
+                    'ui_code' => $this->generateUICode($city->name, $city->time),
+                    'abbreviation' => $this->generateAbbreviation($city->name, $city->extract->name)
+                ];
+            })->filter(); // Filtrar los valores null
+        });
+
+        // Obtener todos los horarios únicos ordenados
+        $this->horarios = $this->lotteryGroups->keys()->sort()->values()->toArray();
+        
+        // Cargar horarios por ciudad para lógica por defecto
+        $this->citySchedules = [];
+        foreach ($cities->groupBy('name') as $cityName => $cityData) {
+            $schedules = $cityData->pluck('time')->unique()->sort()->values()->toArray();
+            
+            // Filtrar visualmente el horario 18:00 de Montevideo
+            if ($cityName === 'MONTEVIDEO') {
+                $schedules = array_filter($schedules, function($time) {
+                    return $time !== '18:00';
+                });
+                $schedules = array_values($schedules); // Reindexar el array
+            }
+            
+            $this->citySchedules[$cityName] = $schedules;
+        }
+        
+
+        // Ordenar las loterías dentro de cada horario por el orden específico solicitado: NAC, CHA, PRO, MZA, CTE, SFE, COR, RIO, ORO
+        $desiredOrder = ['CIUDAD', 'CHACO', 'PROVINCIA', 'MENDOZA', 'CORRIENTES', 'SANTA FE', 'CORDOBA', 'ENTRE RIOS', 'MONTEVIDEO'];
+        
+        foreach ($this->lotteryGroups as $time => &$lotteries) {
+            // Convertir Collection a array para usar usort
+            $lotteriesArray = $lotteries->toArray();
+            usort($lotteriesArray, function($a, $b) use ($desiredOrder) {
+                $posA = array_search($a['name'], $desiredOrder);
+                $posB = array_search($b['name'], $desiredOrder);
+                if ($posA === false) $posA = 999;
+                if ($posB === false) $posB = 999;
+                return $posA - $posB;
+            });
+            // Convertir de vuelta a Collection
+            $lotteries = collect($lotteriesArray);
+        }
+
+        // Crear mapeo de códigos UI a códigos de BD
+        $this->uiCodeMapping = [];
+        foreach ($cities as $city) {
+            // Mapeo especial para Montevideo
+            if ($city->name === 'MONTEVIDEO') {
+                if ($city->time === '18:00') {
+                    // Para Montevideo 18:00, usar código ORO1800 pero UI code con 15:00
+                    $uiCode = $this->generateUICode($city->name, '15:00');
+                    $this->uiCodeMapping[$uiCode] = $city->code; // ORO1800
+                } elseif ($city->time === '21:00') {
+                    // Para Montevideo 21:00, mantener normal
+                    $uiCode = $this->generateUICode($city->name, $city->time);
+                    $this->uiCodeMapping[$uiCode] = $city->code;
+                }
+                // Ignorar otros horarios de Montevideo
+            } else {
+                // Para todas las demás ciudades, mantener normal
+                $uiCode = $this->generateUICode($city->name, $city->time);
+                $this->uiCodeMapping[$uiCode] = $city->code;
+            }
+        }
+
+        // Inicializar selecciones
+        foreach ($this->horarios as $time) {
+            $this->selected[$time] = false;
+            
+            if (isset($this->lotteryGroups[$time])) {
+                foreach ($this->lotteryGroups[$time] as $index => $lottery) {
+                    $this->selected["{$time}_col_" . ($index + 1)] = false;
+                }
+            }
+        }
+    }
+
+    /**
+     * Genera un código UI único para cada lotería basado en su nombre y horario
+     */
+    protected function generateUICode($cityName, $time)
+    {
+        // Mapeo de nombres de ciudades a códigos cortos
+        $cityCodes = [
+            'CIUDAD' => 'NAC',
+            'SANTA FE' => 'SFE', 
+            'PROVINCIA' => 'PRO',
+            'ENTRE RIOS' => 'RIO',
+            'CORDOBA' => 'COR',
+            'CORRIENTES' => 'CTE',
+            'CHACO' => 'CHA',
+            'NEUQUEN' => 'NQN',
+            'MISIONES' => 'MIS',
+            'MENDOZA' => 'MZA',
+            'Río Negro' => 'Rio',
+            'Tucuman' => 'Tucu',
+            'Santiago' => 'San',
+            'JUJUY' => 'JUJ',
+            'SALTA' => 'Salt',
+            'MONTEVIDEO' => 'ORO',
+            'SAN LUIS' => 'SLU',
+            'CHUBUT' => 'CHU',
+            'FORMOSA' => 'FOR',
+            'CATAMARCA' => 'CAT',
+            'SAN JUAN' => 'SJU'
+        ];
+
+        $cityCode = $cityCodes[$cityName] ?? substr($cityName, 0, 3);
+        
+        // Mapeo especial para Montevideo: 15:00 debe generar ORO1800
+        if ($cityName === 'MONTEVIDEO' && $time === '15:00') {
+            return 'ORO1800';
+        }
+        
+        $timeCode = str_replace(':', '', $time);
+        return $cityCode . $timeCode;
+    }
+
+    /**
+     * Genera una abreviación para mostrar en la interfaz
+     */
+    protected function generateAbbreviation($cityName, $extractName)
+    {
+        // Mapeo específico para las 9 loterías principales con abreviaciones exactas
+        $specificAbbreviations = [
+            'CIUDAD' => 'NAC',
+            'CHACO' => 'CHA',
+            'PROVINCIA' => 'PRO',
+            'MENDOZA' => 'MZA',
+            'CORRIENTES' => 'CTE',
+            'SANTA FE' => 'SFE',
+            'CORDOBA' => 'COR',
+            'ENTRE RIOS' => 'RIO',
+            'MONTEVIDEO' => 'ORO'
+        ];
+        
+        // Si es una de las 9 loterías principales, usar la abreviación específica
+        if (isset($specificAbbreviations[$cityName])) {
+            return $specificAbbreviations[$cityName];
+        }
+        
+        // Para las demás loterías, mantener las abreviaciones actuales
+        $cityAbbreviations = [
+            'NEUQUEN' => 'NEU',
+            'MISIONES' => 'MIS',
+            'Río Negro' => 'RNE',
+            'Tucuman' => 'TUC',
+            'Santiago' => 'SGO',
+            'JUJUY' => 'JUJ',
+            'SALTA' => 'SAL',
+            'SAN LUIS' => 'SLU',
+            'CHUBUT' => 'CHU',
+            'FORMOSA' => 'FOR',
+            'CATAMARCA' => 'CAT',
+            'SAN JUAN' => 'SJU'
+        ];
+
+        return $cityAbbreviations[$cityName] ?? substr($cityName, 0, 3);
+    }
 
 
     protected function getAndSortPlays(): Collection
@@ -492,35 +756,34 @@ class PlaysManager extends Component
 
     {
 
-        $systemCodes = [];
+        $displayCodes = [];
 
         foreach ($selectedUiCodes as $uiCode) {
 
             $uiCode = trim($uiCode);
 
-            if (isset($this->codesTicket[$uiCode])) {
+            // Usar el nuevo mapeo dinámico
+            if (isset($this->uiCodeMapping[$uiCode])) {
 
-                $systemCodes[] = $this->codesTicket[$uiCode];
+                $systemCode = $this->uiCodeMapping[$uiCode];
+
+                // Convertir a código corto usando el mapeo
+                if (isset($this->systemToShortCodes[$systemCode])) {
+                    $displayCodes[] = $this->systemToShortCodes[$systemCode];
+                } else {
+                    // Fallback al método anterior si no existe el código corto
+                    $prefix = substr($systemCode, 0, -4); // Extracts 'NAC' from 'NAC1015'
+                    $timeSuffix = $this->getTimeSuffixFromSystemCode($systemCode); // Gets '10' from 'NAC1015'
+                    $displayCodes[] = $prefix . $timeSuffix; // Combines to 'NAC10'
+                }
+
             }
         }
 
 
-        $displayCodes = [];
+        // Custom sort based on a predefined order (usando códigos cortos)
 
-        foreach ($systemCodes as $systemCode) {
-
-            $prefix = substr($systemCode, 0, -4); // Extracts 'NAC' from 'NAC1015'
-
-            $timeSuffix = $this->getTimeSuffixFromSystemCode($systemCode); // Gets '10' from 'NAC1015'
-
-            $displayCodes[] = $prefix . $timeSuffix; // Combines to 'NAC10'
-
-        }
-
-
-        // Custom sort based on a predefined order
-
-        $desiredOrder = ['NAC', 'CHA', 'PRO', 'MZA', 'CTE', 'SFE', 'COR', 'RIO', 'ORO'];
+        $desiredOrder = ['AB', 'CH1', 'QW', 'M10', '!', 'ER', 'SD', 'RT', 'Q', 'CH2', 'W', 'M1', 'M', 'R', 'T', 'K', 'A', 'CH3', 'E', 'M2', 'CT3', 'D', 'L', 'J', 'S', 'F', 'CH4', 'B', 'M3', 'Z', 'V', 'H', 'U', 'N', 'CH5', 'P', 'M4', 'G', 'I', 'C', 'Y', 'O'];
 
         $uniqueDisplayCodes = array_unique($displayCodes);
 
@@ -528,23 +791,13 @@ class PlaysManager extends Component
 
         usort($uniqueDisplayCodes, function ($a, $b) use ($desiredOrder) {
 
-            // Extract the lottery prefix for sorting (e.g., 'NAC' from 'NAC10')
+            // Buscar directamente los códigos cortos en el orden deseado
+            $posA = array_search($a, $desiredOrder);
+            $posB = array_search($b, $desiredOrder);
 
-            $prefixA = substr($a, 0, -2);
-
-            $prefixB = substr($b, 0, -2);
-
-
-
-            $posA = array_search($prefixA, $desiredOrder);
-
-            $posB = array_search($prefixB, $desiredOrder);
-
-
-
-            if ($posB === false) return -1;
-
-
+            // Si no se encuentra en el orden deseado, poner al final
+            if ($posA === false) $posA = 999;
+            if ($posB === false) $posB = 999;
 
             return $posA - $posB;
         });
@@ -867,14 +1120,15 @@ public function editRow($id)
 
         $this->selected = [];
         foreach ($this->checkboxCodes as $code) {
-            foreach ($this->codes as $time => $timeCodes) {
-                if (is_array($timeCodes)) {
-                    $col = array_search($code, $timeCodes);
-                    if ($col !== false) $this->selected["{$time}_col_" . ($col + 1)] = true;
+            // Buscar en la nueva estructura de lotteryGroups
+            foreach ($this->lotteryGroups as $time => $lotteries) {
+                foreach ($lotteries as $index => $lottery) {
+                    if ($lottery['ui_code'] === $code) {
+                        $this->selected["{$time}_col_" . ($index + 1)] = true;
+                        break 2; // Salir de ambos bucles
+                    }
                 }
             }
-            if ($code === 'S') $this->selected["15:00_oro"] = true;
-            elseif ($code === 'O') $this->selected["21:00_oro"] = true;
         }
 
         foreach ($this->horarios as $time) {
@@ -1034,7 +1288,38 @@ public function addRow()
 
     try {
         $importeAGuardar = $validatedData['import'];
-        $currentLotteryString = implode(',', array_filter($this->checkboxCodes));
+        
+        // Filtrar solo códigos válidos según la configuración de Quinielas
+        $validCodes = [];
+        $globalConfig = GlobalQuinielasConfiguration::all()
+            ->keyBy('city_name')
+            ->map(function($config) {
+                return $config->selected_schedules;
+            });
+            
+        foreach ($this->checkboxCodes as $code) {
+            // Verificar si este código corresponde a una lotería configurada
+            foreach ($this->lotteryGroups as $time => $lotteries) {
+                foreach ($lotteries as $lottery) {
+                    if ($lottery['ui_code'] === $code) {
+                        $cityName = $lottery['name'];
+                        $selectedSchedules = $globalConfig[$cityName] ?? [];
+                        if (in_array($time, $selectedSchedules)) {
+                            $validCodes[] = $code;
+                        }
+                        break 2; // Salir de ambos loops
+                    }
+                }
+            }
+        }
+        
+        $currentLotteryString = implode(',', array_unique($validCodes));
+        
+        // Verificar que hay al menos un código válido
+        if (empty($validCodes)) {
+            $this->dispatch('notify', message: 'No hay loterías válidas seleccionadas según la configuración de Quinielas.', type: 'warning');
+            return;
+        }
 
         // Datos para crear la jugada
         $playDataToCreate = [
@@ -1063,18 +1348,18 @@ public function addRow()
             return;
         }
         
-        // 3. Crear bloqueo temporal (3 segundos)
-        \Cache::put($lockKey, true, 3);
+        // 3. Crear bloqueo temporal mínimo (0.1 segundos) para evitar duplicados
+        \Cache::put($lockKey, true, 0.1);
         
         try {
-            // 4. Verificar duplicados en base de datos (últimos 5 segundos)
+            // 4. Verificar duplicados en base de datos (últimos 1 segundo)
             $recentPlay = Play::where('user_id', auth()->id())
                 ->where('number', $this->formatNumber($validatedData['number']))
                 ->where('position', $validatedData['position'] ?? 1)
                 ->where('lottery', $currentLotteryString)
                 ->where('numberR', $validatedData['numberR'])
                 ->where('positionR', $validatedData['positionR'])
-                ->where('created_at', '>=', now()->subSeconds(5))
+                ->where('created_at', '>=', now()->subSeconds(1))
                 ->first();
 
             if ($recentPlay) {
@@ -1115,10 +1400,20 @@ public function addRow()
         // Focar el siguiente input de número
         $this->dispatch('focusInput', ['selector' => '#number']);
 
+        // Reactivar las bajadas si se creó una nueva jugada base (3 o 4 dígitos)
+        $cleanNumber = str_replace('*', '', $validatedData['number']);
+        if (strlen($cleanNumber) >= 3 && ctype_digit($cleanNumber)) {
+            $lastDerivedKey = 'lastDerivedCompleted_' . auth()->id();
+            \Cache::forget($lastDerivedKey); // Reactivar las bajadas
+            $this->currentBasePlayId = $newPlay->id; // Actualizar ID de base
+            $this->currentDerivedCount = 0; // Resetear contador
+        }
+
         // Limpiar el ID de la jugada si estamos en modo edición
         if ($this->editingRowId) $this->editingRowId = null;
     } catch (\Exception $e) {
         // En caso de error, notificar el fallo
+        \Log::error('Error al agregar jugada: ' . $e->getMessage());
         $this->dispatch('notify', message: 'Error al agregar.', type: 'error');
     }
 }
@@ -1234,8 +1529,44 @@ public function addRow()
     public function getHorariosConEstado()
 
     {
+        // Obtener configuración global de quinielas
+        $globalConfig = GlobalQuinielasConfiguration::all()
+            ->keyBy('city_name')
+            ->map(function($config) {
+                return $config->selected_schedules;
+            });
+        
+        // Si no hay configuración global guardada, usar configuración por defecto
+        if ($globalConfig->isEmpty()) {
+            $defaultSelectedLotteries = [
+                'CIUDAD', 'CHACO', 'PROVINCIA', 'MENDOZA', 'CORRIENTES', 
+                'SANTA FE', 'CORDOBA', 'ENTRE RIOS', 'MONTEVIDEO'
+            ];
+            
+            foreach ($defaultSelectedLotteries as $cityName) {
+                $globalConfig[$cityName] = $this->citySchedules[$cityName] ?? [];
+            }
+        }
+        
+        // Filtrar horarios: solo mostrar aquellos que tienen al menos una lotería seleccionada
+        $horariosFiltrados = collect($this->horarios)->filter(function($time) use ($globalConfig) {
+            // Verificar si hay al menos una lotería seleccionada para este horario
+            foreach ($globalConfig as $cityName => $selectedSchedules) {
+                if (in_array($time, $selectedSchedules)) {
+                    // Verificar si esta lotería realmente existe en este horario
+                    if (isset($this->lotteryGroups[$time])) {
+                        foreach ($this->lotteryGroups[$time] as $lottery) {
+                            if ($lottery['name'] === $cityName) {
+                                return true; // Hay al menos una lotería seleccionada para este horario
+                            }
+                        }
+                    }
+                }
+            }
+            return false; // No hay loterías seleccionadas para este horario
+        })->values();
 
-        return collect($this->horarios)->map(function ($time) {
+        return $horariosFiltrados->map(function ($time) {
 
             $horaCarbon = Carbon::createFromFormat('H:i', $time, 'America/Argentina/Buenos_Aires');
 
@@ -1275,6 +1606,12 @@ public function addRow()
     public function toggleAllCheckboxes($checked)
 
     {
+        // Obtener configuración global de quinielas
+        $globalConfig = GlobalQuinielasConfiguration::all()
+            ->keyBy('city_name')
+            ->map(function($config) {
+                return $config->selected_schedules;
+            });
 
         $codesToUpdate = [];
 
@@ -1297,59 +1634,71 @@ public function addRow()
 
 
 
-            foreach ($this->codes[$hora] ?? [] as $colIdx => $codeValue) {
+            // Usar la nueva estructura de lotteryGroups
+            if (isset($this->lotteryGroups[$hora])) {
+                foreach ($this->lotteryGroups[$hora] as $colIdx => $lottery) {
 
-                $key = "{$hora}_col_" . ($colIdx + 1);
+                    $key = "{$hora}_col_" . ($colIdx + 1);
 
-                if ($this->selected[$key] != $checked) {
+                    // Verificar si esta lotería está configurada para este horario
+                    $cityName = $lottery['name'];
+                    $selectedSchedules = $globalConfig[$cityName] ?? [];
+                    
+                    if (in_array($hora, $selectedSchedules) && $this->selected[$key] != $checked) {
 
-                    $this->selected[$key] = $checked;
+                        $this->selected[$key] = $checked;
 
-                    $anyCheckboxChanged = true;
+                        $anyCheckboxChanged = true;
+                    }
+
+                    // Solo agregar códigos de loterías configuradas en Quinielas
+                    $cityName = $lottery['name'];
+                    $selectedSchedules = $globalConfig[$cityName] ?? [];
+                    
+                    if (in_array($hora, $selectedSchedules)) {
+                        $codesToUpdate[] = $lottery['ui_code'];
+                    }
                 }
-
-                $codesToUpdate[] = $codeValue;
             }
 
 
 
-            if (in_array($hora, ['15:00', '21:00'])) {
-
-                $oroKey = "{$hora}_oro";
-
-                if (($this->selected[$oroKey] ?? false) != $checked) {
-
-                    $this->selected[$oroKey] = $checked;
-
-                    $anyCheckboxChanged = true;
-                }
-
-                $codesToUpdate[] = $hora === '15:00' ? 'S' : 'O';
-            }
         }
 
 
 
         if ($checked) {
-
-            $newCodes = array_values(array_unique(array_merge($this->checkboxCodes, $codesToUpdate)));
+            // Solo agregar códigos de loterías que están realmente marcadas en los checkboxes individuales
+            $actuallySelectedCodes = [];
+            foreach ($this->horarios as $hora) {
+                if ($this->isDisabled($hora)) continue;
+                
+                if (isset($this->lotteryGroups[$hora])) {
+                    foreach ($this->lotteryGroups[$hora] as $colIdx => $lottery) {
+                        $key = "{$hora}_col_" . ($colIdx + 1);
+                        
+                        // Verificar si esta lotería está configurada para este horario
+                        $cityName = $lottery['name'];
+                        $selectedSchedules = $globalConfig[$cityName] ?? [];
+                        
+                        // Solo agregar si está marcada Y está configurada para este horario
+                        if (in_array($hora, $selectedSchedules) && $this->selected[$key]) {
+                            $actuallySelectedCodes[] = $lottery['ui_code'];
+                        }
+                    }
+                }
+            }
+            
+            $newCodes = array_values(array_unique($actuallySelectedCodes));
 
             if ($this->checkboxCodes != $newCodes) {
-
                 $this->checkboxCodes = $newCodes;
-
                 $anyCheckboxChanged = true;
             }
         } else {
-
-            $newCodes = array_values(array_diff($this->checkboxCodes, $codesToUpdate));
-
-            if ($this->checkboxCodes != $newCodes) {
-
-                $this->checkboxCodes = $newCodes;
-
-                $anyCheckboxChanged = true;
-            }
+            // Al desmarcar "todos", limpiar todos los códigos
+            $this->checkboxCodes = [];
+            $anyCheckboxChanged = true;
         }
 
 
@@ -1367,41 +1716,39 @@ public function addRow()
 
         if ($this->isDisabled($time)) return;
 
+        // Obtener configuración global de quinielas
+        $globalConfig = GlobalQuinielasConfiguration::all()
+            ->keyBy('city_name')
+            ->map(function($config) {
+                return $config->selected_schedules;
+            });
 
-        $currentCodesInRow = $this->codes[$time] ?? [];
+        $currentCodesInRow = [];
 
         $anyCheckboxChanged = false;
 
 
 
-        if (in_array($time, ['15:00', '21:00'])) {
+        // Usar la nueva estructura de lotteryGroups
+        if (isset($this->lotteryGroups[$time])) {
+            foreach ($this->lotteryGroups[$time] as $index => $lottery) {
 
-            $oroCode = $time === '15:00' ? 'S' : 'O';
+                $key = "{$time}_col_" . ($index + 1);
 
-            $currentCodesInRow[] = $oroCode;
+                if (($this->selected[$key] ?? false) != $checked) {
 
+                    $this->selected[$key] = $checked;
 
-            $oroKey = "{$time}_oro";
+                    $anyCheckboxChanged = true;
+                }
 
-            if (($this->selected[$oroKey] ?? false) != $checked) {
-
-                $this->selected[$oroKey] = $checked;
-
-                $anyCheckboxChanged = true;
-            }
-        }
-
-
-
-        foreach (array_keys($this->codes[$time] ?? []) as $index) {
-
-            $key = "{$time}_col_" . ($index + 1);
-
-            if (($this->selected[$key] ?? false) != $checked) {
-
-                $this->selected[$key] = $checked;
-
-                $anyCheckboxChanged = true;
+                // Solo agregar códigos de loterías que están configuradas para este horario
+                $cityName = $lottery['name'];
+                $selectedSchedules = $globalConfig[$cityName] ?? [];
+                
+                if (in_array($time, $selectedSchedules)) {
+                    $currentCodesInRow[] = $lottery['ui_code'];
+                }
             }
         }
 
@@ -1451,8 +1798,11 @@ public function addRow()
     {
 
         if ($this->isDisabled($time)) return;
-        $code = $this->codes[$time][$col - 1] ?? null;
-        if (!$code) return;
+        // Obtener el código UI de la nueva estructura
+        $lottery = $this->lotteryGroups[$time][$col - 1] ?? null;
+        if (!$lottery) return;
+        
+        $code = $lottery['ui_code'];
 
 
         $key = "{$time}_col_{$col}";
@@ -1569,21 +1919,17 @@ public function addRow()
 
         $allCheckedInRow = true;
 
-        foreach (array_keys($this->codes[$time] ?? []) as $index) {
+        // Usar la nueva estructura de lotteryGroups
+        if (isset($this->lotteryGroups[$time])) {
+            foreach ($this->lotteryGroups[$time] as $index => $lottery) {
 
-            $colKey = "{$time}_col_" . ($index + 1);
+                $colKey = "{$time}_col_" . ($index + 1);
 
-            if (empty($this->selected[$colKey] ?? false)) {
-                $allCheckedInRow = false;
-                break;
+                if (empty($this->selected[$colKey] ?? false)) {
+                    $allCheckedInRow = false;
+                    break;
+                }
             }
-        }
-
-        if ($allCheckedInRow && in_array($time, ['15:00', '21:00'])) {
-
-            $oroKey = "{$time}_oro";
-
-            if (empty($this->selected[$oroKey] ?? false)) $allCheckedInRow = false;
         }
 
         if (($this->selected[$time] ?? false) != $allCheckedInRow) $this->selected[$time] = $allCheckedInRow;
@@ -1615,6 +1961,19 @@ public function addRow()
         $this->checkboxCodes = array_values(array_unique(array_filter($this->checkboxCodes)));
 
         $this->count = count($this->checkboxCodes);
+    }
+
+    /**
+     * Convierte códigos del sistema a códigos cortos para mostrar
+     */
+    protected function convertToShortCodes($systemCodes)
+    {
+        $shortCodes = [];
+        foreach ($systemCodes as $code) {
+            $shortCode = $this->systemToShortCodes[$code] ?? $code;
+            $shortCodes[] = $shortCode;
+        }
+        return $shortCodes;
     }
 
 
@@ -1663,14 +2022,12 @@ public function addRow()
 
             $this->selected[$h] = false;
 
-            foreach ($this->codes[$h] ?? [] as $colIdx => $codeValue) {
+            // Usar la nueva estructura de lotteryGroups
+            if (isset($this->lotteryGroups[$h])) {
+                foreach ($this->lotteryGroups[$h] as $colIdx => $lottery) {
 
-                $this->selected["{$h}_col_" . ($colIdx + 1)] = false;
-            }
-
-            if (in_array($h, ['15:00', '21:00'])) {
-
-                $this->selected["{$h}_oro"] = false;
+                    $this->selected["{$h}_col_" . ($colIdx + 1)] = false;
+                }
             }
         }
 
@@ -1808,6 +2165,9 @@ public function addRow()
             $type = $plays->contains(fn($play) => !empty($play->numberR) || !empty($play->positionR)) ? 'R' : 'J';
             $uniqueLotteryCodes = array_unique($lotteryCodesForAllPlays);
 
+            // Obtener el número de quiniela de la primera jugada (asumiendo que todas las jugadas del ticket tienen el mismo número)
+            $firstPlayNumber = $plays->first()->number ?? '0000';
+            
             $playsSent = PlaysSentModel::create([
                 'ticket' => $ticket,
                 'user_id' => auth()->id(),
@@ -1819,7 +2179,7 @@ public function addRow()
                 'pay' => $this->totalAmount,
                 'amount' => $this->totalAmount,
                 'date' => now()->toDateString(),
-                'code' => $uniqueCodeForTicket,
+                'code' => $firstPlayNumber, // Usar el número de quiniela en lugar del código alfanumérico
             ]);
 
             if ($playsSent && $ticketCreated) {
@@ -1871,27 +2231,17 @@ public function addRow()
 
         foreach ($allLotteryCodesFromPlays as $code) {
 
-            if ($code === 'S') {
+            // Buscar en la nueva estructura de lotteryGroups
+            foreach ($this->lotteryGroups as $time => $lotteries) {
 
-                $selectedTimes[] = '15:00';
+                foreach ($lotteries as $lottery) {
 
-                continue;
-            }
+                    if ($lottery['ui_code'] === $code) {
 
-            if ($code === 'O') {
+                        $selectedTimes[] = $time;
 
-                $selectedTimes[] = '21:00';
-
-                continue;
-            }
-
-            foreach ($this->codes as $time => $codesArray) {
-
-                if (in_array($code, $codesArray)) {
-
-                    $selectedTimes[] = $time;
-
-                    break;
+                        break 2; // Salir de ambos bucles
+                    }
                 }
             }
         }
@@ -1905,17 +2255,15 @@ public function addRow()
 
     {
 
-        if ($lotteryUiCode === 'S') return '15:00';
+        // Buscar en la nueva estructura de lotteryGroups
+        foreach ($this->lotteryGroups as $time => $lotteries) {
 
-        if ($lotteryUiCode === 'O') return '21:00';
+            foreach ($lotteries as $lottery) {
 
+                if ($lottery['ui_code'] === $lotteryUiCode) {
 
-
-        foreach ($this->codes as $time => $uiCodesInTime) {
-
-            if (in_array($lotteryUiCode, $uiCodesInTime)) {
-
-                return $time;
+                    return $time;
+                }
             }
         }
 
@@ -1926,63 +2274,158 @@ public function addRow()
 
     public function addRowWithDerived()
 {
-    $basePlay = Play::where('user_id', auth()->id())
-        ->whereRaw('LENGTH(REPLACE(number, "*", "")) IN (3,4)')
-        ->orderBy('id', 'desc')
-        ->first();
-
-    if (!$basePlay) {
-        $this->dispatch('notify', message: 'Debe haber una jugada principal de 3 o 4 dígitos para generar derivadas.', type: 'error');
+    // 1. Verificar si ya hay una operación en curso (evitar clics rápidos)
+    if ($this->isCreatingDerived) {
         return;
     }
-
-    $cleanBaseNumber = str_replace('*', '', $basePlay->number);
-
-    if (!ctype_digit($cleanBaseNumber) || !in_array(strlen($cleanBaseNumber), [3, 4])) {
-        $this->dispatch('notify', message: 'La jugada principal para derivar debe tener 3 o 4 dígitos numéricos (sin contar asteriscos).', type: 'error');
+    
+    // 2. Crear una clave de bloqueo única para este usuario y operación
+    $lockKey = 'addRowWithDerived_lock_' . auth()->id();
+    $lastDerivedKey = 'lastDerivedCompleted_' . auth()->id();
+    
+    // 3. Verificar si ya hay una operación en curso (evitar clics rápidos)
+    if (\Cache::has($lockKey)) {
+        // En lugar de mostrar mensaje, simplemente ignorar el clic (más rápido)
         return;
     }
-
-    if ($this->currentBasePlayId !== $basePlay->id) {
-        $this->currentBasePlayId = $basePlay->id;
-        $this->currentDerivedCount = 0;
-    }
-
-    $allDerivedRaw = $this->getSpecialDerivedNumbers($cleanBaseNumber);
-    $derivedNumbersToCreate = array_slice($allDerivedRaw, 1);
-
-    if (empty($derivedNumbersToCreate)) {
-        $this->dispatch('notify', message: 'No hay jugadas derivadas definidas para este número base.', type: 'info');
+    
+    // 4. Verificar si se completó la última derivada y bloquear completamente
+    if (\Cache::has($lastDerivedKey)) {
+        // La última derivada ya se completó, bloquear completamente
         return;
     }
+    
+    // 5. Marcar como procesando y establecer bloqueo más largo (0.5 segundos)
+    $this->isCreatingDerived = true;
+    \Cache::put($lockKey, true, 0.5);
+    
+    try {
+        $basePlay = Play::where('user_id', auth()->id())
+            ->whereRaw('LENGTH(REPLACE(number, "*", "")) IN (3,4)')
+            ->orderBy('id', 'desc')
+            ->first();
 
-    if ($this->currentDerivedCount >= count($derivedNumbersToCreate)) {
-        $this->dispatch('notify', message: 'Ya se crearon todas las jugadas derivadas posibles para la base actual.', type: 'info');
-        return;
+        if (!$basePlay) {
+            $this->dispatch('notify', message: 'Debe haber una jugada principal de 3 o 4 dígitos para generar derivadas.', type: 'error');
+            return;
+        }
+
+        $cleanBaseNumber = str_replace('*', '', $basePlay->number);
+
+        if (!ctype_digit($cleanBaseNumber) || !in_array(strlen($cleanBaseNumber), [3, 4])) {
+            $this->dispatch('notify', message: 'La jugada principal para derivar debe tener 3 o 4 dígitos numéricos (sin contar asteriscos).', type: 'error');
+            return;
+        }
+
+        if ($this->currentBasePlayId !== $basePlay->id) {
+            $this->currentBasePlayId = $basePlay->id;
+            $this->currentDerivedCount = 0;
+        }
+
+        $allDerivedRaw = $this->getSpecialDerivedNumbers($cleanBaseNumber);
+        $derivedNumbersToCreate = array_slice($allDerivedRaw, 1);
+
+        if (empty($derivedNumbersToCreate)) {
+            $this->dispatch('notify', message: 'No hay jugadas derivadas definidas para este número base.', type: 'info');
+            return;
+        }
+
+        // Verificar si ya se crearon todas las jugadas derivadas posibles
+        if ($this->currentDerivedCount >= count($derivedNumbersToCreate)) {
+            // Marcar que se completó la última derivada y bloquear por tiempo mínimo
+            \Cache::put($lastDerivedKey, true, 5); // Bloquear solo por 5 segundos
+            $this->dispatch('notify', message: 'Ya se crearon todas las jugadas derivadas posibles para la base actual.', type: 'info');
+            return;
+        }
+
+        $newDerivedNumberFormatted = $derivedNumbersToCreate[$this->currentDerivedCount];
+
+        // 4. Verificación robusta: verificar duplicados en los últimos 2 segundos
+        $duplicatePlay = Play::where('user_id', auth()->id())
+            ->where('number', $newDerivedNumberFormatted)
+            ->where('position', $basePlay->position)
+            ->where('lottery', $basePlay->lottery)
+            ->where('numberR', $basePlay->numberR)
+            ->where('positionR', $basePlay->positionR)
+            ->where('created_at', '>=', now()->subSeconds(2))
+            ->first();
+
+        if ($duplicatePlay) {
+            // Silenciosamente ignorar duplicados
+            \Cache::forget($lockKey);
+            $this->isCreatingDerived = false;
+            return;
+        }
+
+        // 5. Verificación rápida: contar derivadas existentes en los últimos 1 segundo
+        $existingDerivedCount = Play::where('user_id', auth()->id())
+            ->where('position', $basePlay->position)
+            ->where('lottery', $basePlay->lottery)
+            ->where('numberR', $basePlay->numberR)
+            ->where('positionR', $basePlay->positionR)
+            ->where('created_at', '>=', now()->subSeconds(1))
+            ->count();
+
+        if ($existingDerivedCount >= count($derivedNumbersToCreate)) {
+            // Silenciosamente ignorar si ya se crearon todas
+            return;
+        }
+
+        // 6. Verificación estricta: verificar si la última jugada es exactamente la misma
+        $lastPlay = Play::where('user_id', auth()->id())
+            ->where('number', $newDerivedNumberFormatted)
+            ->where('position', $basePlay->position)
+            ->where('lottery', $basePlay->lottery)
+            ->where('numberR', $basePlay->numberR)
+            ->where('positionR', $basePlay->positionR)
+            ->orderBy('id', 'desc')
+            ->first();
+
+        if ($lastPlay && $lastPlay->created_at->diffInSeconds(now()) < 1.0) {
+            // Si la última jugada es exactamente igual y fue creada hace menos de 1 segundo, ignorar
+            \Cache::forget($lockKey);
+            $this->isCreatingDerived = false;
+            return;
+        }
+
+        // 7. Crear la nueva jugada derivada
+        $newPlay = Play::create([
+            'user_id' => auth()->id(),
+            'type' => $basePlay->type,
+            'number' => $newDerivedNumberFormatted,
+            'position' => $basePlay->position,
+            'import' => $basePlay->import,
+            'lottery' => $basePlay->lottery,
+            'numberR' => $basePlay->numberR,
+            'positionR' => $basePlay->positionR,
+            'isChecked' => $basePlay->isChecked,
+        ]);
+
+        // Incrementar contador (más simple y rápido)
+        $this->currentDerivedCount++;
+        
+        // Verificar si esta fue la última derivada posible y bloquear
+        if ($this->currentDerivedCount >= count($derivedNumbersToCreate)) {
+            // Esta fue la última derivada, bloquear por tiempo mínimo
+            \Cache::put($lastDerivedKey, true, 5); // Bloquear solo por 5 segundos
+        }
+        
+        $this->rows = $this->getAndSortPlays();
+        $this->needsTotalRecalculation = true;
+        $this->dispatch('scroll-to-last-play', ['playId' => $newPlay->id]);
+        $this->dispatch('notify', message: "Jugada derivada '{$newDerivedNumberFormatted}' creada correctamente.", type: 'success');
+        $this->dispatch('focusInput', ['selector' => '#number']);
+        
+    } catch (\Exception $e) {
+        // En caso de error, liberar el bloqueo y notificar
+        \Cache::forget($lockKey);
+        \Log::error('Error al crear jugada derivada: ' . $e->getMessage());
+        $this->dispatch('notify', message: 'Error al crear jugada derivada.', type: 'error');
+    } finally {
+        // Asegurar que el bloqueo se libere siempre y resetear el estado
+        \Cache::forget($lockKey);
+        $this->isCreatingDerived = false;
     }
-
-    $newDerivedNumberFormatted = $derivedNumbersToCreate[$this->currentDerivedCount];
-
-    // **Eliminamos la validación de duplicados** para las jugadas derivadas
-    // Esto permite que se cree una jugada derivada duplicada sin ningún problema.
-    $newPlay = Play::create([
-        'user_id' => auth()->id(),
-        'type' => $basePlay->type,
-        'number' => $newDerivedNumberFormatted,
-        'position' => $basePlay->position,
-        'import' => $basePlay->import,
-        'lottery' => $basePlay->lottery,
-        'numberR' => $basePlay->numberR,
-        'positionR' => $basePlay->positionR,
-        'isChecked' => $basePlay->isChecked,
-    ]);
-
-    $this->currentDerivedCount++;
-    $this->rows = $this->getAndSortPlays();
-    $this->needsTotalRecalculation = true;
-    $this->dispatch('scroll-to-last-play', ['playId' => $newPlay->id]);
-    $this->dispatch('notify', message: "Jugada derivada '{$newDerivedNumberFormatted}' creada correctamente.", type: 'success');
-    $this->dispatch('focusInput', ['selector' => '#number']);
 }
 
 
@@ -2128,6 +2571,8 @@ public function addRow()
             'mainNumber' => $mainPlay ? $mainPlay->number : null,
 
             'total' => $total, // Pasar el total calculado
+            
+            'lotteryGroups' => $this->lotteryGroups, // Pasar los grupos de loterías
 
         ]);
     }
@@ -2147,4 +2592,5 @@ public function addRow()
         $this->needsTotalRecalculation = false;
         return $this->cachedTotal;
     }
+
 }

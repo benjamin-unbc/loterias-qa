@@ -68,17 +68,27 @@ class PlaysSent extends Component
         $this->showTicketModal = true;
     }
 
-    // Standardized codes array (consistent with LotteryResultProcessor)
+    // Standardized codes array (consistent with LotteryResultProcessor and PlaysManager)
     public $codes = [
         'AB' => 'NAC1015', 'CH1' => 'CHA1015', 'QW' => 'PRO1015', 'M10' => 'MZA1015', '!' => 'CTE1015',
         'ER' => 'SFE1015', 'SD' => 'COR1015', 'RT' => 'RIO1015', 'Q' => 'NAC1200', 'CH2' => 'CHA1200',
         'W' => 'PRO1200', 'M1' => 'MZA1200', 'M' => 'CTE1200', 'R' => 'SFE1200', 'T' => 'COR1200',
         'K' => 'RIO1200', 'A' => 'NAC1500', 'CH3' => 'CHA1500', 'E' => 'PRO1500', 'M2' => 'MZA1500',
-        'Ct3' => 'CTE1500', 'D' => 'SFE1500', 'L' => 'COR1500', 'J' => 'RIO1500', 'S' => 'ORO1500',
+        'Ct3' => 'CTE1500', 'D' => 'SFE1500', 'L' => 'COR1500', 'J' => 'RIO1500', 'S' => 'ORO1800',
+        'ORO1500' => 'ORO1800', // Mapeo especial para Montevideo 18:00
+        'ORO1800' => 'ORO1800', // Mapeo directo para Montevideo 18:00
         'F' => 'NAC1800', 'CH4' => 'CHA1800', 'B' => 'PRO1800', 'M3' => 'MZA1800', 'Z' => 'CTE1800',
         'V' => 'SFE1800', 'H' => 'COR1800', 'U' => 'RIO1800', 'N' => 'NAC2100', 'CH5' => 'CHA2100',
         'P' => 'PRO2100', 'M4' => 'MZA2100', 'G' => 'CTE2100', 'I' => 'SFE2100', 'C' => 'COR2100',
-        'Y' => 'RIO2100', 'O' => 'ORO2100'
+        'Y' => 'RIO2100', 'O' => 'ORO2100',
+        // Nuevos códigos cortos para las loterías adicionales
+        'NQ1' => 'NQN1015', 'MI1' => 'MIS1030', 'RN1' => 'Rio1015', 'TU1' => 'Tucu1130', 'SG1' => 'San1015',
+        'NQ2' => 'NQN1200', 'MI2' => 'MIS1215', 'JU1' => 'JUJ1200', 'SA1' => 'Salt1130', 'RN2' => 'Rio1200',
+        'TU2' => 'Tucu1430', 'SG2' => 'San1200', 'NQ3' => 'NQN1500', 'MI3' => 'MIS1500', 'JU2' => 'JUJ1500',
+        'SA2' => 'Salt1400', 'RN3' => 'Rio1500', 'TU3' => 'Tucu1730', 'SG3' => 'San1500', 'NQ4' => 'NQN1800',
+        'MI4' => 'MIS1800', 'JU3' => 'JUJ1800', 'SA3' => 'Salt1730', 'RN4' => 'Rio1800', 'TU4' => 'Tucu1930',
+        'SG4' => 'San1945', 'NQ5' => 'NQN2100', 'JU4' => 'JUJ2100', 'RN5' => 'Rio2100', 'SA4' => 'Salt2100',
+        'TU5' => 'Tucu2200', 'MI5' => 'MIS2115', 'SG5' => 'San2200'
     ];
 
     // Helper to extract time suffix from system code (e.g., 'NAC1015' -> '1015')
@@ -115,6 +125,7 @@ public function viewApus($ticket)
         ->orderBy('id', 'asc')
         ->get();
 
+
     if ($rawApus->isEmpty()) {
         $this->apusData = collect();
         $this->groups = collect();
@@ -130,6 +141,7 @@ public function viewApus($ticket)
 
     // OPTIMIZACIÓN 3: Procesamiento optimizado de agrupaciones
     $this->processApusData($rawApus);
+
 
     // OPTIMIZACIÓN 4: Consulta paralela para el play (ya no bloquea el procesamiento)
     $this->play = PlaysSentModel::select(['ticket', 'code', 'date', 'time', 'user_id', 'amount'])
@@ -151,14 +163,14 @@ public function viewApus($ticket)
  */
 private function processApusData($rawApus)
 {
-    // OPTIMIZACIÓN 6: Agrupación optimizada con menos operaciones
+    // Agrupar por original_play_id para mantener las jugadas juntas
     $groupedByPlayId = $rawApus->groupBy('original_play_id');
     
     $processedGroups = $groupedByPlayId->map(function ($groupOfApusFromSameOriginalPlay) {
-        // Tomar la primera apuesta del grupo como representativa
+        // Tomar la primera apuesta del grupo como representativa para los datos básicos
         $representativeApu = $groupOfApusFromSameOriginalPlay->first();
         
-        // OPTIMIZACIÓN 7: Procesamiento más eficiente de códigos de lotería
+        // Obtener TODOS los códigos de lotería únicos de este grupo
         $lotteryCodes = $groupOfApusFromSameOriginalPlay
             ->pluck('lottery')
             ->filter()
@@ -166,6 +178,7 @@ private function processApusData($rawApus)
             ->values()
             ->toArray();
         
+        // Determinar la cadena de loterías para mostrar
         $determinedLotteryKeyString = $this->determineLottery($lotteryCodes);
 
         return [
@@ -180,7 +193,7 @@ private function processApusData($rawApus)
         ];
     });
 
-    // OPTIMIZACIÓN 8: Agrupación final optimizada
+    // Agrupar por la cadena de loterías para mostrar
     $this->groups = $processedGroups
         ->groupBy('codes_display_string')
         ->map(function ($items, $key) {
@@ -189,15 +202,18 @@ private function processApusData($rawApus)
                 'numbers' => $items->pluck('numbers')->flatten(1)->all(),
             ];
         })
-        // OPTIMIZACIÓN 9: Ordenamiento optimizado con caché de posiciones
+        // Ordenar por el orden deseado de loterías (usando códigos cortos)
         ->sortBy(function ($group, $key) {
-            static $desiredOrder = ['NAC', 'CHA', 'PRO', 'MZA', 'CTE', 'SFE', 'COR', 'RIO', 'ORO'];
+            static $desiredOrder = ['AB', 'CH1', 'QW', 'M10', '!', 'ER', 'SD', 'RT', 'NQ1', 'MI1', 'RN1', 'TU1', 'SG1',
+                        'Q', 'CH2', 'W', 'M1', 'M', 'R', 'T', 'K', 'NQ2', 'MI2', 'JU1', 'SA1', 'RN2', 'TU2', 'SG2',
+                        'A', 'CH3', 'E', 'M2', 'Ct3', 'D', 'L', 'J', 'S', 'NQ3', 'MI3', 'JU2', 'SA2', 'RN3', 'TU3', 'SG3',
+                        'F', 'CH4', 'B', 'M3', 'Z', 'V', 'H', 'U', 'NQ4', 'MI4', 'JU3', 'SA3', 'RN4', 'TU4', 'SG4',
+                        'N', 'CH5', 'P', 'M4', 'G', 'I', 'C', 'Y', 'O', 'NQ5', 'JU4', 'RN5', 'SA4', 'TU5', 'MI5', 'SG5'];
             static $positionCache = [];
             
             if (!isset($positionCache[$key])) {
                 $firstLotteryInGroup = explode(', ', $key)[0];
-                $prefix = substr($firstLotteryInGroup, 0, -2);
-                $positionCache[$key] = array_search($prefix, $desiredOrder) ?: 999;
+                $positionCache[$key] = array_search($firstLotteryInGroup, $desiredOrder) ?: 999;
             }
             
             return $positionCache[$key];
@@ -205,32 +221,68 @@ private function processApusData($rawApus)
         ->values();
 }
 
-    // Use the same determineLottery logic as PlaysManager
-    protected function determineLottery(array $selectedUiCodes): string
+    // Use the same determineLottery logic as PlaysManager but with short codes
+    protected function determineLottery(array $selectedCodes): string
     {
-        $systemCodes = [];
-        foreach ($selectedUiCodes as $uiCode) {
-            $uiCode = trim($uiCode);
-            if (isset($this->codes[$uiCode])) {
-                $systemCodes[] = $this->codes[$uiCode];
+        $displayCodes = [];
+        
+        // Debug temporal para ver qué códigos llegan
+        \Log::info('PlaysSent determineLottery - selectedCodes:', $selectedCodes);
+        
+        foreach ($selectedCodes as $code) {
+            $code = trim($code);
+            \Log::info("Processing code: '$code'");
+            
+            // Limpiar códigos malformados - extraer solo códigos válidos
+            if (preg_match_all('/[A-Za-z]+\d{4}/', $code, $matches)) {
+                // Si el código contiene múltiples códigos válidos, procesarlos por separado
+                foreach ($matches[0] as $validCode) {
+                    $shortCode = array_search($validCode, $this->codes);
+                    if ($shortCode !== false) {
+                        $displayCodes[] = $shortCode;
+                        \Log::info("Converted '$validCode' to '$shortCode'");
+                    } else {
+                        \Log::info("Not found in codes: '$validCode'");
+                    }
+                }
+            }
+            // Si el código ya es un código del sistema válido (ej: "CHA1800"), convertirlo a código corto
+            elseif (preg_match('/^[A-Za-z]+\d{4}$/', $code)) {
+                $shortCode = array_search($code, $this->codes);
+                if ($shortCode !== false) {
+                    $displayCodes[] = $shortCode;
+                    \Log::info("Converted '$code' to '$shortCode'");
+                } else {
+                    \Log::info("Not found in codes: '$code'");
+                }
+            }
+            // Si es un código de UI (ej: "CH4"), ya es un código corto
+            elseif (isset($this->codes[$code])) {
+                $displayCodes[] = $code; // Ya es un código corto
+                \Log::info("UI code found: '$code'");
+            } else {
+                \Log::info("Unknown code format: '$code'");
             }
         }
-        $displayCodes = [];
-        foreach ($systemCodes as $systemCode) {
-            $prefix = substr($systemCode, 0, -4); // Extracts 'NAC' from 'NAC1015'
-            $timeSuffix = $this->getTimeSuffixFromSystemCode($systemCode); // Gets '10' from 'NAC1015'
-            $displayCodes[] = $prefix . $timeSuffix; // Combines to 'NAC10'
-        }
-        $desiredOrder = ['NAC', 'CHA', 'PRO', 'MZA', 'CTE', 'SFE', 'COR', 'RIO', 'ORO'];
+        
+        \Log::info('Final displayCodes:', $displayCodes);
+        
+        $desiredOrder = ['AB', 'CH1', 'QW', 'M10', '!', 'ER', 'SD', 'RT', 'NQ1', 'MI1', 'RN1', 'TU1', 'SG1',
+                        'Q', 'CH2', 'W', 'M1', 'M', 'R', 'T', 'K', 'NQ2', 'MI2', 'JU1', 'SA1', 'RN2', 'TU2', 'SG2',
+                        'A', 'CH3', 'E', 'M2', 'Ct3', 'D', 'L', 'J', 'S', 'NQ3', 'MI3', 'JU2', 'SA2', 'RN3', 'TU3', 'SG3',
+                        'F', 'CH4', 'B', 'M3', 'Z', 'V', 'H', 'U', 'NQ4', 'MI4', 'JU3', 'SA3', 'RN4', 'TU4', 'SG4',
+                        'N', 'CH5', 'P', 'M4', 'G', 'I', 'C', 'Y', 'O', 'NQ5', 'JU4', 'RN5', 'SA4', 'TU5', 'MI5', 'SG5'];
+        
         $uniqueDisplayCodes = array_unique($displayCodes);
+        
         usort($uniqueDisplayCodes, function ($a, $b) use ($desiredOrder) {
-            $prefixA = substr($a, 0, -2);
-            $prefixB = substr($b, 0, -2);
-            $posA = array_search($prefixA, $desiredOrder);
-            $posB = array_search($prefixB, $desiredOrder);
-            if ($posB === false) return -1;
+            $posA = array_search($a, $desiredOrder);
+            $posB = array_search($b, $desiredOrder);
+            if ($posA === false) $posA = 999;
+            if ($posB === false) $posB = 999;
             return $posA - $posB;
         });
+        
         return implode(', ', $uniqueDisplayCodes);
     }
 

@@ -52,8 +52,8 @@ class AutoUpdateLotteryNumbers extends Command
                 // Verificar si hay ciudades/turnos sin números completos
                 $missingNumbers = $this->checkMissingNumbers($todayDate);
                 if (empty($missingNumbers)) {
-                    $this->info("✅ Todos los números están completos para {$todayDate}.");
-                    return;
+                    $this->info("✅ Todos los números están completos para {$todayDate}. Procesando números existentes para calcular resultados...");
+                    // No retornar, continuar para procesar números existentes
                 } else {
                     $this->info("⚠️  Se encontraron números faltantes en: " . implode(', ', $missingNumbers));
                 }
@@ -112,6 +112,12 @@ class AutoUpdateLotteryNumbers extends Command
                     $errors[] = "Error en {$cityName}: " . $e->getMessage();
                     $this->error("❌ Error en {$cityName}: " . $e->getMessage());
                 }
+            }
+            
+            // Si no se insertaron números nuevos, procesar números existentes para calcular resultados
+            if ($totalInserted === 0 && $totalUpdated === 0) {
+                $this->info("🔄 No hay números nuevos. Procesando números existentes para calcular resultados...");
+                $this->processExistingNumbersForResults($todayDate);
             }
             
             // Crear notificación del sistema
@@ -178,28 +184,50 @@ class AutoUpdateLotteryNumbers extends Command
         $updated = 0;
         
         try {
-            // Mapear nombres de ciudades a códigos de BD
+            // Mapear nombres de ciudades a códigos de BD (maneja tanto mayúsculas como formato correcto)
             $cityMapping = [
+                'CIUDAD' => 'NAC',
                 'Ciudad' => 'NAC',
+                'SANTA FE' => 'SFE',
                 'Santa Fé' => 'SFE',
+                'PROVINCIA' => 'PRO',
                 'Provincia' => 'PRO',
+                'ENTRE RIOS' => 'RIO',
                 'Entre Ríos' => 'RIO',
+                'CORDOBA' => 'COR',
                 'Córdoba' => 'COR',
+                'CORRIENTES' => 'CTE',
                 'Corrientes' => 'CTE',
+                'CHACO' => 'CHA',
                 'Chaco' => 'CHA',
+                'NEUQUEN' => 'NQN',
                 'Neuquén' => 'NQN',
+                'MISIONES' => 'MIS',
                 'Misiones' => 'MIS',
+                'MENDOZA' => 'MZA',
                 'Mendoza' => 'MZA',
+                'RÍO NEGRO' => 'Rio',
                 'Río Negro' => 'Rio',
+                'TUCUMAN' => 'Tucu',
+                'Tucuman' => 'Tucu',
                 'Tucumán' => 'Tucu',
+                'SANTIAGO' => 'San',
                 'Santiago' => 'San',
+                'JUJUY' => 'JUJ',
                 'Jujuy' => 'JUJ',
+                'SALTA' => 'Salt',
                 'Salta' => 'Salt',
+                'MONTEVIDEO' => 'ORO',
                 'Montevideo' => 'ORO',
+                'SAN LUIS' => 'SLU',
                 'San Luis' => 'SLU',
+                'CHUBUT' => 'CHU',
                 'Chubut' => 'CHU',
+                'FORMOSA' => 'FOR',
                 'Formosa' => 'FOR',
+                'CATAMARCA' => 'CAT',
                 'Catamarca' => 'CAT',
+                'SAN JUAN' => 'SJU',
                 'San Juan' => 'SJU'
             ];
             
@@ -275,6 +303,10 @@ class AutoUpdateLotteryNumbers extends Command
                         'date' => $date
                     ]);
                     $inserted++;
+                    
+                    // NUEVO: Calcular resultados inmediatamente después de insertar número
+                    Log::info("AutoUpdateLotteryNumbers - Llamando calculateResultsForNumber para {$cityName} - Pos {$position} - Número {$number}");
+                    $this->calculateResultsForNumber($city, $extractId, $position, $date, $number);
                 }
             }
             
@@ -316,6 +348,44 @@ class AutoUpdateLotteryNumbers extends Command
 
 
     /**
+     * Procesa números existentes para calcular resultados
+     */
+    private function processExistingNumbersForResults($date)
+    {
+        try {
+            $this->info("🔍 Buscando números existentes para procesar...");
+            
+            // Obtener todos los números de hoy
+            $existingNumbers = Number::whereDate('date', $date)
+                ->with('city')
+                ->get();
+            
+            if ($existingNumbers->isEmpty()) {
+                $this->info("ℹ️  No hay números existentes para procesar.");
+                return;
+            }
+            
+            $this->info("📊 Encontrados " . $existingNumbers->count() . " números existentes.");
+            
+            $processedCount = 0;
+            
+            foreach ($existingNumbers as $number) {
+                $city = $number->city;
+                if ($city) {
+                    $this->calculateResultsForNumber($city, $number->extract_id, $number->index, $date, $number->value);
+                    $processedCount++;
+                }
+            }
+            
+            $this->info("✅ Procesados {$processedCount} números existentes para calcular resultados.");
+            
+        } catch (\Exception $e) {
+            $this->error("❌ Error procesando números existentes: " . $e->getMessage());
+            Log::error("AutoUpdateLotteryNumbers - Error procesando números existentes: " . $e->getMessage());
+        }
+    }
+
+    /**
      * Verifica si la hora actual está dentro del horario de funcionamiento
      * Horario: 24/7 (funciona siempre)
      */
@@ -337,28 +407,50 @@ class AutoUpdateLotteryNumbers extends Command
             $winningNumbersService = new WinningNumbersService();
             $availableCities = $winningNumbersService->getAvailableCities();
             
-            // Mapear nombres de ciudades a códigos de BD
+            // Mapear nombres de ciudades a códigos de BD (maneja tanto mayúsculas como formato correcto)
             $cityMapping = [
+                'CIUDAD' => 'NAC',
                 'Ciudad' => 'NAC',
+                'SANTA FE' => 'SFE',
                 'Santa Fé' => 'SFE',
+                'PROVINCIA' => 'PRO',
                 'Provincia' => 'PRO',
+                'ENTRE RIOS' => 'RIO',
                 'Entre Ríos' => 'RIO',
+                'CORDOBA' => 'COR',
                 'Córdoba' => 'COR',
+                'CORRIENTES' => 'CTE',
                 'Corrientes' => 'CTE',
+                'CHACO' => 'CHA',
                 'Chaco' => 'CHA',
+                'NEUQUEN' => 'NQN',
                 'Neuquén' => 'NQN',
+                'MISIONES' => 'MIS',
                 'Misiones' => 'MIS',
+                'MENDOZA' => 'MZA',
                 'Mendoza' => 'MZA',
+                'RÍO NEGRO' => 'Rio',
                 'Río Negro' => 'Rio',
+                'TUCUMAN' => 'Tucu',
+                'Tucuman' => 'Tucu',
                 'Tucumán' => 'Tucu',
+                'SANTIAGO' => 'San',
                 'Santiago' => 'San',
+                'JUJUY' => 'JUJ',
                 'Jujuy' => 'JUJ',
+                'SALTA' => 'Salt',
                 'Salta' => 'Salt',
+                'MONTEVIDEO' => 'ORO',
                 'Montevideo' => 'ORO',
+                'SAN LUIS' => 'SLU',
                 'San Luis' => 'SLU',
+                'CHUBUT' => 'CHU',
                 'Chubut' => 'CHU',
+                'FORMOSA' => 'FOR',
                 'Formosa' => 'FOR',
+                'CATAMARCA' => 'CAT',
                 'Catamarca' => 'CAT',
+                'SAN JUAN' => 'SJU',
                 'San Juan' => 'SJU'
             ];
             
@@ -450,5 +542,373 @@ class AutoUpdateLotteryNumbers extends Command
         } catch (\Exception $e) {
             Log::error("Error creando notificación de cabeza: " . $e->getMessage());
         }
+    }
+
+    /**
+     * Calcula resultados inmediatamente después de insertar un número ganador
+     */
+    private function calculateResultsForNumber($city, $extractId, $position, $date, $winningNumber)
+    {
+        try {
+            Log::info("AutoUpdateLotteryNumbers - Calculando resultados para: {$city->code} - Pos {$position} - Número {$winningNumber}");
+            
+            // Obtener el extract para el tiempo
+            $extract = \App\Models\Extract::find($extractId);
+            if (!$extract) {
+                Log::warning("No se encontró extract con ID: {$extractId}");
+                return;
+            }
+            
+            // Mapeo de códigos de ciudad a códigos de lotería
+            $cityToLotteryMapping = [
+                'BUE' => 'BUE',
+                'COR' => 'COR', 
+                'SFE' => 'SFE',
+                'PRO' => 'PRO',
+                'RIO' => 'RIO',
+                'CTE' => 'CTE',
+                'CHA' => 'CHA',
+                'NQN' => 'NQN',
+                'MIS' => 'MIS',
+                'MZA' => 'MZA',
+                'Rio' => 'Rio',
+                'Tucu' => 'Tucu',
+                'San' => 'San',
+                'JUJ' => 'JUJ',
+                'Salt' => 'Salt',
+                'ORO' => 'ORO',
+                'SLU' => 'SLU',
+                'CHU' => 'CHU',
+                'FOR' => 'FOR',
+                'CAT' => 'CAT',
+                'SJU' => 'SJU',
+                'NAC' => 'NAC',
+                'CIU' => 'NAC' // CIUDAD -> NAC
+            ];
+            
+            // Extraer el código base de la ciudad (ej: NAC1015 -> NAC)
+            $cityCodeBase = substr($city->code, 0, 3);
+            $lotteryCode = $cityToLotteryMapping[$cityCodeBase] ?? null;
+            
+            if (!$lotteryCode) {
+                Log::warning("No se encontró mapeo de lotería para ciudad: {$city->code} (base: {$cityCodeBase})");
+                return;
+            }
+            
+            Log::info("AutoUpdateLotteryNumbers - Mapeo: {$city->code} (base: {$cityCodeBase}) -> {$lotteryCode}");
+            
+            // Buscar jugadas que coincidan con este número ganador
+            // Las jugadas se guardan con códigos como "JUJ1800,PRO1500" etc.
+            $matchingPlays = \App\Models\PlaysSentModel::whereDate('created_at', $date)
+                                                      ->where('lot', 'LIKE', "%{$lotteryCode}%")
+                                                      ->get();
+            
+            Log::info("AutoUpdateLotteryNumbers - Encontradas " . $matchingPlays->count() . " jugadas para posición {$position} y lotería {$lotteryCode}");
+            Log::info("AutoUpdateLotteryNumbers - Buscando jugadas con lot LIKE '%{$lotteryCode}%' para fecha {$date}");
+            
+            // Mostrar detalles de las jugadas encontradas
+            foreach ($matchingPlays as $play) {
+                Log::info("AutoUpdateLotteryNumbers - Jugada encontrada: Ticket {$play->ticket}, Código: {$play->code}, Loterías: {$play->lot}");
+            }
+            
+            // Obtener configuraciones de premios
+            $quinielaPayouts = \App\Models\QuinielaModel::first();
+            $redoblona1toX = \App\Models\BetCollectionRedoblonaModel::first();
+            $redoblona5to20 = \App\Models\BetCollection5To20Model::first();
+            $redoblona10to20 = \App\Models\BetCollection10To20Model::first();
+            
+            if (!$quinielaPayouts || !$redoblona1toX || !$redoblona5to20 || !$redoblona10to20) {
+                Log::error("No se encontraron configuraciones de premios");
+                return;
+            }
+            
+            $resultsInserted = 0;
+            
+            // Para cada jugada que coincida, calcular acierto
+            foreach ($matchingPlays as $play) {
+                // Calcular premio de jugada principal
+                $aciertoValue = 0;
+                $redoblonaValue = 0;
+                
+                if ($this->isWinningPlay($play, $winningNumber)) {
+                    $aciertoValue = $this->calculatePrize($play, $winningNumber, $quinielaPayouts, $position);
+                }
+                
+                // Calcular premio de redoblona si existe (PlaysSentModel no tiene redoblona)
+                $redoblonaValue = 0;
+                
+                $totalPrize = $aciertoValue + $redoblonaValue;
+                
+                if ($totalPrize > 0) {
+                    // Verificar si ya existe este resultado para evitar duplicados
+                    $existingResult = \App\Models\Result::where('ticket', $play->ticket)
+                                                       ->where('lottery', $play->lot)
+                                                       ->where('number', $play->code) // PlaysSentModel usa 'code' en lugar de 'number'
+                                                       ->where('position', $position)
+                                                       ->where('date', $date)
+                                                       ->first();
+                    
+                    if (!$existingResult) {
+                        // Insertar resultado inmediatamente
+                        \App\Models\Result::create([
+                            'ticket' => $play->ticket,
+                            'lottery' => $play->lot,
+                            'number' => $play->code, // PlaysSentModel usa 'code'
+                            'position' => $position,
+                            'import' => $play->amount,
+                            'aciert' => $totalPrize,
+                            'date' => $date,
+                            'time' => $extract->time,
+                            'user_id' => $play->user_id,
+                            'XA' => 'X',
+                            'numero_g' => $winningNumber,
+                            'posicion_g' => $position,
+                            'numR' => null, // PlaysSentModel no tiene redoblona
+                            'posR' => null, // PlaysSentModel no tiene redoblona
+                            'num_g_r' => null,
+                            'pos_g_r' => null,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+                        
+                        $resultsInserted++;
+                        Log::info("AutoUpdateLotteryNumbers - Resultado insertado: Ticket {$play->ticket} - Premio principal: \${$aciertoValue} - Premio redoblona: \${$redoblonaValue} - Total: \${$totalPrize}");
+                    }
+                }
+            }
+            
+            if ($resultsInserted > 0) {
+                Log::info("AutoUpdateLotteryNumbers - Se insertaron {$resultsInserted} resultados para número ganador {$winningNumber}");
+            }
+            
+        } catch (\Exception $e) {
+            Log::error("AutoUpdateLotteryNumbers - Error calculando resultados: " . $e->getMessage());
+        }
+    }
+    
+    /**
+     * Verifica si una jugada es ganadora
+     */
+    private function isWinningPlay($play, $winningNumber)
+    {
+        // PlaysSentModel ahora usa 'code' que contiene el número de quiniela (4 dígitos)
+        $playedNumber = str_replace('*', '', $play->code);
+        $playedDigits = strlen($playedNumber);
+        
+        Log::info("AutoUpdateLotteryNumbers - Verificando jugada: {$playedNumber} vs número ganador: {$winningNumber}");
+        
+        if ($playedDigits > 0 && $playedDigits <= 4) {
+            $winningLastDigits = substr($winningNumber, -$playedDigits);
+            $isWinner = $playedNumber === $winningLastDigits;
+            Log::info("AutoUpdateLotteryNumbers - Coincidencia: {$playedNumber} === {$winningLastDigits} = " . ($isWinner ? 'SÍ' : 'NO'));
+            return $isWinner;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Calcula el premio para una jugada ganadora
+     */
+    private function calculatePrize($play, $winningNumber, $quinielaPayouts, $position)
+    {
+        // PlaysSentModel ahora usa 'code' que contiene el número de quiniela (4 dígitos)
+        $playedNumber = str_replace('*', '', $play->code);
+        $playedDigits = strlen($playedNumber);
+        
+        Log::info("AutoUpdateLotteryNumbers - Calculando premio para: {$playedNumber} (4 dígitos)");
+        
+        if ($playedDigits > 0 && $playedDigits <= 4) {
+            // Determinar el tipo de jugada según el formato
+            $ticketType = $this->getTicketType($play->code);
+            
+            // Obtener todas las tablas de pagos
+            $prizes = \App\Models\PrizesModel::first();
+            $figureOne = \App\Models\FigureOneModel::first();
+            $figureTwo = \App\Models\FigureTwoModel::first();
+            
+            $prizeMultiplier = 0;
+            
+            // Aplicar la tabla correcta según el tipo de jugada
+            if ($ticketType === 'quiniela') {
+                $prizeMultiplier = $quinielaPayouts->{"cobra_{$playedDigits}_cifra"} ?? 0;
+            } elseif ($ticketType === 'prizes') {
+                // Usar la posición del número ganador que se está procesando
+                if ($position >= 1 && $position <= 5) {
+                    $prizeMultiplier = $prizes->cobra_5 ?? 0;
+                } elseif ($position >= 6 && $position <= 10) {
+                    $prizeMultiplier = $prizes->cobra_4 ?? 0;
+                } elseif ($position >= 11 && $position <= 15) {
+                    $prizeMultiplier = $prizes->cobra_3 ?? 0;
+                } elseif ($position >= 16 && $position <= 19) {
+                    $prizeMultiplier = $prizes->cobra_2 ?? 0;
+                } else {
+                    $prizeMultiplier = $prizes->cobra_1 ?? 0;
+                }
+            } elseif ($ticketType === 'figureOne') {
+                if ($position >= 1 && $position <= 5) {
+                    $prizeMultiplier = $figureOne->cobra_5 ?? 0;
+                } elseif ($position >= 6 && $position <= 10) {
+                    $prizeMultiplier = $figureOne->cobra_4 ?? 0;
+                } elseif ($position >= 11 && $position <= 15) {
+                    $prizeMultiplier = $figureOne->cobra_3 ?? 0;
+                } elseif ($position >= 16 && $position <= 19) {
+                    $prizeMultiplier = $figureOne->cobra_2 ?? 0;
+                } else {
+                    $prizeMultiplier = $figureOne->cobra_1 ?? 0;
+                }
+            } elseif ($ticketType === 'figureTwo') {
+                if ($position >= 1 && $position <= 5) {
+                    $prizeMultiplier = $figureTwo->cobra_5 ?? 0;
+                } elseif ($position >= 6 && $position <= 10) {
+                    $prizeMultiplier = $figureTwo->cobra_4 ?? 0;
+                } elseif ($position >= 11 && $position <= 15) {
+                    $prizeMultiplier = $figureTwo->cobra_3 ?? 0;
+                } elseif ($position >= 16 && $position <= 19) {
+                    $prizeMultiplier = $figureTwo->cobra_2 ?? 0;
+                } else {
+                    $prizeMultiplier = $figureTwo->cobra_1 ?? 0;
+                }
+            }
+            
+            Log::info("AutoUpdateLotteryNumbers - Tipo: {$ticketType}, Posición: {$position}, Multiplicador: {$prizeMultiplier}x");
+            return (float) $play->amount * (float) $prizeMultiplier;
+        }
+        
+        return 0;
+    }
+    
+    /**
+     * Determina el tipo de jugada según el formato del número
+     */
+    private function getTicketType(string $ticket): ?string
+    {
+        $asteriskCount = strlen($ticket) - strlen(ltrim($ticket, '*'));
+        $clean = ltrim($ticket, '*');
+        $digitCount = strlen($clean);
+
+        if ($asteriskCount === 3) {
+            return 'quiniela';        // ***123
+        } elseif ($asteriskCount === 2 && $digitCount === 2) {
+            return 'prizes';          // **12
+        } elseif ($asteriskCount === 1 && $digitCount === 3) {
+            return 'figureOne';       // *123
+        } elseif ($asteriskCount === 0 && $digitCount === 4) {
+            return 'figureTwo';       // 1234
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Calcula el premio de redoblona para una jugada
+     */
+    private function calculateRedoblonaPrize($play, $date, $lotteryCode, $redoblona1toX, $redoblona5to20, $redoblona10to20)
+    {
+        try {
+            // Obtener todos los números ganadores del día para esta lotería
+            $winningNumbers = \App\Models\Number::whereDate('date', $date)
+                ->whereHas('city', function($query) use ($lotteryCode) {
+                    $query->where('code', $lotteryCode);
+                })
+                ->with('city', 'extract')
+                ->get()
+                ->keyBy(function ($item) {
+                    $time = str_replace(':', '', $item->extract->time);
+                    return $item->city->code . $time . '_' . $item->index;
+                });
+
+            if ($winningNumbers->isEmpty()) {
+                return 0;
+            }
+
+            $pos1 = min((int)$play->position, (int)$play->positionR);
+            $pos2 = max((int)$play->position, (int)$play->positionR);
+            
+            $num1 = ($play->position < $play->positionR) ? $play->number : $play->numberR;
+            $num2 = ($play->position < $play->positionR) ? $play->numberR : $play->number;
+
+            // Redoblonas son siempre 2 cifras
+            $num1 = str_pad(str_replace('*', '', $num1), 2, '0', STR_PAD_LEFT);
+            $num2 = str_pad(str_replace('*', '', $num2), 2, '0', STR_PAD_LEFT);
+
+            $key1 = $lotteryCode . '_' . $pos1;
+            $key2 = $lotteryCode . '_' . $pos2;
+
+            if (isset($winningNumbers[$key1], $winningNumbers[$key2])) {
+                $winner1 = $winningNumbers[$key1];
+                $winner2 = $winningNumbers[$key2];
+
+                if (substr($winner1->value, -2) == $num1 && substr($winner2->value, -2) == $num2) {
+                    $prizeMultiplier = 0;
+                    if ($pos1 <= 1) {
+                        if ($pos2 <= 5) $prizeMultiplier = $redoblona1toX->payout_1_to_5 ?? 0;
+                        elseif ($pos2 <= 10) $prizeMultiplier = $redoblona1toX->payout_1_to_10 ?? 0;
+                        elseif ($pos2 <= 20) $prizeMultiplier = $redoblona1toX->payout_1_to_20 ?? 0;
+                    } elseif ($pos1 <= 5) {
+                        if ($pos2 <= 5) $prizeMultiplier = $redoblona5to20->payout_5_to_5 ?? 0;
+                        elseif ($pos2 <= 10) $prizeMultiplier = $redoblona5to20->payout_5_to_10 ?? 0;
+                        elseif ($pos2 <= 20) $prizeMultiplier = $redoblona5to20->payout_5_to_20 ?? 0;
+                    } elseif ($pos1 <= 10) {
+                        if ($pos2 <= 10) $prizeMultiplier = $redoblona10to20->payout_10_to_10 ?? 0;
+                        elseif ($pos2 <= 20) $prizeMultiplier = $redoblona10to20->payout_10_to_20 ?? 0;
+                    } elseif ($pos1 <= 20) {
+                        if ($pos2 <= 20) $prizeMultiplier = $redoblona10to20->payout_20_to_20 ?? 0;
+                    }
+                    
+                    // Ajustar el multiplicador según el importe de la apuesta
+                    $adjustedMultiplier = $this->getAdjustedRedoblonaMultiplier($play->import, $prizeMultiplier, $redoblona1toX, $redoblona5to20, $redoblona10to20);
+                    $redoblonaValue = (float) $play->import * (float) $adjustedMultiplier;
+                    Log::info("AutoUpdateLotteryNumbers - Redoblona ganadora: Pos {$pos1}-{$pos2}, Números {$num1}-{$num2}, Multiplicador: {$prizeMultiplier}x, Premio: \${$redoblonaValue}");
+                    return $redoblonaValue;
+                }
+            }
+            
+            return 0;
+        } catch (\Exception $e) {
+            Log::error("AutoUpdateLotteryNumbers - Error calculando redoblona: " . $e->getMessage());
+            return 0;
+        }
+    }
+    
+    /**
+     * Ajusta el multiplicador de redoblona según el importe de la apuesta
+     */
+    private function getAdjustedRedoblonaMultiplier($import, $baseMultiplier, $redoblona1toX, $redoblona5to20, $redoblona10to20)
+    {
+        // Buscar el multiplicador correcto según el importe de la apuesta
+        $redoblonaTables = [
+            $redoblona1toX,
+            $redoblona5to20, 
+            $redoblona10to20
+        ];
+        
+        foreach ($redoblonaTables as $table) {
+            if ($table->bet_amount == $import) {
+                // Encontrar el campo correcto según el multiplicador base
+                if ($baseMultiplier == $redoblona1toX->payout_1_to_5 || 
+                    $baseMultiplier == $redoblona1toX->payout_1_to_10 || 
+                    $baseMultiplier == $redoblona1toX->payout_1_to_20) {
+                    if ($baseMultiplier == $redoblona1toX->payout_1_to_5) return $table->payout_1_to_5;
+                    if ($baseMultiplier == $redoblona1toX->payout_1_to_10) return $table->payout_1_to_10;
+                    if ($baseMultiplier == $redoblona1toX->payout_1_to_20) return $table->payout_1_to_20;
+                } elseif ($baseMultiplier == $redoblona5to20->payout_5_to_5 || 
+                         $baseMultiplier == $redoblona5to20->payout_5_to_10 || 
+                         $baseMultiplier == $redoblona5to20->payout_5_to_20) {
+                    if ($baseMultiplier == $redoblona5to20->payout_5_to_5) return $table->payout_5_to_5;
+                    if ($baseMultiplier == $redoblona5to20->payout_5_to_10) return $table->payout_5_to_10;
+                    if ($baseMultiplier == $redoblona5to20->payout_5_to_20) return $table->payout_5_to_20;
+                } elseif ($baseMultiplier == $redoblona10to20->payout_10_to_10 || 
+                         $baseMultiplier == $redoblona10to20->payout_10_to_20 || 
+                         $baseMultiplier == $redoblona10to20->payout_20_to_20) {
+                    if ($baseMultiplier == $redoblona10to20->payout_10_to_10) return $table->payout_10_to_10;
+                    if ($baseMultiplier == $redoblona10to20->payout_10_to_20) return $table->payout_10_to_20;
+                    if ($baseMultiplier == $redoblona10to20->payout_20_to_20) return $table->payout_20_to_20;
+                }
+            }
+        }
+        
+        // Si no se encuentra una coincidencia exacta, usar el multiplicador base
+        return $baseMultiplier;
     }
 }
