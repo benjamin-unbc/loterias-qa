@@ -72,20 +72,77 @@
                                 <h4 class="text-white font-medium text-sm">{{ $cityName }}</h4>
                                 <button wire:click="toggleCitySchedules('{{ $cityName }}')" 
                                         class="text-blue-400 hover:text-blue-300 text-xs underline">
-                                    {{ count($selectedCitySchedules[$cityName] ?? []) === count($schedules) ? 'Ninguno' : 'Todos' }}
+                                    {{ count($selectedCitySchedules[$cityName] ?? []) === count($schedules ?? []) ? 'Ninguno' : 'Todos' }}
                                 </button>
                             </div>
                             
-                            <!-- Horarios de la ciudad -->
-                            <div class="flex flex-wrap gap-1">
-                                @foreach($schedules as $schedule)
-                                    <label class="flex items-center gap-1 bg-[#2a2a2a] border border-gray-600 rounded px-2 py-1 cursor-pointer hover:bg-[#333333] transition-colors">
-                                        <input type="checkbox" 
-                                               wire:model.live="selectedCitySchedules.{{ $cityName }}" 
-                                               value="{{ $schedule }}"
-                                               class="w-3 h-3 bg-[#1a1a1a] border border-gray-400 rounded text-blue-400 focus:ring-blue-400">
-                                        <span class="text-white text-xs">{{ $schedule }}</span>
-                                    </label>
+                            <!-- Horarios de la ciudad agrupados por estado -->
+                            <div class="space-y-2">
+                                @php
+                                    // Agrupar horarios por estado
+                                    $groupedSchedules = [];
+                                    foreach ($schedules as $schedule) {
+                                        $state = $schedule['state'] ?? 'Otro';
+                                        $time = $schedule['time'] ?? $schedule;
+                                        $groupedSchedules[$state][] = $time;
+                                    }
+                                    
+                                    // Orden de los estados
+                                    $stateOrder = ['Previa', 'Primera', 'Matutina', 'Vespertina', 'Nocturna', 'Otro'];
+                                    
+                                    // Colores por estado - todos en blanco
+                                    $stateColors = [
+                                        'Previa' => 'text-white',
+                                        'Primera' => 'text-white',
+                                        'Matutina' => 'text-white',
+                                        'Vespertina' => 'text-white',
+                                        'Nocturna' => 'text-white',
+                                        'Otro' => 'text-white'
+                                    ];
+                                @endphp
+                                
+                                @foreach($stateOrder as $state)
+                                    @if(isset($groupedSchedules[$state]) && !empty($groupedSchedules[$state]))
+                                        <div class="space-y-1">
+                                            <!-- Título del estado -->
+                                            <div class="flex items-center gap-2">
+                                                <h5 class="text-xs font-semibold {{ $stateColors[$state] ?? 'text-gray-300' }} uppercase tracking-wide">
+                                                    {{ $state }}
+                                                </h5>
+                                                <div class="flex-1 h-px bg-gray-600"></div>
+                                            </div>
+                                            
+                                            <!-- Horarios de este estado -->
+                                            <div class="grid grid-cols-3 gap-1 ml-2 max-w-[180px]">
+                                                @foreach($groupedSchedules[$state] as $index => $time)
+                                                    @if($index < 3)
+                                                        <label class="flex items-center gap-1 bg-[#2a2a2a] border border-gray-600 rounded px-2 py-1 cursor-pointer hover:bg-[#333333] transition-colors">
+                                                            <input type="checkbox" 
+                                                                   wire:model.live="selectedCitySchedules.{{ $cityName }}" 
+                                                                   value="{{ $time }}"
+                                                                   class="w-3 h-3 bg-[#1a1a1a] border border-gray-400 rounded text-blue-400 focus:ring-blue-400">
+                                                            <span class="text-white text-xs">{{ $time }}</span>
+                                                        </label>
+                                                    @endif
+                                                @endforeach
+                                            </div>
+                                            @if(count($groupedSchedules[$state]) > 3)
+                                                <div class="grid grid-cols-2 gap-1 ml-2 max-w-[120px] mt-1">
+                                                    @foreach($groupedSchedules[$state] as $index => $time)
+                                                        @if($index >= 3)
+                                                            <label class="flex items-center gap-1 bg-[#2a2a2a] border border-gray-600 rounded px-2 py-1 cursor-pointer hover:bg-[#333333] transition-colors">
+                                                                <input type="checkbox" 
+                                                                       wire:model.live="selectedCitySchedules.{{ $cityName }}" 
+                                                                       value="{{ $time }}"
+                                                                       class="w-3 h-3 bg-[#1a1a1a] border border-gray-400 rounded text-blue-400 focus:ring-blue-400">
+                                                                <span class="text-white text-xs">{{ $time }}</span>
+                                                            </label>
+                                                        @endif
+                                                    @endforeach
+                                                </div>
+                                            @endif
+                                        </div>
+                                    @endif
                                 @endforeach
                             </div>
                         </div>
@@ -107,12 +164,44 @@
                             @foreach($selectedCitySchedules as $cityName => $schedules)
                                 @if(!empty($schedules))
                                     @php
-                                        $totalSelected += count($schedules);
+                                        $totalSelected += count($schedules ?? []);
                                         $citiesWithSelection++;
                                     @endphp
-                                    <div class="mb-1">
-                                        <span class="text-blue-400">{{ $cityName }}:</span>
-                                        <span class="text-white">{{ implode(', ', $schedules) }}</span>
+                                    <div class="mb-2">
+                                        <span class="text-blue-400 font-medium">{{ $cityName }}:</span>
+                                        <div class="ml-2 mt-1">
+                                            @php
+                                                $citySchedules = $this->citySchedules[$cityName] ?? [];
+                                                $groupedSchedules = [];
+                                                foreach ($schedules as $scheduleTime) {
+                                                    foreach ($citySchedules as $scheduleData) {
+                                                        if (($scheduleData['time'] ?? $scheduleData) === $scheduleTime) {
+                                                            $state = $scheduleData['state'] ?? 'Otro';
+                                                            $groupedSchedules[$state][] = $scheduleTime;
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                                
+                                                $stateOrder = ['Previa', 'Primera', 'Matutina', 'Vespertina', 'Nocturna', 'Otro'];
+                                                $stateColors = [
+                                                    'Previa' => 'text-white',
+                                                    'Primera' => 'text-white',
+                                                    'Matutina' => 'text-white',
+                                                    'Vespertina' => 'text-white',
+                                                    'Nocturna' => 'text-white',
+                                                    'Otro' => 'text-white'
+                                                ];
+                                            @endphp
+                                            @foreach($stateOrder as $state)
+                                                @if(isset($groupedSchedules[$state]) && !empty($groupedSchedules[$state]))
+                                                    <div class="text-xs mb-1">
+                                                        <span class="{{ $stateColors[$state] ?? 'text-gray-300' }} font-semibold">{{ $state }}:</span>
+                                                        <span class="text-white">{{ implode(', ', $groupedSchedules[$state]) }}</span>
+                                                    </div>
+                                                @endif
+                                            @endforeach
+                                        </div>
                                     </div>
                                 @endif
                             @endforeach
@@ -156,4 +245,5 @@
 
         </div>
     </div>
+
 </div>

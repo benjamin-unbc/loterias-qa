@@ -25,6 +25,39 @@ class QuinielasManager extends Component
     }
 
     /**
+     * Mapeo de horarios a estados/turnos
+     */
+    protected function getScheduleState($time)
+    {
+        $scheduleStates = [
+            '09:00' => 'Previa',
+            '10:15' => 'Previa',
+            '10:30' => 'Previa',
+            '11:00' => 'Primera',
+            '11:30' => 'Primera',
+            '12:00' => 'Primera',
+            '12:15' => 'Primera',
+            '13:00' => 'Matutina',
+            '14:00' => 'Matutina',
+            '14:30' => 'Matutina',
+            '15:00' => 'Matutina',
+            '16:00' => 'Vespertina',
+            '17:00' => 'Vespertina',
+            '17:30' => 'Vespertina',
+            '18:00' => 'Vespertina',
+            '19:00' => 'Vespertina',
+            '19:30' => 'Vespertina',
+            '19:45' => 'Vespertina',
+            '20:00' => 'Nocturna',
+            '21:00' => 'Nocturna',
+            '22:00' => 'Nocturna',
+            '22:30' => 'Nocturna',
+        ];
+
+        return $scheduleStates[$time] ?? 'Otro';
+    }
+
+    /**
      * Carga los horarios disponibles por ciudad
      */
     protected function loadCitySchedules()
@@ -88,7 +121,18 @@ class QuinielasManager extends Component
                 $schedules = array_values($schedules); // Reindexar el array
             }
             
-            $this->citySchedules[$cityName] = $schedules;
+            // Agregar estado a cada horario
+            $schedulesWithState = [];
+            foreach ($schedules as $schedule) {
+                $state = $this->getScheduleState($schedule);
+                $schedulesWithState[] = [
+                    'time' => $schedule,
+                    'state' => $state,
+                    'display' => $schedule . ' (' . $state . ')'
+                ];
+            }
+            
+            $this->citySchedules[$cityName] = $schedulesWithState;
             
             // Cargar configuración global guardada o usar configuración por defecto
             if ($globalConfig->has($cityName)) {
@@ -97,8 +141,8 @@ class QuinielasManager extends Component
             } else {
                 // Configuración por defecto: solo las loterías especificadas con todos sus horarios
                 if (in_array($cityName, $defaultSelectedLotteries)) {
-                    $this->selectedCitySchedules[$cityName] = $schedules;
-                    $this->appliedCitySchedules[$cityName] = $schedules;
+                    $this->selectedCitySchedules[$cityName] = array_column($schedulesWithState, 'time');
+                    $this->appliedCitySchedules[$cityName] = array_column($schedulesWithState, 'time');
                 } else {
                     // Las demás loterías desmarcadas por defecto
                     $this->selectedCitySchedules[$cityName] = [];
@@ -127,7 +171,7 @@ class QuinielasManager extends Component
         if (count($selectedSchedules) === count($allSchedules)) {
             $this->selectedCitySchedules[$cityName] = [];
         } else {
-            $this->selectedCitySchedules[$cityName] = $allSchedules;
+            $this->selectedCitySchedules[$cityName] = array_column($allSchedules, 'time');
         }
         $this->checkForUnsavedChanges();
     }
@@ -186,7 +230,7 @@ class QuinielasManager extends Component
         
         foreach ($this->citySchedules as $cityName => $schedules) {
             if (in_array($cityName, $defaultSelectedLotteries)) {
-                $this->selectedCitySchedules[$cityName] = $schedules;
+                $this->selectedCitySchedules[$cityName] = array_column($schedules, 'time');
             } else {
                 $this->selectedCitySchedules[$cityName] = [];
             }
@@ -208,6 +252,7 @@ class QuinielasManager extends Component
         $this->checkForUnsavedChanges();
         $this->dispatch('notify', message: 'Todas las loterías han sido desmarcadas. Recuerda guardar los cambios.', type: 'warning');
     }
+
 
     public function render()
     {
