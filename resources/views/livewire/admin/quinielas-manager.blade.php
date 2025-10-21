@@ -79,16 +79,27 @@
                             <!-- Horarios de la ciudad agrupados por estado -->
                             <div class="space-y-2">
                                 @php
-                                    // Agrupar horarios por estado
+                                    // Agrupar horarios por estado (incluyendo turnos vacíos para mostrar todos los turnos)
                                     $groupedSchedules = [];
                                     foreach ($schedules as $schedule) {
-                                        $state = $schedule['state'] ?? 'Otro';
                                         $time = $schedule['time'] ?? $schedule;
-                                        $groupedSchedules[$state][] = $time;
+                                        $state = $schedule['state'] ?? 'Otro';
+                                        // Solo incluir estados válidos (no 'Otro')
+                                        if ($state !== 'Otro') {
+                                            $groupedSchedules[$state][] = $time;
+                                        }
+                                    }
+                                    
+                                    // Asegurar que se muestren todos los 5 turnos principales
+                                    $requiredStates = ['Previa', 'Primera', 'Matutina', 'Vespertina', 'Nocturna'];
+                                    foreach ($requiredStates as $state) {
+                                        if (!isset($groupedSchedules[$state])) {
+                                            $groupedSchedules[$state] = [''];
+                                        }
                                     }
                                     
                                     // Orden de los estados
-                                    $stateOrder = ['Previa', 'Primera', 'Matutina', 'Vespertina', 'Nocturna', 'Otro'];
+                                    $stateOrder = ['Previa', 'Primera', 'Matutina', 'Vespertina', 'Nocturna'];
                                     
                                     // Colores por estado - todos en blanco
                                     $stateColors = [
@@ -96,13 +107,12 @@
                                         'Primera' => 'text-white',
                                         'Matutina' => 'text-white',
                                         'Vespertina' => 'text-white',
-                                        'Nocturna' => 'text-white',
-                                        'Otro' => 'text-white'
+                                        'Nocturna' => 'text-white'
                                     ];
                                 @endphp
                                 
                                 @foreach($stateOrder as $state)
-                                    @if(isset($groupedSchedules[$state]) && !empty($groupedSchedules[$state]))
+                                    @if(isset($groupedSchedules[$state]) && !empty($groupedSchedules[$state]) && $state !== 'Otro')
                                         <div class="space-y-1">
                                             <!-- Título del estado -->
                                             <div class="flex items-center gap-2">
@@ -116,13 +126,50 @@
                                             <div class="grid grid-cols-3 gap-1 ml-2 max-w-[180px]">
                                                 @foreach($groupedSchedules[$state] as $index => $time)
                                                     @if($index < 3)
-                                                        <label class="flex items-center gap-1 bg-[#2a2a2a] border border-gray-600 rounded px-2 py-1 cursor-pointer hover:bg-[#333333] transition-colors">
-                                                            <input type="checkbox" 
-                                                                   wire:model.live="selectedCitySchedules.{{ $cityName }}" 
-                                                                   value="{{ $time }}"
-                                                                   class="w-3 h-3 bg-[#1a1a1a] border border-gray-400 rounded text-blue-400 focus:ring-blue-400">
-                                                            <span class="text-white text-xs">{{ $time }}</span>
-                                                        </label>
+                                                        @if(empty($time))
+                                                            <!-- Turno vacío - solo mostrar texto sin casilla -->
+                                                            <div class="flex items-center gap-1 bg-[#2a2a2a] border border-gray-600 rounded px-2 py-1">
+                                                                <span class="text-gray-500 text-xs">--</span>
+                                                            </div>
+                                                        @else
+                                                            <!-- Turno con horario - mostrar casilla -->
+                                                            <label class="flex items-center gap-1 bg-[#2a2a2a] border border-gray-600 rounded px-2 py-1 cursor-pointer hover:bg-[#333333] transition-colors">
+                                                                <input type="checkbox" 
+                                                                       wire:model.live="selectedCitySchedules.{{ $cityName }}" 
+                                                                       value="{{ $time }}"
+                                                                       class="w-3 h-3 bg-[#1a1a1a] border border-gray-400 rounded text-blue-400 focus:ring-blue-400">
+                                                            @php
+                                                                $cityId = null;
+                                                                foreach ($schedules as $schedule) {
+                                                                    if (($schedule['time'] ?? $schedule) === $time) {
+                                                                        $cityId = $schedule['cityId'] ?? null;
+                                                                        break;
+                                                                    }
+                                                                }
+                                                            @endphp
+                                                            @if($editingSchedule && $editingSchedule['cityName'] === $cityName && $editingSchedule['oldTime'] === $time)
+                                                                <input type="time" 
+                                                                       wire:model="newTimeValue"
+                                                                       class="text-black text-xs bg-[#1a1a1a] border border-gray-500 rounded px-1 py-0.5 w-20 focus:border-blue-400 focus:outline-none">
+                                                                <button wire:click="saveTimeChange" 
+                                                                        class="text-green-400 hover:text-green-300 text-xs ml-1 p-1 rounded hover:bg-green-900/20">
+                                                                    <i class="fa-solid fa-check"></i>
+                                                                </button>
+                                                                <button wire:click="cancelEditingSchedule" 
+                                                                        class="text-red-400 hover:text-red-300 text-xs ml-1 p-1 rounded hover:bg-red-900/20">
+                                                                    <i class="fa-solid fa-times"></i>
+                                                                </button>
+                                                            @else
+                                                                <span class="text-white text-xs flex-1">{{ $time ?: '--' }}</span>
+                                                                @if($time && $cityId)
+                                                                    <button wire:click="startEditingSchedule('{{ $cityName }}', '{{ $time }}', {{ $cityId }})" 
+                                                                            class="text-gray-400 hover:text-blue-400 text-xs ml-1">
+                                                                        <i class="fa-solid fa-pencil"></i>
+                                                                    </button>
+                                                                @endif
+                                                            @endif
+                                                            </label>
+                                                        @endif
                                                     @endif
                                                 @endforeach
                                             </div>
@@ -130,13 +177,50 @@
                                                 <div class="grid grid-cols-2 gap-1 ml-2 max-w-[120px] mt-1">
                                                     @foreach($groupedSchedules[$state] as $index => $time)
                                                         @if($index >= 3)
-                                                            <label class="flex items-center gap-1 bg-[#2a2a2a] border border-gray-600 rounded px-2 py-1 cursor-pointer hover:bg-[#333333] transition-colors">
-                                                                <input type="checkbox" 
-                                                                       wire:model.live="selectedCitySchedules.{{ $cityName }}" 
-                                                                       value="{{ $time }}"
-                                                                       class="w-3 h-3 bg-[#1a1a1a] border border-gray-400 rounded text-blue-400 focus:ring-blue-400">
-                                                                <span class="text-white text-xs">{{ $time }}</span>
-                                                            </label>
+                                                            @if(empty($time))
+                                                                <!-- Turno vacío adicional - solo mostrar texto sin casilla -->
+                                                                <div class="flex items-center gap-1 bg-[#2a2a2a] border border-gray-600 rounded px-2 py-1">
+                                                                    <span class="text-gray-500 text-xs">--</span>
+                                                                </div>
+                                                            @else
+                                                                <!-- Turno con horario adicional - mostrar casilla -->
+                                                                <label class="flex items-center gap-1 bg-[#2a2a2a] border border-gray-600 rounded px-2 py-1 cursor-pointer hover:bg-[#333333] transition-colors">
+                                                                    <input type="checkbox" 
+                                                                           wire:model.live="selectedCitySchedules.{{ $cityName }}" 
+                                                                           value="{{ $time }}"
+                                                                           class="w-3 h-3 bg-[#1a1a1a] border border-gray-400 rounded text-blue-400 focus:ring-blue-400">
+                                                                @php
+                                                                    $cityId = null;
+                                                                    foreach ($schedules as $schedule) {
+                                                                        if (($schedule['time'] ?? $schedule) === $time) {
+                                                                            $cityId = $schedule['cityId'] ?? null;
+                                                                            break;
+                                                                        }
+                                                                    }
+                                                                @endphp
+                                                                @if($editingSchedule && $editingSchedule['cityName'] === $cityName && $editingSchedule['oldTime'] === $time)
+                                                                    <input type="time" 
+                                                                           wire:model="newTimeValue"
+                                                                           class="text-black text-xs bg-[#1a1a1a] border border-gray-500 rounded px-1 py-0.5 w-20 focus:border-blue-400 focus:outline-none">
+                                                                    <button wire:click="saveTimeChange" 
+                                                                            class="text-green-400 hover:text-green-300 text-xs ml-1 p-1 rounded hover:bg-green-900/20">
+                                                                        <i class="fa-solid fa-check"></i>
+                                                                    </button>
+                                                                    <button wire:click="cancelEditingSchedule" 
+                                                                            class="text-red-400 hover:text-red-300 text-xs ml-1 p-1 rounded hover:bg-red-900/20">
+                                                                        <i class="fa-solid fa-times"></i>
+                                                                    </button>
+                                                                @else
+                                                                    <span class="text-white text-xs flex-1">{{ $time ?: '--' }}</span>
+                                                                    @if($time && $cityId)
+                                                                        <button wire:click="startEditingSchedule('{{ $cityName }}', '{{ $time }}', {{ $cityId }})" 
+                                                                                class="text-gray-400 hover:text-blue-400 text-xs ml-1">
+                                                                            <i class="fa-solid fa-pencil"></i>
+                                                                        </button>
+                                                                    @endif
+                                                                @endif
+                                                                </label>
+                                                            @endif
                                                         @endif
                                                     @endforeach
                                                 </div>
@@ -177,20 +261,30 @@
                                                     foreach ($citySchedules as $scheduleData) {
                                                         if (($scheduleData['time'] ?? $scheduleData) === $scheduleTime) {
                                                             $state = $scheduleData['state'] ?? 'Otro';
-                                                            $groupedSchedules[$state][] = $scheduleTime;
+                                                            // Solo incluir estados válidos (no 'Otro')
+                                                            if ($state !== 'Otro') {
+                                                                $groupedSchedules[$state][] = $scheduleTime;
+                                                            }
                                                             break;
                                                         }
                                                     }
                                                 }
                                                 
-                                                $stateOrder = ['Previa', 'Primera', 'Matutina', 'Vespertina', 'Nocturna', 'Otro'];
+                                                // Asegurar que se muestren todos los 5 turnos principales en el resumen
+                                                $requiredStates = ['Previa', 'Primera', 'Matutina', 'Vespertina', 'Nocturna'];
+                                                foreach ($requiredStates as $state) {
+                                                    if (!isset($groupedSchedules[$state])) {
+                                                        $groupedSchedules[$state] = [''];
+                                                    }
+                                                }
+                                                
+                                                $stateOrder = ['Previa', 'Primera', 'Matutina', 'Vespertina', 'Nocturna'];
                                                 $stateColors = [
                                                     'Previa' => 'text-white',
                                                     'Primera' => 'text-white',
                                                     'Matutina' => 'text-white',
                                                     'Vespertina' => 'text-white',
-                                                    'Nocturna' => 'text-white',
-                                                    'Otro' => 'text-white'
+                                                    'Nocturna' => 'text-white'
                                                 ];
                                             @endphp
                                             @foreach($stateOrder as $state)

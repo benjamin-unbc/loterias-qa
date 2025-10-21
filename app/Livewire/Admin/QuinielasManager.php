@@ -17,6 +17,10 @@ class QuinielasManager extends Component
     public $selectedCitySchedules = []; // Horarios seleccionados por ciudad
     public $appliedCitySchedules = []; // Horarios aplicados (después de guardar)
     public $hasUnsavedChanges = false; // Indica si hay cambios sin guardar
+    
+    // Propiedades para edición de horarios
+    public $editingSchedule = null; // Array con cityName, oldTime, cityId cuando está editando
+    public $newTimeValue = ''; // Nuevo valor del horario
 
     public function mount()
     {
@@ -29,32 +33,28 @@ class QuinielasManager extends Component
      */
     protected function getScheduleState($time)
     {
-        $scheduleStates = [
-            '09:00' => 'Previa',
-            '10:15' => 'Previa',
-            '10:30' => 'Previa',
-            '11:00' => 'Primera',
-            '11:30' => 'Primera',
-            '12:00' => 'Primera',
-            '12:15' => 'Primera',
-            '13:00' => 'Matutina',
-            '14:00' => 'Matutina',
-            '14:30' => 'Matutina',
-            '15:00' => 'Matutina',
-            '16:00' => 'Vespertina',
-            '17:00' => 'Vespertina',
-            '17:30' => 'Vespertina',
-            '18:00' => 'Vespertina',
-            '19:00' => 'Vespertina',
-            '19:30' => 'Vespertina',
-            '19:45' => 'Vespertina',
-            '20:00' => 'Nocturna',
-            '21:00' => 'Nocturna',
-            '22:00' => 'Nocturna',
-            '22:30' => 'Nocturna',
+        if (empty($time)) {
+            return 'Otro';
+        }
+        
+        $timeMinutes = $this->timeToMinutes($time);
+        
+        // Definir rangos por turno
+        $ranges = [
+            'Previa' => [540, 719],    // 09:00 - 11:59
+            'Primera' => [660, 779],   // 11:00 - 12:59
+            'Matutina' => [780, 959],  // 13:00 - 15:59
+            'Vespertina' => [960, 1199], // 16:00 - 19:59
+            'Nocturna' => [1200, 1439], // 20:00 - 23:59
         ];
-
-        return $scheduleStates[$time] ?? 'Otro';
+        
+        foreach ($ranges as $state => $range) {
+            if ($timeMinutes >= $range[0] && $timeMinutes <= $range[1]) {
+                return $state;
+            }
+        }
+        
+        return 'Otro';
     }
 
     /**
@@ -125,10 +125,13 @@ class QuinielasManager extends Component
             $schedulesWithState = [];
             foreach ($schedules as $schedule) {
                 $state = $this->getScheduleState($schedule);
+                // Obtener el ID de la ciudad para este horario específico
+                $cityId = $cityData->where('time', $schedule)->first()->id ?? null;
                 $schedulesWithState[] = [
                     'time' => $schedule,
                     'state' => $state,
-                    'display' => $schedule . ' (' . $state . ')'
+                    'display' => $schedule . ' (' . $state . ')',
+                    'cityId' => $cityId
                 ];
             }
             
@@ -251,6 +254,150 @@ class QuinielasManager extends Component
         
         $this->checkForUnsavedChanges();
         $this->dispatch('notify', message: 'Todas las loterías han sido desmarcadas. Recuerda guardar los cambios.', type: 'warning');
+    }
+
+    /**
+     * Inicia la edición de un horario específico
+     */
+    public function startEditingSchedule($cityName, $time, $cityId)
+    {
+        // No permitir editar turnos vacíos
+        if (empty($time)) {
+            $this->dispatch('notify', message: 'No se puede editar un turno vacío', type: 'error');
+            return;
+        }
+        
+        $this->editingSchedule = [
+            'cityName' => $cityName,
+            'oldTime' => $time,
+            'cityId' => $cityId
+        ];
+        $this->newTimeValue = $time;
+    }
+
+    /**
+     * Cancela la edición del horario
+     */
+    public function cancelEditingSchedule()
+    {
+        $this->editingSchedule = null;
+        $this->newTimeValue = '';
+    }
+
+    /**
+     * Guarda el cambio de horario
+     */
+    public function saveTimeChange()
+    {
+        if (!$this->editingSchedule) {
+            return;
+        }
+
+        // Validar formato de hora
+        if (!preg_match('/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/', $this->newTimeValue)) {
+            $this->dispatch('notify', message: 'Formato de hora inválido. Use HH:MM (ej: 10:30)', type: 'error');
+            return;
+        }
+
+        // Obtener el estado/turno actual del horario
+        $oldTime = $this->editingSchedule['oldTime'] ?? '';
+        if (empty($oldTime)) {
+            $this->dispatch('notify', message: 'No se puede editar un turno vacío', type: 'error');
+            return;
+        }
+        
+        $currentState = $this->getScheduleState($oldTime);
+        
+        // Validar que el nuevo horario esté dentro del rango del turno actual
+        if (!$this->validateTimeForState($this->newTimeValue, $currentState)) {
+            $range = $this->getScheduleStateRange($currentState);
+            if ($range) {
+                $this->dispatch('notify', message: "El horario debe estar entre {$range[0]} y {$range[1]} para el turno {$currentState}", type: 'error');
+            } else {
+                $this->dispatch('notify', message: "El horario no es válido para el turno {$currentState}", type: 'error');
+            }
+            return;
+        }
+
+        try {
+            // Guardar valores antes de limpiar
+            $newTime = $this->newTimeValue;
+            $cityName = $this->editingSchedule['cityName'];
+            
+            // Actualizar solo el campo time en la tabla cities usando el id
+            City::where('id', $this->editingSchedule['cityId'])
+                ->update(['time' => $this->newTimeValue]);
+
+            // Actualizar la configuración global si existe
+            $globalConfig = GlobalQuinielasConfiguration::where('city_name', $cityName)->first();
+            if ($globalConfig && !empty($globalConfig->selected_schedules)) {
+                $selectedSchedules = $globalConfig->selected_schedules;
+                $key = array_search($oldTime, $selectedSchedules);
+                if ($key !== false) {
+                    $selectedSchedules[$key] = $newTime;
+                    $globalConfig->update(['selected_schedules' => $selectedSchedules]);
+                }
+            }
+
+            // Recargar horarios y limpiar estado de edición
+            $this->loadCitySchedules();
+            $this->editingSchedule = null;
+            $this->newTimeValue = '';
+            
+            $this->dispatch('notify', message: "Horario actualizado correctamente de {$oldTime} a {$newTime}", type: 'success');
+        } catch (\Exception $e) {
+            $this->dispatch('notify', message: 'Error al actualizar el horario: ' . $e->getMessage(), type: 'error');
+        }
+    }
+
+    /**
+     * Obtiene el rango de horas válidas para un turno específico
+     */
+    protected function getScheduleStateRange($state)
+    {
+        $ranges = [
+            'Previa' => ['09:00', '11:59'],
+            'Primera' => ['11:00', '12:59'],
+            'Matutina' => ['13:00', '15:59'],
+            'Vespertina' => ['16:00', '19:59'],
+            'Nocturna' => ['20:00', '23:59'],
+        ];
+
+        return $ranges[$state] ?? null;
+    }
+
+    /**
+     * Valida si un horario está dentro del rango permitido para un turno
+     */
+    protected function validateTimeForState($time, $state)
+    {
+        // No validar turnos vacíos o estados no válidos
+        if (empty($time) || $state === 'Otro') {
+            return false;
+        }
+        
+        $range = $this->getScheduleStateRange($state);
+        if (!$range) {
+            return false;
+        }
+
+        $timeMinutes = $this->timeToMinutes($time);
+        $startMinutes = $this->timeToMinutes($range[0]);
+        $endMinutes = $this->timeToMinutes($range[1]);
+
+        return $timeMinutes >= $startMinutes && $timeMinutes <= $endMinutes;
+    }
+
+    /**
+     * Convierte tiempo HH:MM a minutos para comparación
+     */
+    protected function timeToMinutes($time)
+    {
+        if (empty($time)) {
+            return 0;
+        }
+        list($hours, $minutes) = explode(':', $time);
+        return (int)$hours * 60 + (int)$minutes;
     }
 
 
