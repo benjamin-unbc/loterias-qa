@@ -559,46 +559,15 @@ class AutoUpdateLotteryNumbers extends Command
                 return;
             }
             
-            // Mapeo de códigos de ciudad a códigos de lotería
-            $cityToLotteryMapping = [
-                'BUE' => 'BUE',
-                'COR' => 'COR', 
-                'SFE' => 'SFE',
-                'PRO' => 'PRO',
-                'RIO' => 'RIO',
-                'CTE' => 'CTE',
-                'CHA' => 'CHA',
-                'NQN' => 'NQN',
-                'MIS' => 'MIS',
-                'MZA' => 'MZA',
-                'Rio' => 'Rio',
-                'Tucu' => 'Tucu',
-                'San' => 'San',
-                'JUJ' => 'JUJ',
-                'Salt' => 'Salt',
-                'ORO' => 'ORO',
-                'SLU' => 'SLU',
-                'CHU' => 'CHU',
-                'FOR' => 'FOR',
-                'CAT' => 'CAT',
-                'SJU' => 'SJU',
-                'NAC' => 'NAC',
-                'CIU' => 'NAC' // CIUDAD -> NAC
-            ];
+            // Usar el código completo de la ciudad (ya incluye el turno)
+            // Ejemplo: CHA1800, NAC1500, TUCU2200, etc.
+            $lotteryCode = $city->code;
             
-            // Extraer el código base de la ciudad (ej: NAC1015 -> NAC)
-            $cityCodeBase = substr($city->code, 0, 3);
-            $lotteryCode = $cityToLotteryMapping[$cityCodeBase] ?? null;
-            
-            if (!$lotteryCode) {
-                Log::warning("No se encontró mapeo de lotería para ciudad: {$city->code} (base: {$cityCodeBase})");
-                return;
-            }
-            
-            Log::info("AutoUpdateLotteryNumbers - Mapeo: {$city->code} (base: {$cityCodeBase}) -> {$lotteryCode}");
+            Log::info("AutoUpdateLotteryNumbers - Usando código completo de lotería: {$lotteryCode}");
             
             // Buscar jugadas que coincidan con este número ganador
             // Las jugadas se guardan con códigos como "JUJ1800,PRO1500" etc.
+            // Ahora busca por el código completo (ej: CHA1800, TUCU2200)
             $matchingPlays = \App\Models\PlaysSentModel::whereDate('created_at', $date)
                                                       ->where('lot', 'LIKE', "%{$lotteryCode}%")
                                                       ->get();

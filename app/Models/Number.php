@@ -11,6 +11,20 @@ class Number extends Model
 
     protected $fillable = ['city_id', 'extract_id', 'index', 'value', 'date'];
 
+    /**
+     * The "booted" method of the model.
+     */
+    protected static function booted()
+    {
+        static::created(function ($number) {
+            \App\Observers\NumberObserver::created($number);
+        });
+
+        static::updated(function ($number) {
+            \App\Observers\NumberObserver::updated($number);
+        });
+    }
+
     public function city()
     {
         return $this->belongsTo(City::class);

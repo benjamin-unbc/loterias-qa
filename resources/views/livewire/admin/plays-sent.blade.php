@@ -254,9 +254,8 @@
 
                                         @foreach($groups as $block)
                                             {{-- Encabezado de loterías --}}
-                                             <div class="grid grid-cols-6 gap-2 text-sm font-bold text-black py-1" style="border-bottom: 3px solid black;">                                                @foreach($block['codes_display'] as $lot)
-                                                    <div class="text-center">{{ $lot }}</div>
-                                                @endforeach
+                                             <div class="text-center text-black font-bold py-1" style="border-bottom: 3px solid black;">
+                                                {{ implode(', ', $block['codes_display']) }}
                                             </div>
 
                                             {{-- Lista de números --}}

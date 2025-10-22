@@ -124,25 +124,31 @@ class Results extends Component
 
         // Mapeo de códigos de sistema a nombres de ciudad
         $systemCodeToCity = [
-            'NAC' => 'BUENOS AIRES',
+            'NAC' => 'CIUDAD', // Cambiado de 'BUENOS AIRES' a 'CIUDAD'
             'CHA' => 'CHACO', 
-            'PRO' => 'ENTRE RIOS',
+            'PRO' => 'PROVINCIA', // Cambiado de 'ENTRE RIOS' a 'PROVINCIA'
             'MZA' => 'MENDOZA',
             'CTE' => 'CORRIENTES',
             'SFE' => 'SANTA FE',
             'COR' => 'CORDOBA',
-            'RIO' => 'LA RIOJA',
+            'RIO' => 'ENTRE RIOS', // Cambiado de 'LA RIOJA' a 'ENTRE RIOS'
             'ORO' => 'MONTEVIDEO',
             'NQN' => 'NEUQUEN',
             'MIS' => 'MISIONES',
             'JUJ' => 'JUJUY',
             'Salt' => 'SALTA',
-            'Rio' => 'RIO NEGRO',
-            'Tucu' => 'TUCUMAN',
-            'San' => 'SAN LUIS'
+            'Rio' => 'Río Negro',
+            'Tucu' => 'Tucuman',
+            'San' => 'Santiago'
         ];
 
         return $results->filter(function($result) use ($savedPreferences, $systemCodeToCity) {
+            // Si el campo lottery es un número (cantidad de loterías), permitir el resultado
+            if (is_numeric($result->lottery)) {
+                return true; // Permitir resultados con formato de número de loterías
+            }
+            
+            // Si es un string con códigos de lotería, aplicar el filtro original
             $lotteryCodes = explode(',', $result->lottery);
             
             foreach ($lotteryCodes as $code) {

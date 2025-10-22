@@ -160,14 +160,10 @@ class CalculateLotteryResults implements ShouldQueue
                             Log::info("Acierto POSICIÓN 1 (A LA CABEZA): Apuesta {$play->number} ({$playedDigits} dígitos) en posición {$play->position}, número ganador {$winnerValue}, multiplicador Quiniela: {$prizeMultiplier}");
                         } else {
                             // Otras posiciones (2-20): Usar tablas específicas según número de dígitos
-                            if ($playedDigits == 1) {
-                                // Apuesta de 1 dígito (***X) - Solo tabla Quiniela
-                                $prizeMultiplier = $quinielaPayouts->cobra_1_cifra ?? 0;
-                                Log::info("Acierto 1 dígito: Apuesta {$play->number} en posición {$play->position}, número ganador {$winnerValue}, multiplicador: {$prizeMultiplier}");
-                            } elseif ($playedDigits == 2) {
-                                // Apuesta de 2 dígitos (**XX) - Tabla Prizes (A los 5, 10, 20)
+                            if ($playedDigits == 1 || $playedDigits == 2) {
+                                // Apuesta de 1-2 dígitos (***X, **XX) - Tabla Prizes (A los 5, 10, 20)
                                 $prizeMultiplier = $this->calculatePositionBasedPrize($play->position, $prizesPayouts);
-                                Log::info("Acierto 2 dígitos: Apuesta {$play->number} en posición {$play->position}, número ganador {$winnerValue}, multiplicador Prizes: {$prizeMultiplier}");
+                                Log::info("Acierto {$playedDigits} dígito(s): Apuesta {$play->number} en posición {$play->position}, número ganador {$winnerValue}, multiplicador Prizes: {$prizeMultiplier}");
                             } elseif ($playedDigits == 3) {
                                 // Apuesta de 3 dígitos (*XXX) - Tabla FigureOne (Terminación 3 cifras)
                                 $prizeMultiplier = $this->calculatePositionBasedPrize($play->position, $figureOnePayouts);

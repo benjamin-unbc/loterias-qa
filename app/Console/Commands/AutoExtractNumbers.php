@@ -243,39 +243,14 @@ class AutoExtractNumbers extends Command
                 return;
             }
             
-            // Mapeo de códigos de ciudad a códigos de lotería
-            $cityToLotteryMapping = [
-                'BUE' => 'BUE',
-                'COR' => 'COR', 
-                'SFE' => 'SFE',
-                'PRO' => 'PRO',
-                'RIO' => 'RIO',
-                'CTE' => 'CTE',
-                'CHA' => 'CHA',
-                'NQN' => 'NQN',
-                'MIS' => 'MIS',
-                'MZA' => 'MZA',
-                'Rio' => 'Rio',
-                'Tucu' => 'Tucu',
-                'San' => 'San',
-                'JUJ' => 'JUJ',
-                'Salt' => 'Salt',
-                'ORO' => 'ORO',
-                'SLU' => 'SLU',
-                'CHU' => 'CHU',
-                'FOR' => 'FOR',
-                'CAT' => 'CAT',
-                'SJU' => 'SJU',
-                'NAC' => 'NAC'
-            ];
+            // Usar el código completo de la ciudad (ya incluye el turno)
+            // Ejemplo: CHA1800, NAC1500, TUCU2200, etc.
+            $lotteryCode = $city->code;
             
-            $lotteryCode = $cityToLotteryMapping[$city->code] ?? null;
-            if (!$lotteryCode) {
-                Log::warning("No se encontró mapeo de lotería para ciudad: {$city->code}");
-                return;
-            }
+            Log::info("AutoExtractNumbers - Usando código completo de lotería: {$lotteryCode}");
             
             // Buscar jugadas que coincidan con este número ganador
+            // Ahora busca por el código completo (ej: CHA1800, TUCU2200)
             $matchingPlays = \App\Models\ApusModel::whereDate('created_at', $date)
                                                  ->where('position', $position)
                                                  ->where('lottery', $lotteryCode)

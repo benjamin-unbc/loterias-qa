@@ -794,7 +794,7 @@
                         'SFE1015' => 'ER', 'COR1015' => 'SD', 'RIO1015' => 'RT', 'NAC1200' => 'Q', 'CHA1200' => 'CH2',
                         'PRO1200' => 'W', 'MZA1200' => 'M1', 'CTE1200' => 'M', 'SFE1200' => 'R', 'COR1200' => 'T',
                         'RIO1200' => 'K', 'NAC1500' => 'A', 'CHA1500' => 'CH3', 'PRO1500' => 'E', 'MZA1500' => 'M2',
-                        'CTE1500' => 'CT3', 'SFE1500' => 'D', 'COR1500' => 'L', 'RIO1500' => 'J', 'ORO1500' => 'S',
+                        'CTE1500' => 'Ct3', 'SFE1500' => 'D', 'COR1500' => 'L', 'RIO1500' => 'J', 'ORO1500' => 'S',
                         'NAC1800' => 'F', 'CHA1800' => 'CH4', 'PRO1800' => 'B', 'MZA1800' => 'M3', 'CTE1800' => 'Z',
                         'SFE1800' => 'V', 'COR1800' => 'H', 'RIO1800' => 'U', 'NAC2100' => 'N', 'CHA2100' => 'CH5',
                         'PRO2100' => 'P', 'MZA2100' => 'M4', 'CTE2100' => 'G', 'SFE2100' => 'I', 'COR2100' => 'C',
@@ -819,28 +819,23 @@
                             ->values()
                             ->toArray();
                         
-                        // Convertir códigos del sistema a códigos cortos
+                        // Mostrar códigos completos en lugar de códigos cortos
                         $displayCodes = [];
                         
                         foreach ($lotteryCodes as $code) {
                             $code = trim($code);
                             
-                            // Si el código ya es un código del sistema (ej: "CHA1800"), convertirlo a código corto
+                            // Mostrar el código completo directamente
                             if (preg_match('/^[A-Za-z]+\d{4}$/', $code)) {
-                                if (isset($systemToShortCodes[$code])) {
-                                    $displayCodes[] = $systemToShortCodes[$code];
-                                } else {
-                                    // Fallback si no existe el código corto
-                                    $displayCodes[] = $code;
-                                }
+                                $displayCodes[] = $code;
                             }
                         }
                         
-                        $desiredOrder = ['AB', 'CH1', 'QW', 'M10', '!', 'ER', 'SD', 'RT', 'NQ1', 'MI1', 'RN1', 'TU1', 'SG1',
-                                        'Q', 'CH2', 'W', 'M1', 'M', 'R', 'T', 'K', 'NQ2', 'MI2', 'JU1', 'SA1', 'RN2', 'TU2', 'SG2',
-                                        'A', 'CH3', 'E', 'M2', 'Ct3', 'D', 'L', 'J', 'S', 'NQ3', 'MI3', 'JU2', 'SA2', 'RN3', 'TU3', 'SG3',
-                                        'F', 'CH4', 'B', 'M3', 'Z', 'V', 'H', 'U', 'NQ4', 'MI4', 'JU3', 'SA3', 'RN4', 'TU4', 'SG4',
-                                        'N', 'CH5', 'P', 'M4', 'G', 'I', 'C', 'Y', 'O', 'NQ5', 'JU4', 'RN5', 'SA4', 'TU5', 'MI5', 'SG5'];
+                        $desiredOrder = ['NAC1015', 'CHA1015', 'PRO1015', 'MZA1015', 'CTE1015', 'SFE1015', 'COR1015', 'RIO1015', 'NQN1015', 'MIS1030', 'Rio1015', 'Tucu1130', 'San1015',
+                                        'NAC1200', 'CHA1200', 'PRO1200', 'MZA1200', 'CTE1200', 'SFE1200', 'COR1200', 'RIO1200', 'NQN1200', 'MIS1215', 'JUJ1200', 'Salt1130', 'Rio1200', 'Tucu1430', 'San1200',
+                                        'NAC1500', 'CHA1500', 'PRO1500', 'MZA1500', 'CTE1500', 'SFE1500', 'COR1500', 'RIO1500', 'ORO1800', 'NQN1500', 'MIS1500', 'JUJ1500', 'Salt1400', 'Rio1500', 'Tucu1730', 'San1500',
+                                        'NAC1800', 'CHA1800', 'PRO1800', 'MZA1800', 'CTE1800', 'SFE1800', 'COR1800', 'RIO1800', 'NQN1800', 'MIS1800', 'JUJ1800', 'Salt1730', 'Rio1800', 'Tucu1930', 'San1945',
+                                        'NAC2100', 'CHA2100', 'PRO2100', 'MZA2100', 'CTE2100', 'SFE2100', 'COR2100', 'RIO2100', 'ORO2100', 'NQN2100', 'JUJ2100', 'Rio2100', 'Salt2100', 'Tucu2200', 'MIS2115', 'San2200'];
                         $uniqueDisplayCodes = array_unique($displayCodes);
                         
                         usort($uniqueDisplayCodes, function ($a, $b) use ($desiredOrder) {
@@ -874,11 +869,11 @@
                             ];
                         })
                         ->sortBy(function ($group, $key) {
-                            static $desiredOrder = ['AB', 'CH1', 'QW', 'M10', '!', 'ER', 'SD', 'RT', 'NQ1', 'MI1', 'RN1', 'TU1', 'SG1',
-                                        'Q', 'CH2', 'W', 'M1', 'M', 'R', 'T', 'K', 'NQ2', 'MI2', 'JU1', 'SA1', 'RN2', 'TU2', 'SG2',
-                                        'A', 'CH3', 'E', 'M2', 'Ct3', 'D', 'L', 'J', 'S', 'NQ3', 'MI3', 'JU2', 'SA2', 'RN3', 'TU3', 'SG3',
-                                        'F', 'CH4', 'B', 'M3', 'Z', 'V', 'H', 'U', 'NQ4', 'MI4', 'JU3', 'SA3', 'RN4', 'TU4', 'SG4',
-                                        'N', 'CH5', 'P', 'M4', 'G', 'I', 'C', 'Y', 'O', 'NQ5', 'JU4', 'RN5', 'SA4', 'TU5', 'MI5', 'SG5'];
+                            static $desiredOrder = ['NAC1015', 'CHA1015', 'PRO1015', 'MZA1015', 'CTE1015', 'SFE1015', 'COR1015', 'RIO1015', 'NQN1015', 'MIS1030', 'Rio1015', 'Tucu1130', 'San1015',
+                                        'NAC1200', 'CHA1200', 'PRO1200', 'MZA1200', 'CTE1200', 'SFE1200', 'COR1200', 'RIO1200', 'NQN1200', 'MIS1215', 'JUJ1200', 'Salt1130', 'Rio1200', 'Tucu1430', 'San1200',
+                                        'NAC1500', 'CHA1500', 'PRO1500', 'MZA1500', 'CTE1500', 'SFE1500', 'COR1500', 'RIO1500', 'ORO1800', 'NQN1500', 'MIS1500', 'JUJ1500', 'Salt1400', 'Rio1500', 'Tucu1730', 'San1500',
+                                        'NAC1800', 'CHA1800', 'PRO1800', 'MZA1800', 'CTE1800', 'SFE1800', 'COR1800', 'RIO1800', 'NQN1800', 'MIS1800', 'JUJ1800', 'Salt1730', 'Rio1800', 'Tucu1930', 'San1945',
+                                        'NAC2100', 'CHA2100', 'PRO2100', 'MZA2100', 'CTE2100', 'SFE2100', 'COR2100', 'RIO2100', 'ORO2100', 'NQN2100', 'JUJ2100', 'Rio2100', 'Salt2100', 'Tucu2200', 'MIS2115', 'San2200'];
                             $firstLotteryInGroup = explode(', ', $key)[0];
                             return array_search($firstLotteryInGroup, $desiredOrder) ?: 999;
                         })
@@ -887,10 +882,8 @@
 
                 @foreach($groups as $block)
                     {{-- Encabezado de loterías --}}
-                    <div class="grid grid-cols-6 gap-2 text-sm font-bold text-black py-1" style="border-bottom: 3px solid black;">
-                        @foreach($block['codes_display'] as $lot)
-                            <div class="text-center">{{ $lot }}</div>
-                        @endforeach
+                    <div class="text-center text-black font-bold py-1" style="border-bottom: 3px solid black;">
+                        {{ implode(', ', $block['codes_display']) }}
                     </div>
 
                     {{-- Lista de números --}}

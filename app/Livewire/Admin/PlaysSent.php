@@ -202,13 +202,13 @@ private function processApusData($rawApus)
                 'numbers' => $items->pluck('numbers')->flatten(1)->all(),
             ];
         })
-        // Ordenar por el orden deseado de loterías (usando códigos cortos)
+        // Ordenar por el orden deseado de loterías (usando códigos completos)
         ->sortBy(function ($group, $key) {
-            static $desiredOrder = ['AB', 'CH1', 'QW', 'M10', '!', 'ER', 'SD', 'RT', 'NQ1', 'MI1', 'RN1', 'TU1', 'SG1',
-                        'Q', 'CH2', 'W', 'M1', 'M', 'R', 'T', 'K', 'NQ2', 'MI2', 'JU1', 'SA1', 'RN2', 'TU2', 'SG2',
-                        'A', 'CH3', 'E', 'M2', 'Ct3', 'D', 'L', 'J', 'S', 'NQ3', 'MI3', 'JU2', 'SA2', 'RN3', 'TU3', 'SG3',
-                        'F', 'CH4', 'B', 'M3', 'Z', 'V', 'H', 'U', 'NQ4', 'MI4', 'JU3', 'SA3', 'RN4', 'TU4', 'SG4',
-                        'N', 'CH5', 'P', 'M4', 'G', 'I', 'C', 'Y', 'O', 'NQ5', 'JU4', 'RN5', 'SA4', 'TU5', 'MI5', 'SG5'];
+            static $desiredOrder = ['NAC1015', 'CHA1015', 'PRO1015', 'MZA1015', 'CTE1015', 'SFE1015', 'COR1015', 'RIO1015', 'NQN1015', 'MIS1030', 'Rio1015', 'Tucu1130', 'San1015',
+                        'NAC1200', 'CHA1200', 'PRO1200', 'MZA1200', 'CTE1200', 'SFE1200', 'COR1200', 'RIO1200', 'NQN1200', 'MIS1215', 'JUJ1200', 'Salt1130', 'Rio1200', 'Tucu1430', 'San1200',
+                        'NAC1500', 'CHA1500', 'PRO1500', 'MZA1500', 'CTE1500', 'SFE1500', 'COR1500', 'RIO1500', 'ORO1800', 'NQN1500', 'MIS1500', 'JUJ1500', 'Salt1400', 'Rio1500', 'Tucu1730', 'San1500',
+                        'NAC1800', 'CHA1800', 'PRO1800', 'MZA1800', 'CTE1800', 'SFE1800', 'COR1800', 'RIO1800', 'NQN1800', 'MIS1800', 'JUJ1800', 'Salt1730', 'Rio1800', 'Tucu1930', 'San1945',
+                        'NAC2100', 'CHA2100', 'PRO2100', 'MZA2100', 'CTE2100', 'SFE2100', 'COR2100', 'RIO2100', 'ORO2100', 'NQN2100', 'JUJ2100', 'Rio2100', 'Salt2100', 'Tucu2200', 'MIS2115', 'San2200'];
             static $positionCache = [];
             
             if (!isset($positionCache[$key])) {
@@ -221,57 +221,36 @@ private function processApusData($rawApus)
         ->values();
 }
 
-    // Use the same determineLottery logic as PlaysManager but with short codes
+    // Use the same determineLottery logic as PlaysManager but with full codes
     protected function determineLottery(array $selectedCodes): string
     {
         $displayCodes = [];
         
-        // Debug temporal para ver qué códigos llegan
-        \Log::info('PlaysSent determineLottery - selectedCodes:', $selectedCodes);
-        
         foreach ($selectedCodes as $code) {
             $code = trim($code);
-            \Log::info("Processing code: '$code'");
             
             // Limpiar códigos malformados - extraer solo códigos válidos
             if (preg_match_all('/[A-Za-z]+\d{4}/', $code, $matches)) {
                 // Si el código contiene múltiples códigos válidos, procesarlos por separado
                 foreach ($matches[0] as $validCode) {
-                    $shortCode = array_search($validCode, $this->codes);
-                    if ($shortCode !== false) {
-                        $displayCodes[] = $shortCode;
-                        \Log::info("Converted '$validCode' to '$shortCode'");
-                    } else {
-                        \Log::info("Not found in codes: '$validCode'");
-                    }
+                    $displayCodes[] = $validCode; // Usar código completo directamente
                 }
             }
-            // Si el código ya es un código del sistema válido (ej: "CHA1800"), convertirlo a código corto
+            // Si el código ya es un código del sistema válido (ej: "CHA1800"), usarlo directamente
             elseif (preg_match('/^[A-Za-z]+\d{4}$/', $code)) {
-                $shortCode = array_search($code, $this->codes);
-                if ($shortCode !== false) {
-                    $displayCodes[] = $shortCode;
-                    \Log::info("Converted '$code' to '$shortCode'");
-                } else {
-                    \Log::info("Not found in codes: '$code'");
-                }
+                $displayCodes[] = $code; // Usar código completo directamente
             }
-            // Si es un código de UI (ej: "CH4"), ya es un código corto
+            // Si es un código de UI (ej: "CH4"), convertirlo a código completo
             elseif (isset($this->codes[$code])) {
-                $displayCodes[] = $code; // Ya es un código corto
-                \Log::info("UI code found: '$code'");
-            } else {
-                \Log::info("Unknown code format: '$code'");
+                $displayCodes[] = $this->codes[$code]; // Convertir a código completo
             }
         }
         
-        \Log::info('Final displayCodes:', $displayCodes);
-        
-        $desiredOrder = ['AB', 'CH1', 'QW', 'M10', '!', 'ER', 'SD', 'RT', 'NQ1', 'MI1', 'RN1', 'TU1', 'SG1',
-                        'Q', 'CH2', 'W', 'M1', 'M', 'R', 'T', 'K', 'NQ2', 'MI2', 'JU1', 'SA1', 'RN2', 'TU2', 'SG2',
-                        'A', 'CH3', 'E', 'M2', 'Ct3', 'D', 'L', 'J', 'S', 'NQ3', 'MI3', 'JU2', 'SA2', 'RN3', 'TU3', 'SG3',
-                        'F', 'CH4', 'B', 'M3', 'Z', 'V', 'H', 'U', 'NQ4', 'MI4', 'JU3', 'SA3', 'RN4', 'TU4', 'SG4',
-                        'N', 'CH5', 'P', 'M4', 'G', 'I', 'C', 'Y', 'O', 'NQ5', 'JU4', 'RN5', 'SA4', 'TU5', 'MI5', 'SG5'];
+        $desiredOrder = ['NAC1015', 'CHA1015', 'PRO1015', 'MZA1015', 'CTE1015', 'SFE1015', 'COR1015', 'RIO1015', 'NQN1015', 'MIS1030', 'Rio1015', 'Tucu1130', 'San1015',
+                        'NAC1200', 'CHA1200', 'PRO1200', 'MZA1200', 'CTE1200', 'SFE1200', 'COR1200', 'RIO1200', 'NQN1200', 'MIS1215', 'JUJ1200', 'Salt1130', 'Rio1200', 'Tucu1430', 'San1200',
+                        'NAC1500', 'CHA1500', 'PRO1500', 'MZA1500', 'CTE1500', 'SFE1500', 'COR1500', 'RIO1500', 'ORO1800', 'NQN1500', 'MIS1500', 'JUJ1500', 'Salt1400', 'Rio1500', 'Tucu1730', 'San1500',
+                        'NAC1800', 'CHA1800', 'PRO1800', 'MZA1800', 'CTE1800', 'SFE1800', 'COR1800', 'RIO1800', 'NQN1800', 'MIS1800', 'JUJ1800', 'Salt1730', 'Rio1800', 'Tucu1930', 'San1945',
+                        'NAC2100', 'CHA2100', 'PRO2100', 'MZA2100', 'CTE2100', 'SFE2100', 'COR2100', 'RIO2100', 'ORO2100', 'NQN2100', 'JUJ2100', 'Rio2100', 'Salt2100', 'Tucu2200', 'MIS2115', 'San2200'];
         
         $uniqueDisplayCodes = array_unique($displayCodes);
         

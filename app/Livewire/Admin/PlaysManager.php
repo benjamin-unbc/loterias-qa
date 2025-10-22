@@ -574,16 +574,39 @@ class PlaysManager extends Component
     protected function getAndSortPlays(): Collection
 
     {
+        // MEJORA: Agregar validación adicional de seguridad
+        $currentUserId = auth()->id();
+        
+        if (!$currentUserId) {
+            \Log::error("Usuario no autenticado al obtener jugadas");
+            return collect();
+        }
 
-        return Play::where('user_id', auth()->id())
-
+        $plays = Play::where('user_id', $currentUserId)
             ->select(['id', 'user_id', 'type', 'number', 'position', 'import', 'lottery', 'numberR', 'positionR', 'isChecked'])
-
             ->orderBy('id', 'asc')
-
             ->get()
-
             ->values();
+            
+        // MEJORA: Validar que todas las jugadas pertenecen al usuario actual
+        $invalidPlays = $plays->filter(function($play) use ($currentUserId) {
+            return $play->user_id !== $currentUserId;
+        });
+        
+        if ($invalidPlays->isNotEmpty()) {
+            \Log::error("Jugadas de otros usuarios encontradas", [
+                'current_user_id' => $currentUserId,
+                'invalid_play_ids' => $invalidPlays->pluck('id')->toArray(),
+                'invalid_user_ids' => $invalidPlays->pluck('user_id')->unique()->toArray()
+            ]);
+            
+            // Filtrar solo las jugadas válidas
+            $plays = $plays->filter(function($play) use ($currentUserId) {
+                return $play->user_id === $currentUserId;
+            })->values();
+        }
+        
+        return $plays;
     }
 
 
@@ -767,23 +790,16 @@ class PlaysManager extends Component
 
                 $systemCode = $this->uiCodeMapping[$uiCode];
 
-                // Convertir a código corto usando el mapeo
-                if (isset($this->systemToShortCodes[$systemCode])) {
-                    $displayCodes[] = $this->systemToShortCodes[$systemCode];
-                } else {
-                    // Fallback al método anterior si no existe el código corto
-                    $prefix = substr($systemCode, 0, -4); // Extracts 'NAC' from 'NAC1015'
-                    $timeSuffix = $this->getTimeSuffixFromSystemCode($systemCode); // Gets '10' from 'NAC1015'
-                    $displayCodes[] = $prefix . $timeSuffix; // Combines to 'NAC10'
-                }
+                // Usar código completo directamente
+                $displayCodes[] = $systemCode;
 
             }
         }
 
 
-        // Custom sort based on a predefined order (usando códigos cortos)
+        // Custom sort based on a predefined order (usando códigos completos)
 
-        $desiredOrder = ['AB', 'CH1', 'QW', 'M10', '!', 'ER', 'SD', 'RT', 'Q', 'CH2', 'W', 'M1', 'M', 'R', 'T', 'K', 'A', 'CH3', 'E', 'M2', 'CT3', 'D', 'L', 'J', 'S', 'F', 'CH4', 'B', 'M3', 'Z', 'V', 'H', 'U', 'N', 'CH5', 'P', 'M4', 'G', 'I', 'C', 'Y', 'O'];
+        $desiredOrder = ['NAC1015', 'CHA1015', 'PRO1015', 'MZA1015', 'CTE1015', 'SFE1015', 'COR1015', 'RIO1015', 'NAC1200', 'CHA1200', 'PRO1200', 'MZA1200', 'CTE1200', 'SFE1200', 'COR1200', 'RIO1200', 'NAC1500', 'CHA1500', 'PRO1500', 'MZA1500', 'CTE1500', 'SFE1500', 'COR1500', 'RIO1500', 'ORO1800', 'NAC1800', 'CHA1800', 'PRO1800', 'MZA1800', 'CTE1800', 'SFE1800', 'COR1800', 'RIO1800', 'NAC2100', 'CHA2100', 'PRO2100', 'MZA2100', 'CTE2100', 'SFE2100', 'COR2100', 'RIO2100', 'ORO2100'];
 
         $uniqueDisplayCodes = array_unique($displayCodes);
 
@@ -791,7 +807,7 @@ class PlaysManager extends Component
 
         usort($uniqueDisplayCodes, function ($a, $b) use ($desiredOrder) {
 
-            // Buscar directamente los códigos cortos en el orden deseado
+            // Buscar directamente los códigos completos en el orden deseado
             $posA = array_search($a, $desiredOrder);
             $posB = array_search($b, $desiredOrder);
 
@@ -1400,13 +1416,26 @@ public function addRow()
         // Focar el siguiente input de número
         $this->dispatch('focusInput', ['selector' => '#number']);
 
-        // Reactivar las bajadas si se creó una nueva jugada base (3 o 4 dígitos)
+        // MEJORA: Reactivar las bajadas si se creó una nueva jugada base (3 o 4 dígitos)
         $cleanNumber = str_replace('*', '', $validatedData['number']);
         if (strlen($cleanNumber) >= 3 && ctype_digit($cleanNumber)) {
             $lastDerivedKey = 'lastDerivedCompleted_' . auth()->id();
             \Cache::forget($lastDerivedKey); // Reactivar las bajadas
             $this->currentBasePlayId = $newPlay->id; // Actualizar ID de base
             $this->currentDerivedCount = 0; // Resetear contador
+            
+            // MEJORA: Limpiar también el cache de bloqueo de derivadas
+            $lockKey = 'addRowWithDerived_lock_' . auth()->id();
+            \Cache::forget($lockKey);
+            
+            // Logging para debugging
+            \Log::info("Nueva jugada base creada para derivación", [
+                'user_id' => auth()->id(),
+                'play_id' => $newPlay->id,
+                'number' => $newPlay->number,
+                'clean_number' => $cleanNumber,
+                'previous_base_play_id' => $this->currentBasePlayId
+            ]);
         }
 
         // Limpiar el ID de la jugada si estamos en modo edición
@@ -2300,13 +2329,17 @@ public function addRow()
     \Cache::put($lockKey, true, 0.5);
     
     try {
-        $basePlay = Play::where('user_id', auth()->id())
-            ->whereRaw('LENGTH(REPLACE(number, "*", "")) IN (3,4)')
-            ->orderBy('id', 'desc')
-            ->first();
+        // MEJORA: Obtener la jugada base de manera más específica y segura
+        $basePlay = $this->getBasePlayForDerivation();
 
         if (!$basePlay) {
             $this->dispatch('notify', message: 'Debe haber una jugada principal de 3 o 4 dígitos para generar derivadas.', type: 'error');
+            return;
+        }
+
+        // MEJORA: Validación adicional de seguridad
+        if (!$this->validateBasePlay($basePlay)) {
+            $this->dispatch('notify', message: 'La jugada base no es válida para generar derivadas.', type: 'error');
             return;
         }
 
@@ -2330,66 +2363,46 @@ public function addRow()
             return;
         }
 
-        // Verificar si ya se crearon todas las jugadas derivadas posibles
-        if ($this->currentDerivedCount >= count($derivedNumbersToCreate)) {
-            // Marcar que se completó la última derivada y bloquear por tiempo mínimo
-            \Cache::put($lastDerivedKey, true, 5); // Bloquear solo por 5 segundos
-            $this->dispatch('notify', message: 'Ya se crearon todas las jugadas derivadas posibles para la base actual.', type: 'info');
-            return;
+        // MEJORA: Verificar qué derivadas ya existen en la base de datos (UNA SOLA CONSULTA)
+        $existingDerivedNumbers = $this->getExistingDerivedNumbers($basePlay, $derivedNumbersToCreate);
+        
+        // OPTIMIZACIÓN: Verificación rápida - si no hay derivadas existentes, crear la primera
+        if (empty($existingDerivedNumbers)) {
+            $nextDerivedIndex = 0;
+            $newDerivedNumberFormatted = $derivedNumbersToCreate[0];
+            $this->currentDerivedCount = 0;
+        } else {
+            // Encontrar la siguiente derivada que no existe
+            $nextDerivedIndex = $this->findNextDerivedIndex($derivedNumbersToCreate, $existingDerivedNumbers);
+            
+            if ($nextDerivedIndex === null) {
+                // Todas las derivadas ya existen, bloquear
+                \Cache::put($lastDerivedKey, true, 10); // Bloquear por 10 segundos
+                $this->dispatch('notify', message: 'Todas las jugadas derivadas ya fueron creadas para este número base.', type: 'info');
+                return;
+            }
+
+            $newDerivedNumberFormatted = $derivedNumbersToCreate[$nextDerivedIndex];
+            $this->currentDerivedCount = $nextDerivedIndex;
         }
 
-        $newDerivedNumberFormatted = $derivedNumbersToCreate[$this->currentDerivedCount];
-
-        // 4. Verificación robusta: verificar duplicados en los últimos 2 segundos
-        $duplicatePlay = Play::where('user_id', auth()->id())
-            ->where('number', $newDerivedNumberFormatted)
-            ->where('position', $basePlay->position)
-            ->where('lottery', $basePlay->lottery)
-            ->where('numberR', $basePlay->numberR)
-            ->where('positionR', $basePlay->positionR)
-            ->where('created_at', '>=', now()->subSeconds(2))
-            ->first();
-
-        if ($duplicatePlay) {
-            // Silenciosamente ignorar duplicados
+        // OPTIMIZACIÓN: Verificación rápida de duplicados (solo si ya sabemos que existe)
+        if (in_array($newDerivedNumberFormatted, $existingDerivedNumbers)) {
+            // Ya verificamos que existe, no necesitamos consultar de nuevo
+            \Log::warning("Duplicado detectado en derivación (ya verificado)", [
+                'user_id' => auth()->id(),
+                'new_derived_number' => $newDerivedNumberFormatted,
+                'base_play_id' => $basePlay->id
+            ]);
             \Cache::forget($lockKey);
             $this->isCreatingDerived = false;
             return;
         }
 
-        // 5. Verificación rápida: contar derivadas existentes en los últimos 1 segundo
-        $existingDerivedCount = Play::where('user_id', auth()->id())
-            ->where('position', $basePlay->position)
-            ->where('lottery', $basePlay->lottery)
-            ->where('numberR', $basePlay->numberR)
-            ->where('positionR', $basePlay->positionR)
-            ->where('created_at', '>=', now()->subSeconds(1))
-            ->count();
+        // OPTIMIZACIÓN: Eliminadas verificaciones redundantes ya que la consulta principal ya las cubre
 
-        if ($existingDerivedCount >= count($derivedNumbersToCreate)) {
-            // Silenciosamente ignorar si ya se crearon todas
-            return;
-        }
-
-        // 6. Verificación estricta: verificar si la última jugada es exactamente la misma
-        $lastPlay = Play::where('user_id', auth()->id())
-            ->where('number', $newDerivedNumberFormatted)
-            ->where('position', $basePlay->position)
-            ->where('lottery', $basePlay->lottery)
-            ->where('numberR', $basePlay->numberR)
-            ->where('positionR', $basePlay->positionR)
-            ->orderBy('id', 'desc')
-            ->first();
-
-        if ($lastPlay && $lastPlay->created_at->diffInSeconds(now()) < 1.0) {
-            // Si la última jugada es exactamente igual y fue creada hace menos de 1 segundo, ignorar
-            \Cache::forget($lockKey);
-            $this->isCreatingDerived = false;
-            return;
-        }
-
-        // 7. Crear la nueva jugada derivada
-        $newPlay = Play::create([
+        // MEJORA: Crear la nueva jugada derivada con logging detallado
+        $newPlayData = [
             'user_id' => auth()->id(),
             'type' => $basePlay->type,
             'number' => $newDerivedNumberFormatted,
@@ -2399,15 +2412,29 @@ public function addRow()
             'numberR' => $basePlay->numberR,
             'positionR' => $basePlay->positionR,
             'isChecked' => $basePlay->isChecked,
-        ]);
-
-        // Incrementar contador (más simple y rápido)
-        $this->currentDerivedCount++;
+        ];
         
-        // Verificar si esta fue la última derivada posible y bloquear
-        if ($this->currentDerivedCount >= count($derivedNumbersToCreate)) {
-            // Esta fue la última derivada, bloquear por tiempo mínimo
-            \Cache::put($lastDerivedKey, true, 5); // Bloquear solo por 5 segundos
+        \Log::info("Creando jugada derivada", [
+            'user_id' => auth()->id(),
+            'base_play_id' => $basePlay->id,
+            'base_number' => $basePlay->number,
+            'derived_number' => $newDerivedNumberFormatted,
+            'derived_count' => $this->currentDerivedCount + 1,
+            'total_derived_possible' => count($derivedNumbersToCreate)
+        ]);
+        
+        $newPlay = Play::create($newPlayData);
+
+        // OPTIMIZACIÓN: Verificación rápida si esta fue la última derivada
+        if ($nextDerivedIndex === count($derivedNumbersToCreate) - 1) {
+            // Esta fue la última derivada, bloquear por tiempo más largo
+            \Cache::put($lastDerivedKey, true, 15); // Bloquear por 15 segundos
+            \Log::info("Última derivada creada, bloqueando futuras creaciones", [
+                'user_id' => auth()->id(),
+                'base_play_id' => $basePlay->id,
+                'created_derived_number' => $newDerivedNumberFormatted,
+                'total_derived_created' => count($derivedNumbersToCreate)
+            ]);
         }
         
         $this->rows = $this->getAndSortPlays();
@@ -2428,6 +2455,204 @@ public function addRow()
     }
 }
 
+
+    /**
+     * MEJORA: Obtiene la jugada base para derivación de manera más específica y segura
+     * Prioriza la jugada que el usuario está visualizando o la más reciente válida
+     */
+    private function getBasePlayForDerivation()
+    {
+        $currentUserId = auth()->id();
+        
+        // Logging para debugging
+        \Log::info("Buscando jugada base para derivación", [
+            'user_id' => $currentUserId,
+            'current_base_play_id' => $this->currentBasePlayId,
+            'editing_row_id' => $this->editingRowId
+        ]);
+
+        // 1. Si hay una jugada en edición, usar esa como base
+        if ($this->editingRowId) {
+            $editingPlay = Play::where('id', $this->editingRowId)
+                ->where('user_id', $currentUserId)
+                ->whereRaw('LENGTH(REPLACE(number, "*", "")) IN (3,4)')
+                ->first();
+                
+            if ($editingPlay) {
+                \Log::info("Usando jugada en edición como base", ['play_id' => $editingPlay->id]);
+                return $editingPlay;
+            }
+        }
+
+        // 2. Si hay una jugada base actual válida, verificar que aún existe
+        if ($this->currentBasePlayId) {
+            $currentBasePlay = Play::where('id', $this->currentBasePlayId)
+                ->where('user_id', $currentUserId)
+                ->whereRaw('LENGTH(REPLACE(number, "*", "")) IN (3,4)')
+                ->first();
+                
+            if ($currentBasePlay) {
+                \Log::info("Usando jugada base actual", ['play_id' => $currentBasePlay->id]);
+                return $currentBasePlay;
+            }
+        }
+
+        // 3. Buscar la jugada más reciente de 3-4 dígitos del usuario actual
+        // MEJORA: Agregar validación de tiempo para evitar jugadas muy antiguas
+        $basePlay = Play::where('user_id', $currentUserId)
+            ->whereRaw('LENGTH(REPLACE(number, "*", "")) IN (3,4)')
+            ->where('created_at', '>=', now()->subHours(24)) // Solo jugadas de las últimas 24 horas
+            ->orderBy('id', 'desc')
+            ->first();
+
+        if ($basePlay) {
+            \Log::info("Usando jugada más reciente como base", [
+                'play_id' => $basePlay->id,
+                'number' => $basePlay->number,
+                'created_at' => $basePlay->created_at
+            ]);
+        } else {
+            \Log::warning("No se encontró jugada base válida para derivación", [
+                'user_id' => $currentUserId,
+                'search_criteria' => '3-4 dígitos, últimas 24 horas'
+            ]);
+        }
+
+        return $basePlay;
+    }
+
+    /**
+     * MEJORA: Valida que la jugada base es segura para usar en derivación
+     */
+    private function validateBasePlay($basePlay): bool
+    {
+        if (!$basePlay) {
+            return false;
+        }
+
+        $currentUserId = auth()->id();
+        
+        // 1. Verificar que la jugada pertenece al usuario actual
+        if ($basePlay->user_id !== $currentUserId) {
+            \Log::error("Intento de usar jugada de otro usuario", [
+                'play_user_id' => $basePlay->user_id,
+                'current_user_id' => $currentUserId,
+                'play_id' => $basePlay->id
+            ]);
+            return false;
+        }
+
+        // 2. Verificar que la jugada no es muy antigua (máximo 24 horas)
+        if ($basePlay->created_at < now()->subHours(24)) {
+            \Log::warning("Jugada base muy antigua", [
+                'play_id' => $basePlay->id,
+                'created_at' => $basePlay->created_at,
+                'age_hours' => $basePlay->created_at->diffInHours(now())
+            ]);
+            return false;
+        }
+
+        // 3. Verificar que el número es válido
+        $cleanNumber = str_replace('*', '', $basePlay->number);
+        if (!ctype_digit($cleanNumber) || !in_array(strlen($cleanNumber), [3, 4])) {
+            \Log::warning("Número de jugada base inválido", [
+                'play_id' => $basePlay->id,
+                'number' => $basePlay->number,
+                'clean_number' => $cleanNumber
+            ]);
+            return false;
+        }
+
+        // 4. Verificar que tiene loterías seleccionadas
+        if (empty($basePlay->lottery)) {
+            \Log::warning("Jugada base sin loterías", [
+                'play_id' => $basePlay->id
+            ]);
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * MEJORA: Obtiene las derivadas que ya existen en la base de datos (OPTIMIZADO)
+     */
+    private function getExistingDerivedNumbers($basePlay, $derivedNumbersToCreate): array
+    {
+        // OPTIMIZACIÓN: Una sola consulta en lugar de múltiples consultas
+        $existingPlays = Play::where('user_id', auth()->id())
+            ->whereIn('number', $derivedNumbersToCreate)
+            ->where('position', $basePlay->position)
+            ->where('lottery', $basePlay->lottery)
+            ->where('numberR', $basePlay->numberR)
+            ->where('positionR', $basePlay->positionR)
+            ->where('created_at', '>=', now()->subHours(24))
+            ->pluck('number')
+            ->toArray();
+        
+        // Solo loggear si hay derivadas existentes (reducir logs)
+        if (!empty($existingPlays)) {
+            \Log::info("Derivadas existentes encontradas", [
+                'user_id' => auth()->id(),
+                'base_play_id' => $basePlay->id,
+                'existing_derived_numbers' => $existingPlays,
+                'total_derived_possible' => count($derivedNumbersToCreate)
+            ]);
+        }
+        
+        return $existingPlays;
+    }
+
+    /**
+     * MEJORA: Encuentra el índice de la siguiente derivada que no existe (OPTIMIZADO)
+     */
+    private function findNextDerivedIndex($derivedNumbersToCreate, $existingDerivedNumbers): ?int
+    {
+        // OPTIMIZACIÓN: Usar array_flip para búsqueda O(1) en lugar de in_array O(n)
+        $existingNumbersMap = array_flip($existingDerivedNumbers);
+        
+        foreach ($derivedNumbersToCreate as $index => $derivedNumber) {
+            if (!isset($existingNumbersMap[$derivedNumber])) {
+                // Solo loggear cuando se encuentra una derivada a crear (reducir logs)
+                \Log::info("Siguiente derivada a crear", [
+                    'user_id' => auth()->id(),
+                    'derived_index' => $index,
+                    'derived_number' => $derivedNumber,
+                    'existing_count' => count($existingDerivedNumbers),
+                    'total_possible' => count($derivedNumbersToCreate)
+                ]);
+                return $index;
+            }
+        }
+        
+        // Solo loggear cuando todas existen (caso menos común)
+        \Log::info("Todas las derivadas ya existen", [
+            'user_id' => auth()->id(),
+            'existing_derived_numbers' => $existingDerivedNumbers,
+            'total_derived_possible' => count($derivedNumbersToCreate)
+        ]);
+        
+        return null; // Todas las derivadas ya existen
+    }
+
+    /**
+     * MEJORA: Obtiene las derivadas que aún no han sido creadas (OPTIMIZADO)
+     */
+    private function getRemainingDerivedNumbers($basePlay, $derivedNumbersToCreate): array
+    {
+        // OPTIMIZACIÓN: Reutilizar la consulta ya hecha en lugar de hacer otra
+        $existingDerivedNumbers = $this->getExistingDerivedNumbers($basePlay, $derivedNumbersToCreate);
+        $existingNumbersMap = array_flip($existingDerivedNumbers);
+        $remainingDerived = [];
+        
+        foreach ($derivedNumbersToCreate as $derivedNumber) {
+            if (!isset($existingNumbersMap[$derivedNumber])) {
+                $remainingDerived[] = $derivedNumber;
+            }
+        }
+        
+        return $remainingDerived;
+    }
 
     private function getSpecialDerivedNumbers($cleanOriginalNumber): array
 
