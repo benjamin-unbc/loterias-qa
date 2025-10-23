@@ -1,0 +1,12 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Excluir herramientas de análisis (como GTmetrix, Googlebot, Pingdom) de la redirección
+    RewriteCond %{HTTP_USER_AGENT} !^(GTmetrix|Googlebot|Pingdom) [NC]
+
+    # Evitar la redirección si ya estamos en la carpeta 'public'
+    RewriteCond %{REQUEST_URI} !^/public/
+
+    # Redirigir todo el tráfico a la carpeta public (excepto las herramientas de análisis y solicitudes dentro de 'public')
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
