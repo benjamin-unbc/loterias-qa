@@ -17,11 +17,13 @@ class Number extends Model
     protected static function booted()
     {
         static::created(function ($number) {
-            \App\Observers\NumberObserver::created($number);
+            $observer = new \App\Observers\NumberObserver();
+            $observer->created($number);
         });
 
         static::updated(function ($number) {
-            \App\Observers\NumberObserver::updated($number);
+            $observer = new \App\Observers\NumberObserver();
+            $observer->updated($number);
         });
     }
 

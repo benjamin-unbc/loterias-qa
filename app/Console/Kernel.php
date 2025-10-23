@@ -12,14 +12,29 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        $schedule->command('playssent:update-status')->everyMinute();
-        $schedule->command('fetch:plays-sent')->everyMinute();
+        // Solo durante horarios de lotería (10:00-23:59)
+        $schedule->command('playssent:update-status')
+                 ->everyMinute()
+                 ->between('10:00', '23:59')
+                 ->withoutOverlapping();
+                 
+        $schedule->command('fetch:plays-sent')
+                 ->everyMinute()
+                 ->between('10:00', '23:59')
+                 ->withoutOverlapping();
         
-        // Actualización automática de números ganadores cada 30 segundos (24/7)
+        // Actualización automática cada 2 minutos (no cada 30 segundos)
         $schedule->command('lottery:auto-update')
-                 ->everyThirtySeconds()
+                 ->everyTwoMinutes()
+                 ->between('10:00', '23:59')
                  ->withoutOverlapping()
                  ->runInBackground();
+                 
+        // Sistema de pagos cada 5 minutos
+        $schedule->command('lottery:auto-payment')
+                 ->everyFiveMinutes()
+                 ->between('10:00', '23:59')
+                 ->withoutOverlapping();
     }
 
     /**
