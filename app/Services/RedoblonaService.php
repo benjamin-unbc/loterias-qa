@@ -73,23 +73,33 @@ class RedoblonaService
             return 0;
         }
 
-        // Buscar número ganador en la posición de redoblona
-        $redoblonaNumber = Number::with(['city', 'extract'])
+        // Buscar números ganadores en el rango de posiciones de redoblona
+        $redoblonaRange = $this->getRedoblonaPositionRange($play->positionR);
+        $redoblonaNumbers = Number::with(['city', 'extract'])
             ->whereHas('city', function($query) use ($lotteryCode) {
                 $query->where('code', $lotteryCode);
             })
-            ->where('index', $play->positionR)
+            ->whereBetween('index', [$redoblonaRange['min'], $redoblonaRange['max']])
             ->whereDate('date', $date)
-            ->first();
+            ->get();
 
-        if (!$redoblonaNumber) {
-            Log::info("RedoblonaService - No se encontró número ganador en posición {$play->positionR} para redoblona");
+        if ($redoblonaNumbers->isEmpty()) {
+            Log::info("RedoblonaService - No se encontraron números ganadores en rango {$redoblonaRange['min']}-{$redoblonaRange['max']} para redoblona");
             return 0;
         }
 
-        // Verificar si la redoblona es ganadora
-        if (!$this->isRedoblonaWinner($play->numberR, $redoblonaNumber->value)) {
-            Log::info("RedoblonaService - Redoblona no ganadora: {$play->numberR} vs {$redoblonaNumber->value}");
+        // Verificar si la redoblona es ganadora en algún número del rango
+        $isRedoblonaWinner = false;
+        foreach ($redoblonaNumbers as $redoblonaNumber) {
+            if ($this->isRedoblonaWinner($play->numberR, $redoblonaNumber->value)) {
+                $isRedoblonaWinner = true;
+                Log::info("RedoblonaService - Redoblona ganadora: {$play->numberR} vs {$redoblonaNumber->value} en posición {$redoblonaNumber->index}");
+                break;
+            }
+        }
+
+        if (!$isRedoblonaWinner) {
+            Log::info("RedoblonaService - Redoblona no ganadora en rango {$redoblonaRange['min']}-{$redoblonaRange['max']}");
             return 0;
         }
 
@@ -100,6 +110,25 @@ class RedoblonaService
         Log::info("RedoblonaService - Premio TOTAL como redoblona: {$prize} para jugada {$play->number} en posición {$play->position}, redoblona {$play->numberR} en posición {$play->positionR}");
         
         return $prize;
+    }
+
+    /**
+     * Obtiene el rango de posiciones para la redoblona (igual que las jugadas normales)
+     */
+    private function getRedoblonaPositionRange($position): array
+    {
+        // Misma lógica que las jugadas normales
+        if ($position == 1) {
+            return ['min' => 1, 'max' => 1];
+        } elseif ($position >= 2 && $position <= 5) {
+            return ['min' => 2, 'max' => 5];
+        } elseif ($position >= 6 && $position <= 10) {
+            return ['min' => 6, 'max' => 10];
+        } elseif ($position >= 11 && $position <= 20) {
+            return ['min' => 11, 'max' => 20];
+        }
+        
+        return ['min' => $position, 'max' => $position];
     }
 
     /**
