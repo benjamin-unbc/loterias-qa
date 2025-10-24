@@ -997,7 +997,7 @@ class Extracts extends Component
                     'pos_g_r'    => null,
                     'XA'         => null,
                     'import'     => $play->import,
-                    'aciert'     => $play->import,
+                    'aciert'     => 0, // Se calculará correctamente por el sistema automático
                     'date'       => isset($this->indexData) ? $this->indexData->date : $dateToStore,
                     'time'       => $play->timeApu,
                 ];
@@ -1095,7 +1095,7 @@ class Extracts extends Component
                     'pos_g_r'    => null,
                     'XA'         => null,
                     'import'     => $play->import,
-                    'aciert'     => $play->import,
+                    'aciert'     => 0, // Se calculará correctamente por el sistema automático
                     'date'       => $numero->date,
                     'time'       => $play->timeApu,
                 ];
