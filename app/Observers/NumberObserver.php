@@ -59,11 +59,10 @@ class NumberObserver
 
             Log::info("NumberObserver - Procesando lotería: {$lotteryCode} para ciudad: {$number->city->code}");
 
-            // Buscar jugadas que coincidan con este número usando el código completo
-            $matchingPlays = ApusModel::whereDate('created_at', $number->date)
-                ->where('position', $number->index)
-                ->where('lottery', $lotteryCode)  // Usar código completo dinámico
-                ->get();
+            // Buscar jugadas que puedan ser ganadoras con este número
+            // Para posición 1 (quiniela), buscar solo en posición 1
+            // Para otras posiciones, buscar en el rango apropiado
+            $matchingPlays = $this->getMatchingPlaysForNumber($number, $lotteryCode);
 
             if ($matchingPlays->isEmpty()) {
                 Log::info("NumberObserver - No hay jugadas para {$number->city->code} - Pos {$number->index}");
@@ -178,6 +177,53 @@ class NumberObserver
         $winningSuffix = substr($winningNumberStr, -$playLength);
         
         return $playNumber === $winningSuffix;
+    }
+
+    /**
+     * Obtiene las jugadas que pueden ser ganadoras con un número específico
+     */
+    private function getMatchingPlaysForNumber(Number $number, $lotteryCode)
+    {
+        $winningPosition = $number->index;
+        
+        // Si el número salió en posición 1, solo buscar jugadas apostadas en posición 1
+        if ($winningPosition == 1) {
+            return ApusModel::whereDate('created_at', $number->date)
+                ->where('position', 1)
+                ->where('lottery', $lotteryCode)
+                ->get();
+        }
+        
+        // Para otras posiciones, buscar jugadas en el rango apropiado
+        $searchRanges = [];
+        
+        // Si salió en posición 2-5, buscar jugadas apostadas en posiciones 1-5
+        if ($winningPosition >= 2 && $winningPosition <= 5) {
+            $searchRanges[] = [1, 5];
+        }
+        
+        // Si salió en posición 6-10, buscar jugadas apostadas en posiciones 1-10
+        if ($winningPosition >= 6 && $winningPosition <= 10) {
+            $searchRanges[] = [1, 10];
+        }
+        
+        // Si salió en posición 11-20, buscar jugadas apostadas en posiciones 1-20
+        if ($winningPosition >= 11 && $winningPosition <= 20) {
+            $searchRanges[] = [1, 20];
+        }
+        
+        $matchingPlays = collect();
+        
+        foreach ($searchRanges as $range) {
+            $plays = ApusModel::whereDate('created_at', $number->date)
+                ->whereBetween('position', $range)
+                ->where('lottery', $lotteryCode)
+                ->get();
+            
+            $matchingPlays = $matchingPlays->merge($plays);
+        }
+        
+        return $matchingPlays->unique('id');
     }
 
     /**
