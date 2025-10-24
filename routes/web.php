@@ -7,6 +7,7 @@ use App\Livewire\SharedTicket;
 use App\Livewire\ArticleExtractorInterface;
 use App\Livewire\HeadsExtractorInterface;
 use App\Livewire\WinningNumbersInterface;
+use App\Livewire\Admin\QuinielasManager;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -30,6 +31,9 @@ Route::get('/cabezas', HeadsExtractorInterface::class)->name('heads.interface');
 
 // 20 Ganadores
 Route::get('/20-ganadores', WinningNumbersInterface::class)->name('winning-numbers.interface');
+
+// Configuración de Quinielas - Solo para Administradores
+Route::get('/quinielas', QuinielasManager::class)->name('quinielas.manager')->middleware('role:Administrador');
 
 
 // Rutas para el extractor de artículos

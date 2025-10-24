@@ -30,7 +30,11 @@ class CitiesTableSeeder extends Seeder
             ['extract_id' => 2, 'name' => 'SANTA FE', 'code' => 'SFE1200', 'time' => '12:00'],
             ['extract_id' => 2, 'name' => 'CORDOBA', 'code' => 'COR1200', 'time' => '12:00'],
             ['extract_id' => 2, 'name' => 'PROVINCIA', 'code' => 'PRO1200', 'time' => '12:00'],
+<<<<<<< HEAD
             ['extract_id' => 2, 'name' => 'MONTEVIDEO', 'code' => 'ORO1500', 'time' => '15:00'],
+=======
+            // NOTA: Montevideo NO tiene "Primera" - solo tiene Vespertina (extract_id 4) y Nocturna (extract_id 5)
+>>>>>>> e1e7f6d64072501f16e79d46a8333cfbc3d78dc2
             ['extract_id' => 2, 'name' => 'CORRIENTES', 'code' => 'CTE1200', 'time' => '12:00'],
             ['extract_id' => 2, 'name' => 'CHACO', 'code' => 'CHA1200', 'time' => '12:00'],
             ['extract_id' => 2, 'name' => 'MENDOZA', 'code' => 'MZA1200', 'time' => '12:00'],
@@ -75,6 +79,7 @@ class CitiesTableSeeder extends Seeder
             ['extract_id' => 4, 'name' => 'Río Negro', 'code' => 'Rio1800', 'time' => '18:00'],
             ['extract_id' => 4, 'name' => 'Tucuman', 'code' => 'Tucu1930', 'time' => '19:30'],
             ['extract_id' => 4, 'name' => 'Santiago', 'code' => 'San1945', 'time' => '19:45'],
+            ['extract_id' => 3, 'name' => 'MONTEVIDEO', 'code' => 'ORO1500', 'time' => '15:00'],
 
 
             ['extract_id' => 5, 'name' => 'CORDOBA', 'code' => 'COR2100', 'time' => '21:00'],

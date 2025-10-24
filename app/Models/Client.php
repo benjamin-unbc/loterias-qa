@@ -26,6 +26,7 @@ class Client extends Authenticatable
         'nombre_fantasia',
         'password',
         'is_active',
+        'commission_percentage',
         'profile_photo_path'
     ];
 
@@ -45,6 +46,7 @@ class Client extends Authenticatable
      */
     protected $casts = [
         'is_active' => 'boolean',
+        'commission_percentage' => 'decimal:2',
     ];
 
     /**
@@ -64,6 +66,29 @@ class Client extends Authenticatable
         if (!empty($value)) {
             $this->attributes['password'] = Hash::make($value);
         }
+    }
+
+    /**
+     * Get the associated user by email
+     */
+    public function associatedUser()
+    {
+        return $this->hasOne(User::class, 'email', 'correo');
+    }
+
+    /**
+     * Delete the client and its associated user
+     */
+    public function deleteWithAssociatedUser()
+    {
+        // Eliminar el usuario asociado si existe
+        $associatedUser = $this->associatedUser;
+        if ($associatedUser) {
+            $associatedUser->delete();
+        }
+        
+        // Eliminar el cliente
+        return $this->delete();
     }
 
     /**

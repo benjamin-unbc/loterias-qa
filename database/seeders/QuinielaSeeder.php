@@ -20,10 +20,10 @@ class QuinielaSeeder extends Seeder
         $data = [
             [
                 'juega' => 1.00,
-                'cobra_1_cifra' => 120.00,
-                'cobra_2_cifra' => 60.00,
-                'cobra_3_cifra' => 30.00,
-                'cobra_4_cifra' => 0.00,
+                'cobra_1_cifra' => 7.00,
+                'cobra_2_cifra' => 70.00,
+                'cobra_3_cifra' => 600.00,
+                'cobra_4_cifra' => 3500.00,
                 'created_at' => $now,
                 'updated_at' => $now,
             ],

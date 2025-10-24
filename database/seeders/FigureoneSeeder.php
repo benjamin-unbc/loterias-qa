@@ -19,9 +19,9 @@ class FigureoneSeeder extends Seeder
         $data = [
             [
                 'juega' => 1.00,
-                'cobra_5' => 7.00,
-                'cobra_10' => 70.00,
-                'cobra_20' => 600.00,
+                'cobra_5' => 120.00,
+                'cobra_10' => 60.00,
+                'cobra_20' => 30.00,
                 'created_at' => $now,
                 'updated_at' => $now,
             ]

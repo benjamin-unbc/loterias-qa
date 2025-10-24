@@ -69,9 +69,6 @@
                         <th scope="col" class="px-6 py-3">Lot</th>
                         <th scope="col" class="px-6 py-3">Pago</th>
                         <th scope="col" class="px-6 py-3">Importe</th>
-                        @if(!Auth::user()->hasRole('Cliente'))
-                            <th scope="col" class="px-6 py-3 text-center">ID Usuario</th>
-                        @endif
                         <th scope="col" class="px-6 py-3 text-center">Acciones</th>
                     </tr>
                 </thead>
@@ -103,13 +100,6 @@
                                     ${{ number_format($playItem->amount ?? 0, 2, ',', '.') }}
                                 @endif
                             </td>
-                            @if(!Auth::user()->hasRole('Cliente'))
-                                <td class="px-6 py-4 {{ $playItem->status === 'I' ? 'line-through' : ''}} text-center">
-                                    <span class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-                                        {{ $playItem->user_id }}
-                                    </span>
-                                </td>
-                            @endif
                             <td class="px-2 py-4 flex gap-1 items-center justify-center">
                                 <button wire:click='viewApus("{{ $playItem->ticket }}")'
                                         class="font-medium text-center text-yellow-200 bg-gray-700 p-1 px-2 rounded-md
@@ -128,7 +118,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ Auth::user()->hasRole('Cliente') ? '8' : '9' }}" class="px-6 py-4 text-center text-gray-500">
+                            <td colspan="8" class="px-6 py-4 text-center text-gray-500">
                                 No hay jugadas enviadas
                             </td>
                         </tr>
@@ -174,6 +164,29 @@
 
                             
                             <x-slot name="content">
+                                {{-- DEBUG INFO --}}
+                                @if(session('debug_info') && session('debug_info')['ticket'] === '24-0008')
+                                    <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4 no-print">
+                                        <h4 class="font-bold">DEBUG INFO - Raw APUs:</h4>
+                                        <p><strong>Count:</strong> {{ session('debug_info')['raw_apus_count'] }}</p>
+                                        <p><strong>Loterías únicas en BD:</strong> {{ implode(', ', session('debug_info')['unique_lotteries']) }}</p>
+                                        <details class="mt-2">
+                                            <summary class="cursor-pointer font-semibold">Ver datos completos</summary>
+                                            <pre class="mt-2 text-xs overflow-auto max-h-40">{{ json_encode(session('debug_info')['raw_apus_data'], JSON_PRETTY_PRINT) }}</pre>
+                                        </details>
+                                    </div>
+                                @endif
+                                
+                                @if(session('debug_groups') && session('debug_groups')['ticket'] === '24-0008')
+                                    <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-4 no-print">
+                                        <h4 class="font-bold">DEBUG INFO - Processed Groups:</h4>
+                                        <details class="mt-2">
+                                            <summary class="cursor-pointer font-semibold">Ver grupos procesados</summary>
+                                            <pre class="mt-2 text-xs overflow-auto max-h-40">{{ json_encode(session('debug_groups')['processed_groups'], JSON_PRETTY_PRINT) }}</pre>
+                                        </details>
+                                    </div>
+                                @endif
+                                
                                 <div class="flex items-center justify-between gap-2 no-print z-10 mt-3" id="buttonsContainer">
                                     <a href="/"
                                        class="w-full text-sm px-3 py-1 bg-teal-500 text-white rounded-md flex justify-center
@@ -241,9 +254,8 @@
 
                                         @foreach($groups as $block)
                                             {{-- Encabezado de loterías --}}
-                                             <div class="grid grid-cols-6 gap-2 text-sm font-bold text-black py-1" style="border-bottom: 3px solid black;">                                                @foreach($block['codes_display'] as $lot)
-                                                    <div class="text-center">{{ $lot }}</div>
-                                                @endforeach
+                                             <div class="text-center text-black font-bold py-1" style="border-bottom: 3px solid black;">
+                                                {{ implode(', ', $block['codes_display']) }}
                                             </div>
 
                                             {{-- Lista de números --}}

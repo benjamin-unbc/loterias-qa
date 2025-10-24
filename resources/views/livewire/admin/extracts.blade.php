@@ -197,14 +197,6 @@
                             class="bg-[#22272b] w-fit border border-green-300 text-sm px-5 py-1 rounded-md text-green-400 hover:bg-green-100/20 duration-200">
                             Reiniciar
                         </button>
-                        @if($isAdmin)
-                        <button wire:click="toggleFilters"
-                            class="bg-[#22272b] w-fit border border-blue-300 text-sm px-5 py-1 rounded-md text-blue-400 hover:bg-blue-100/20 duration-200 flex items-center gap-2">
-                            <i class="fa-solid fa-filter"></i>
-                            Filtros
-                            <i class="fa-solid fa-chevron-{{ $showFilters ? 'up' : 'down' }} text-xs"></i>
-                        </button>
-                        @endif
                         <!-- Botón de prueba para llenar los campos -->
                         {{-- <button onclick="fillTestNumbers()"
                             class="text-sm px-3 py-1 border border-purple-500 bg-purple-500 text-white rounded-md flex items-center gap-2 hover:border-purple-600/90 hover:bg-purple-600/90 duration-200">
@@ -242,6 +234,7 @@
                     <!-- Ciudades asociadas a este extracto -->
                     <div class="flex justify-between gap-3 overflow-x-auto w-full pb-2">
                         @foreach ($cities->where('extract_id', $extract->id) as $city)
+                            @if($this->isCityAndScheduleConfiguredInQuinielas($city->name, $extract->name))
                         <div class="bg-[#292f34] p-3 rounded-lg flex flex-col gap-3">
                             <p class="text-white font-medium flex flex-col text-center">
                                 {{ $city->name }}
@@ -323,6 +316,7 @@
                                     @endfor
                             </div>
                         </div>
+                            @endif
                         @endforeach
                     </div>
                 </div>
@@ -365,6 +359,7 @@
                 <div id="printContent" class="grid grid-cols-2 gap-2 w-full">
                     <!-- Ejemplo de impresión sólo para la 'PREVIA' (extract_id = 1) -->
                     @foreach ($cities->where('extract_id', 1) as $city)
+                        @if($this->isCityAndScheduleConfiguredInQuinielas($city->name, 'PREVIA'))
                     <div class="bg-[#2d3339] p-3 rounded-lg flex flex-col gap-3 w-full">
                         <p class="text-white font-medium flex flex-col text-center">
                             {{ $city->name }}
@@ -406,6 +401,7 @@
                             @endif
                         </div>
                     </div>
+                        @endif
                     @endforeach
                 </div>
             </x-slot>

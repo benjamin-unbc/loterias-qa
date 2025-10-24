@@ -135,6 +135,12 @@
                 <p class="mt-1 text-sm text-gray-400">Dejar vacío para mantener la contraseña actual</p>
                 @endif
             </div>
+            <div class="">
+                <x-label for="commission_percentage" value="{{ __('Porcentaje Comisión (%)') }}" />
+                <x-input id="commission_percentage" type="number" step="0.01" min="0" max="100" class="mt-1 block w-full" wire:model.live="commission_percentage" placeholder="20.00" required />
+                <x-input-error for="commission_percentage" class="mt-2" />
+                <p class="mt-1 text-sm text-gray-400">Porcentaje de comisión que se aplicará a las apuestas del cliente</p>
+            </div>
             <div>
                 <x-label for="is_active" value="{{ __('Estado') }}" />
                 <label class="mt-2 inline-flex items-center cursor-pointer">

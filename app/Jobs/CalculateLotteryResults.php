@@ -9,6 +9,9 @@ use App\Models\BetCollectionRedoblonaModel;
 use App\Models\Number as WinningNumber;
 use App\Livewire\Admin\PlaysManager;
 use App\Models\QuinielaModel;
+use App\Models\PrizesModel;
+use App\Models\FigureOneModel;
+use App\Models\FigureTwoModel;
 use App\Models\Result;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -38,10 +41,9 @@ class CalculateLotteryResults implements ShouldQueue
     {
         Log::info("CalculateLotteryResults Job: Iniciando para la fecha {$this->date}.");
 
-        // **LA SOLUCIÓN CLAVE: Eliminar resultados antiguos para evitar duplicados**
-        // Esto asegura que no se acumulen registros repetidos si el job se ejecuta varias veces.
-        Result::where('date', $this->date)->delete();
-        Log::info("CalculateLotteryResults Job: Resultados existentes para la fecha {$this->date} eliminados.");
+        // **SOLUCIÓN MEJORADA: Verificar duplicados individualmente en lugar de eliminar todo**
+        // Esto preserva los resultados existentes y solo inserta los nuevos
+        Log::info("CalculateLotteryResults Job: Verificando duplicados individualmente para la fecha {$this->date}.");
 
         // 1. Obtener todos los números ganadores del día y organizarlos para una búsqueda rápida.
         $winningNumbers = WinningNumber::with('city', 'extract')
@@ -71,13 +73,16 @@ class CalculateLotteryResults implements ShouldQueue
         // 3. Mapeo de códigos de UI a códigos de sistema
         $codesTicket = (new PlaysManager)->codesTicket;
 
-        // 4. Obtener la tabla de pagos de quiniela
+        // 4. Obtener todas las tablas de pagos
         $quinielaPayouts = QuinielaModel::first();
+        $prizesPayouts = PrizesModel::first(); // Tabla para apuestas de 2 dígitos (**XX)
+        $figureOnePayouts = FigureOneModel::first(); // Tabla para apuestas de 3 dígitos (*XXX)
+        $figureTwoPayouts = FigureTwoModel::first(); // Tabla para apuestas de 4 dígitos (XXXX)
         $redoblona1toX = BetCollectionRedoblonaModel::first();
         $redoblona5to20 = BetCollection5To20Model::first();
         $redoblona10to20 = BetCollection10To20Model::first();
 
-        if (!$quinielaPayouts || !$redoblona1toX || !$redoblona5to20 || !$redoblona10to20) {
+        if (!$quinielaPayouts || !$prizesPayouts || !$figureOnePayouts || !$figureTwoPayouts || !$redoblona1toX || !$redoblona5to20 || !$redoblona10to20) {
             Log::error("CalculateLotteryResults Job: Faltan una o más tablas de pago. Finalizando job.");
             return;
         }
@@ -136,34 +141,82 @@ class CalculateLotteryResults implements ShouldQueue
             }
             // Lógica para Quiniela Simple
             else {
-                $winningNumberKey = $systemCode . '_' . $play->position;
-                if (isset($winningNumbers[$winningNumberKey])) {
-                    $winningNumberData = $winningNumbers[$winningNumberKey];
-                    $playedNumber = str_replace('*', '', $play->number);
-                    $winnerValue = $winningNumberData->value;
-                    $playedDigits = strlen($playedNumber);
+                $playedNumber = str_replace('*', '', $play->number);
+                $playedDigits = strlen($playedNumber);
+                $prizeMultiplier = 0;
+                $winningNumberData = null;
+                $actualWinningPosition = null;
 
-                    if ($playedDigits > 0 && $playedDigits <= 4 && substr($winnerValue, -$playedDigits) == $playedNumber) {
-                        $prizeMultiplier = $quinielaPayouts->{"cobra_{$playedDigits}_cifra"} ?? 0;
-                        $aciertoValue = (float) $play->import * (float) $prizeMultiplier;
+                // REGLA PRINCIPAL: Si apostaste a posición 1 (a la cabeza), SIEMPRE usar tabla Quiniela
+                if ($play->position == 1) {
+                    // Para posición 1, buscar exactamente en esa posición (comportamiento actual)
+                    $winningNumberKey = $systemCode . '_' . $play->position;
+                    if (isset($winningNumbers[$winningNumberKey])) {
+                        $winningNumberData = $winningNumbers[$winningNumberKey];
+                        $winnerValue = $winningNumberData->value;
+                        
+                        // Verificar si la apuesta coincide con el número ganador
+                        if ($playedDigits > 0 && $playedDigits <= 4 && substr($winnerValue, -$playedDigits) == $playedNumber) {
+                            $prizeMultiplier = $quinielaPayouts->{"cobra_{$playedDigits}_cifra"} ?? 0;
+                            $actualWinningPosition = $play->position;
+                            Log::info("Acierto POSICIÓN 1 (A LA CABEZA): Apuesta {$play->number} ({$playedDigits} dígitos) en posición {$play->position}, número ganador {$winnerValue}, multiplicador Quiniela: {$prizeMultiplier}");
+                        }
                     }
+                } else {
+                    // Para otras posiciones (2-20): Buscar en el rango de la tabla apostada
+                    $searchRange = $this->getSearchRangeForPosition($play->position);
+                    
+                    // Buscar el número en todas las posiciones del rango
+                    foreach ($searchRange as $position) {
+                        $winningNumberKey = $systemCode . '_' . $position;
+                        if (isset($winningNumbers[$winningNumberKey])) {
+                            $winningNumberData = $winningNumbers[$winningNumberKey];
+                            $winnerValue = $winningNumberData->value;
+                            
+                            // Verificar si la apuesta coincide con el número ganador
+                            if ($playedDigits > 0 && $playedDigits <= 4 && substr($winnerValue, -$playedDigits) == $playedNumber) {
+                                $actualWinningPosition = $position;
+                                
+                                // Calcular premio basado en la posición donde realmente salió
+                                if ($playedDigits == 1 || $playedDigits == 2) {
+                                    // Apuesta de 1-2 dígitos (***X, **XX) - Tabla Prizes (A los 5, 10, 20)
+                                    $prizeMultiplier = $this->calculatePositionBasedPrize($position, $prizesPayouts);
+                                    Log::info("Acierto {$playedDigits} dígito(s): Apuesta {$play->number} apostada en posición {$play->position}, salió en posición {$position}, número ganador {$winnerValue}, multiplicador Prizes: {$prizeMultiplier}");
+                                } elseif ($playedDigits == 3) {
+                                    // Apuesta de 3 dígitos (*XXX) - Tabla FigureOne (Terminación 3 cifras)
+                                    $prizeMultiplier = $this->calculatePositionBasedPrize($position, $figureOnePayouts);
+                                    Log::info("Acierto 3 dígitos: Apuesta {$play->number} apostada en posición {$play->position}, salió en posición {$position}, número ganador {$winnerValue}, multiplicador FigureOne: {$prizeMultiplier}");
+                                } elseif ($playedDigits == 4) {
+                                    // Apuesta de 4 dígitos (XXXX) - Tabla FigureTwo (Terminación 4 cifras)
+                                    $prizeMultiplier = $this->calculatePositionBasedPrize($position, $figureTwoPayouts);
+                                    Log::info("Acierto 4 dígitos: Apuesta {$play->number} apostada en posición {$play->position}, salió en posición {$position}, número ganador {$winnerValue}, multiplicador FigureTwo: {$prizeMultiplier}");
+                                }
+                                break; // Salir del bucle una vez encontrado el acierto
+                            }
+                        }
+                    }
+                }
+                
+                if ($prizeMultiplier > 0 && $winningNumberData) {
+                    $aciertoValue = (float) $play->import * (float) $prizeMultiplier;
+                    Log::info("Cálculo final: Importe {$play->import} x Multiplicador {$prizeMultiplier} = Acierto {$aciertoValue} (Apostado en pos {$play->position}, salió en pos {$actualWinningPosition})");
                 }
             }
 
             if ($aciertoValue > 0 && $winningNumberData) {
                 $winningPlays[] = [
+                    'user_id' => $play->user_id,
                     'ticket' => $play->ticket,
                     'lottery' => $play->lottery,
                     'number' => $play->number,
                     'position' => $play->position,
+                    'numR' => $play->numberR,
+                    'posR' => $play->positionR,
+                    'XA' => 'X', // Este valor parece ser estático
                     'import' => $play->import,
                     'aciert' => $aciertoValue,
                     'date' => $this->date,
                     'time' => $winningNumberData->extract->time,
-                    'numR' => $play->numberR,
-                    'posR' => $play->positionR,
-                    'XA' => 'X', // Este valor parece ser estático
-                    'user_id' => $play->user_id,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ];
@@ -179,5 +232,52 @@ class CalculateLotteryResults implements ShouldQueue
         }
 
         Log::info("Job CalculateLotteryResults finalizado para la fecha {$this->date}.");
+    }
+
+    /**
+     * Calcula el premio basado en la posición donde sale el número ganador
+     * 
+     * @param int $position Posición donde salió el número ganador
+     * @param object $payoutTable Tabla de pagos (PrizesModel, FigureOneModel, o FigureTwoModel)
+     * @return float Multiplicador del premio
+     */
+    private function calculatePositionBasedPrize(int $position, $payoutTable): float
+    {
+        // Determinar el rango de posición y devolver el multiplicador correspondiente
+        if ($position <= 5) {
+            return (float) ($payoutTable->cobra_5 ?? 0);
+        } elseif ($position <= 10) {
+            return (float) ($payoutTable->cobra_10 ?? 0);
+        } elseif ($position <= 20) {
+            return (float) ($payoutTable->cobra_20 ?? 0);
+        }
+        
+        return 0.0; // No hay premio si sale después de la posición 20
+    }
+
+    /**
+     * Determina el rango de posiciones donde buscar el número ganador
+     * basado en la posición apostada
+     * 
+     * @param int $apostadaPosition Posición apostada
+     * @return array Array de posiciones donde buscar
+     */
+    private function getSearchRangeForPosition(int $apostadaPosition): array
+    {
+        // Si apostaste a posición 5, buscar en posiciones 1-5
+        if ($apostadaPosition <= 5) {
+            return range(1, 5);
+        }
+        // Si apostaste a posición 10, buscar en posiciones 1-10
+        elseif ($apostadaPosition <= 10) {
+            return range(1, 10);
+        }
+        // Si apostaste a posición 20, buscar en posiciones 1-20
+        elseif ($apostadaPosition <= 20) {
+            return range(1, 20);
+        }
+        
+        // Si apostaste a una posición mayor a 20, no hay premio
+        return [];
     }
 }
