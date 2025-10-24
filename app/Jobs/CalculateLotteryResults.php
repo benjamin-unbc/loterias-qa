@@ -7,6 +7,7 @@ use App\Models\BetCollection10To20Model;
 use App\Models\BetCollection5To20Model;
 use App\Models\BetCollectionRedoblonaModel;
 use App\Models\Number as WinningNumber;
+use App\Services\RedoblonaService;
 use App\Livewire\Admin\PlaysManager;
 use App\Models\QuinielaModel;
 use App\Models\PrizesModel;

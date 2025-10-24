@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\City;
 use App\Models\Number;
 use App\Services\WinningNumbersService;
+use App\Services\RedoblonaService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -25,6 +26,8 @@ class AutoExtractNumbers extends Command
      */
     protected $description = 'Extrae automáticamente números ganadores de lotería cada X segundos';
 
+    private $redoblonaService;
+
     /**
      * Execute the console command.
      */
@@ -35,6 +38,9 @@ class AutoExtractNumbers extends Command
         $this->info("📅 Fecha actual: " . Carbon::now()->format('Y-m-d H:i:s'));
         $this->info("⏰ Horario de funcionamiento: 10:25 AM - 12:00 AM");
         $this->info("⏹️  Presiona Ctrl+C para detener");
+        
+        // Inicializar servicio de redoblona
+        $this->redoblonaService = new RedoblonaService();
         
         Log::info("AutoExtractNumbers - Iniciando extracción automática cada {$interval} segundos");
 
@@ -277,13 +283,15 @@ class AutoExtractNumbers extends Command
                 $aciertoValue = 0;
                 $redoblonaValue = 0;
                 
-                if ($this->isWinningPlay($play, $winningNumber)) {
-                    $aciertoValue = $this->calculatePrize($play, $winningNumber, $quinielaPayouts);
-                }
-                
-                // Calcular premio de redoblona si existe
+                // IMPORTANTE: Si hay redoblona, NO se paga premio principal, solo redoblona
                 if (!empty($play->numberR) && !empty($play->positionR)) {
-                    $redoblonaValue = $this->calculateRedoblonaPrize($play, $date, $lotteryCode, $redoblona1toX, $redoblona5to20, $redoblona10to20);
+                    // Solo calcular premio de redoblona (se paga TODO como redoblona)
+                    $redoblonaValue = $this->redoblonaService->calculateRedoblonaPrize($play, $date, $lotteryCode);
+                } else {
+                    // Solo calcular premio principal si NO hay redoblona
+                    if ($this->isWinningPlay($play, $winningNumber)) {
+                        $aciertoValue = $this->calculatePrize($play, $winningNumber, $quinielaPayouts);
+                    }
                 }
                 
                 $totalPrize = $aciertoValue + $redoblonaValue;
@@ -431,117 +439,6 @@ class AutoExtractNumbers extends Command
         return null;
     }
     
-    /**
-     * Calcula el premio de redoblona para una jugada
-     */
-    private function calculateRedoblonaPrize($play, $date, $lotteryCode, $redoblona1toX, $redoblona5to20, $redoblona10to20)
-    {
-        try {
-            // Obtener todos los números ganadores del día para esta lotería
-            $winningNumbers = \App\Models\Number::whereDate('date', $date)
-                ->whereHas('city', function($query) use ($lotteryCode) {
-                    $query->where('code', $lotteryCode);
-                })
-                ->with('city', 'extract')
-                ->get()
-                ->keyBy(function ($item) {
-                    $time = str_replace(':', '', $item->extract->time);
-                    return $item->city->code . $time . '_' . $item->index;
-                });
-
-            if ($winningNumbers->isEmpty()) {
-                return 0;
-            }
-
-            $pos1 = min((int)$play->position, (int)$play->positionR);
-            $pos2 = max((int)$play->position, (int)$play->positionR);
-            
-            $num1 = ($play->position < $play->positionR) ? $play->number : $play->numberR;
-            $num2 = ($play->position < $play->positionR) ? $play->numberR : $play->number;
-
-            // Redoblonas son siempre 2 cifras
-            $num1 = str_pad(str_replace('*', '', $num1), 2, '0', STR_PAD_LEFT);
-            $num2 = str_pad(str_replace('*', '', $num2), 2, '0', STR_PAD_LEFT);
-
-            $key1 = $lotteryCode . '_' . $pos1;
-            $key2 = $lotteryCode . '_' . $pos2;
-
-            if (isset($winningNumbers[$key1], $winningNumbers[$key2])) {
-                $winner1 = $winningNumbers[$key1];
-                $winner2 = $winningNumbers[$key2];
-
-                if (substr($winner1->value, -2) == $num1 && substr($winner2->value, -2) == $num2) {
-                    $prizeMultiplier = 0;
-                    if ($pos1 <= 1) {
-                        if ($pos2 <= 5) $prizeMultiplier = $redoblona1toX->payout_1_to_5 ?? 0;
-                        elseif ($pos2 <= 10) $prizeMultiplier = $redoblona1toX->payout_1_to_10 ?? 0;
-                        elseif ($pos2 <= 20) $prizeMultiplier = $redoblona1toX->payout_1_to_20 ?? 0;
-                    } elseif ($pos1 <= 5) {
-                        if ($pos2 <= 5) $prizeMultiplier = $redoblona5to20->payout_5_to_5 ?? 0;
-                        elseif ($pos2 <= 10) $prizeMultiplier = $redoblona5to20->payout_5_to_10 ?? 0;
-                        elseif ($pos2 <= 20) $prizeMultiplier = $redoblona5to20->payout_5_to_20 ?? 0;
-                    } elseif ($pos1 <= 10) {
-                        if ($pos2 <= 10) $prizeMultiplier = $redoblona10to20->payout_10_to_10 ?? 0;
-                        elseif ($pos2 <= 20) $prizeMultiplier = $redoblona10to20->payout_10_to_20 ?? 0;
-                    } elseif ($pos1 <= 20) {
-                        if ($pos2 <= 20) $prizeMultiplier = $redoblona10to20->payout_20_to_20 ?? 0;
-                    }
-                    
-                    // Ajustar el multiplicador según el importe de la apuesta
-                    $adjustedMultiplier = $this->getAdjustedRedoblonaMultiplier($play->import, $prizeMultiplier, $redoblona1toX, $redoblona5to20, $redoblona10to20);
-                    $redoblonaValue = (float) $play->import * (float) $adjustedMultiplier;
-                    Log::info("AutoExtractNumbers - Redoblona ganadora: Pos {$pos1}-{$pos2}, Números {$num1}-{$num2}, Multiplicador: {$prizeMultiplier}x, Premio: \${$redoblonaValue}");
-                    return $redoblonaValue;
-                }
-            }
-            
-            return 0;
-        } catch (\Exception $e) {
-            Log::error("AutoExtractNumbers - Error calculando redoblona: " . $e->getMessage());
-            return 0;
-        }
-    }
-    
-    /**
-     * Ajusta el multiplicador de redoblona según el importe de la apuesta
-     */
-    private function getAdjustedRedoblonaMultiplier($import, $baseMultiplier, $redoblona1toX, $redoblona5to20, $redoblona10to20)
-    {
-        // Buscar el multiplicador correcto según el importe de la apuesta
-        $redoblonaTables = [
-            $redoblona1toX,
-            $redoblona5to20, 
-            $redoblona10to20
-        ];
-        
-        foreach ($redoblonaTables as $table) {
-            if ($table->bet_amount == $import) {
-                // Encontrar el campo correcto según el multiplicador base
-                if ($baseMultiplier == $redoblona1toX->payout_1_to_5 || 
-                    $baseMultiplier == $redoblona1toX->payout_1_to_10 || 
-                    $baseMultiplier == $redoblona1toX->payout_1_to_20) {
-                    if ($baseMultiplier == $redoblona1toX->payout_1_to_5) return $table->payout_1_to_5;
-                    if ($baseMultiplier == $redoblona1toX->payout_1_to_10) return $table->payout_1_to_10;
-                    if ($baseMultiplier == $redoblona1toX->payout_1_to_20) return $table->payout_1_to_20;
-                } elseif ($baseMultiplier == $redoblona5to20->payout_5_to_5 || 
-                         $baseMultiplier == $redoblona5to20->payout_5_to_10 || 
-                         $baseMultiplier == $redoblona5to20->payout_5_to_20) {
-                    if ($baseMultiplier == $redoblona5to20->payout_5_to_5) return $table->payout_5_to_5;
-                    if ($baseMultiplier == $redoblona5to20->payout_5_to_10) return $table->payout_5_to_10;
-                    if ($baseMultiplier == $redoblona5to20->payout_5_to_20) return $table->payout_5_to_20;
-                } elseif ($baseMultiplier == $redoblona10to20->payout_10_to_10 || 
-                         $baseMultiplier == $redoblona10to20->payout_10_to_20 || 
-                         $baseMultiplier == $redoblona10to20->payout_20_to_20) {
-                    if ($baseMultiplier == $redoblona10to20->payout_10_to_10) return $table->payout_10_to_10;
-                    if ($baseMultiplier == $redoblona10to20->payout_10_to_20) return $table->payout_10_to_20;
-                    if ($baseMultiplier == $redoblona10to20->payout_20_to_20) return $table->payout_20_to_20;
-                }
-            }
-        }
-        
-        // Si no se encuentra una coincidencia exacta, usar el multiplicador base
-        return $baseMultiplier;
-    }
     
     /**
      * Notifica cuando se encuentra un ganador
