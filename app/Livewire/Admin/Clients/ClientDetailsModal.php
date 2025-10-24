@@ -133,6 +133,7 @@ class ClientDetailsModal extends Component
             $query->whereDate('date', $this->resultadosDate);
         }
 
+        // Agrupar por ticket y tomar el resultado con el acierto más alto para evitar duplicados
         $results = $query->select([
                 'ticket',
                 'lottery',
@@ -145,13 +146,29 @@ class ClientDetailsModal extends Component
                 'date'
             ])
             ->orderBy('created_at', 'desc')
-            ->paginate($this->resultadosPerPage);
+            ->get()
+            ->groupBy('ticket')
+            ->map(function($ticketResults) {
+                // Tomar el resultado con el acierto más alto
+                return $ticketResults->sortByDesc('aciert')->first();
+            })
+            ->values();
 
-        // Filtrar resultados según la configuración de quinielas
-        $filteredResults = $this->filterResultsByQuinielasConfig($results->getCollection());
-        $results->setCollection($filteredResults);
+        // Crear paginación manual
+        $currentPage = \Illuminate\Pagination\Paginator::resolveCurrentPage();
+        $perPage = $this->resultadosPerPage;
+        $offset = ($currentPage - 1) * $perPage;
+        $paginatedResults = $results->slice($offset, $perPage);
 
-        return $results;
+        $paginator = new \Illuminate\Pagination\LengthAwarePaginator(
+            $paginatedResults,
+            $results->count(),
+            $perPage,
+            $currentPage,
+            ['path' => request()->url()]
+        );
+
+        return $paginator;
     }
 
     public function getExtractosProperty()
@@ -258,8 +275,15 @@ class ClientDetailsModal extends Component
 
         $results = $query->orderBy('created_at', 'desc')->get();
 
-        // Filtrar resultados según la configuración de quinielas
-        return $this->filterResultsByQuinielasConfig($results);
+        // Agrupar por ticket y tomar el resultado con el acierto más alto para evitar duplicados
+        $deduplicatedResults = $results->groupBy('ticket')
+            ->map(function($ticketResults) {
+                // Tomar el resultado con el acierto más alto
+                return $ticketResults->sortByDesc('aciert')->first();
+            })
+            ->values();
+
+        return $deduplicatedResults;
     }
 
     public function getLiquidacionDataProperty()
@@ -290,17 +314,23 @@ class ClientDetailsModal extends Component
                              ->where('user_id', $userId);
         $allResults = $resultsQuery->get();
         
-        // Filtrar resultados según la configuración de quinielas
-        $filteredResults = $this->filterResultsByQuinielasConfig($allResults);
-        $totalAciert = (float) $filteredResults->sum('aciert');
+        // Agrupar por ticket y tomar el resultado con el acierto más alto para evitar duplicados
+        $deduplicatedResults = $allResults->groupBy('ticket')
+            ->map(function($ticketResults) {
+                // Tomar el resultado con el acierto más alto
+                return $ticketResults->sortByDesc('aciert')->first();
+            })
+            ->values();
+        
+        $totalAciert = (float) $deduplicatedResults->sum('aciert');
 
         // Consulta de apuestas filtrada por cliente
         $apusQuery = \App\Models\ApusModel::whereDate('created_at', $this->liquidacionesDate)
                                          ->where('user_id', $userId);
         $allApus = $apusQuery->get();
         
-        // Filtrar apuestas según la configuración de quinielas
-        $filteredApus = $this->filterApusByQuinielasConfig($allApus);
+        // Mostrar todas las apuestas sin filtrar (igual que el módulo original)
+        $filteredApus = $allApus;
         
         $previaTotalApus = (float) $filteredApus->where('timeApu', '10:15')->sum('import');
         $mananaTotalApus = (float) $filteredApus->where('timeApu', '12:00')->sum('import');

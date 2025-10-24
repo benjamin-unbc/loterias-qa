@@ -223,8 +223,8 @@ class AutoPaymentSystem extends Command
         $mainPrize = 0;
         $redoblonaPrize = 0;
 
-        // Buscar número ganador en la posición apostada
-        $winningNumber = $numbers->where('index', $play->position)->first();
+        // Buscar número ganador en el rango apropiado según la posición apostada
+        $winningNumber = $this->findWinningNumberInRange($play, $numbers);
         
         if (!$winningNumber) {
             return null;
@@ -352,6 +352,58 @@ class AutoPaymentSystem extends Command
 
         $multiplier = $this->getPositionMultiplier($play->position, $payoutTable);
         return $play->import * $multiplier;
+    }
+
+    /**
+     * Busca el número ganador en el rango apropiado según la posición apostada
+     */
+    private function findWinningNumberInRange($play, $numbers)
+    {
+        $apostadaPosition = $play->position;
+        
+        // Si apostaste a posición 1, buscar solo en posición 1
+        if ($apostadaPosition == 1) {
+            return $numbers->where('index', 1)->first();
+        }
+        
+        // Para otras posiciones, buscar en el rango apropiado
+        $searchRange = $this->getSearchRangeForPosition($apostadaPosition);
+        
+        // Buscar el número en todas las posiciones del rango
+        foreach ($searchRange as $position) {
+            $winningNumber = $numbers->where('index', $position)->first();
+            if ($winningNumber) {
+                // Verificar si este número coincide con la apuesta
+                if ($this->isWinningPlay($play, $winningNumber->value)) {
+                    return $winningNumber;
+                }
+            }
+        }
+        
+        return null;
+    }
+
+    /**
+     * Determina el rango de posiciones donde buscar el número ganador
+     * basado en la posición apostada
+     */
+    private function getSearchRangeForPosition(int $apostadaPosition): array
+    {
+        // Si apostaste a posición 5, buscar en posiciones 1-5
+        if ($apostadaPosition <= 5) {
+            return range(1, 5);
+        }
+        // Si apostaste a posición 10, buscar en posiciones 1-10
+        elseif ($apostadaPosition <= 10) {
+            return range(1, 10);
+        }
+        // Si apostaste a posición 20, buscar en posiciones 1-20
+        elseif ($apostadaPosition <= 20) {
+            return range(1, 20);
+        }
+        
+        // Si apostaste a una posición mayor a 20, no hay premio
+        return [];
     }
 
     /**
