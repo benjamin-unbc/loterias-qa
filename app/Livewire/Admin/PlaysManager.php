@@ -313,6 +313,8 @@ class PlaysManager extends Component
 
         'positionR.in' => 'El campo "Posición" de redoblona solo permite los valores: 1, 5, 10 y 20.', // Solo posiciones permitidas
 
+        'numberR.redoblona_validation' => 'La redoblona solo se puede con números de 2 cifras.',
+
     ];
 
 
@@ -1184,6 +1186,14 @@ public function updateRow()
     }
 
     $validatedData = $this->validate();
+    
+    // Validación personalizada para redoblona
+    try {
+        $this->validateRedoblona($validatedData);
+    } catch (\Exception $e) {
+        // La validación de redoblona falló, ya se mostró la notificación
+        return;
+    }
 
     if (empty($this->checkboxCodes) || empty(array_filter($this->checkboxCodes))) {
         $this->dispatch('notify', message: 'Debe seleccionar al menos una lotería.', type: 'warning');
@@ -1295,6 +1305,14 @@ public function updateRow()
 public function addRow()
 {
     $validatedData = $this->validate();
+    
+    // Validación personalizada para redoblona
+    try {
+        $this->validateRedoblona($validatedData);
+    } catch (\Exception $e) {
+        // La validación de redoblona falló, ya se mostró la notificación
+        return;
+    }
 
     // Verificar si se ha seleccionado al menos una lotería
     if (empty($this->checkboxCodes) || empty(array_filter($this->checkboxCodes))) {
@@ -1464,6 +1482,15 @@ public function addRow()
 
             // Validar solo al guardar, no en cada cambio
             $validatedData = $this->validate();
+            
+            // Validación personalizada para redoblona
+            try {
+                $this->validateRedoblona($validatedData);
+            } catch (\Exception $e) {
+                // La validación de redoblona falló, ya se mostró la notificación
+                return;
+            }
+            
         } catch (\Illuminate\Validation\ValidationException $e) {
             $this->dispatch('focus-on-input', id: 'number');
             throw $e;
@@ -2816,6 +2843,38 @@ public function addRow()
         
         $this->needsTotalRecalculation = false;
         return $this->cachedTotal;
+    }
+
+    /**
+     * Validación personalizada para redoblona
+     * Verifica que solo se pueda hacer redoblona con números de 2 cifras
+     */
+    private function validateRedoblona($validatedData)
+    {
+        // Si no hay número de redoblona, no validar
+        if (empty($validatedData['numberR'])) {
+            return;
+        }
+
+        // Obtener el número principal
+        $mainNumber = $validatedData['number'] ?? '';
+        $cleanMainNumber = str_replace('*', '', $mainNumber);
+        $mainDigitCount = strlen($cleanMainNumber);
+
+        // Validar que el número principal sea de 2 cifras
+        if ($mainDigitCount !== 2) {
+            $this->dispatch('notify', message: 'La redoblona solo se puede con números de 2 cifras.', type: 'warning');
+            throw new \Exception('Redoblona validation failed');
+        }
+
+        // Validar que el número de redoblona sea de 2 cifras
+        $cleanRedoblonaNumber = str_replace('*', '', $validatedData['numberR']);
+        $redoblonaDigitCount = strlen($cleanRedoblonaNumber);
+
+        if ($redoblonaDigitCount !== 2) {
+            $this->dispatch('notify', message: 'La redoblona solo se puede con números de 2 cifras.', type: 'warning');
+            throw new \Exception('Redoblona validation failed');
+        }
     }
 
 }

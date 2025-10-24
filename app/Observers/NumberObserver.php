@@ -12,11 +12,18 @@ use App\Models\FigureTwoModel;
 use App\Models\BetCollectionRedoblonaModel;
 use App\Models\BetCollection5To20Model;
 use App\Models\BetCollection10To20Model;
+use App\Services\RedoblonaService;
 use Illuminate\Support\Facades\Log;
 
 class NumberObserver
 {
     private static $payoutTables = null;
+    private $redoblonaService;
+
+    public function __construct()
+    {
+        $this->redoblonaService = new RedoblonaService();
+    }
 
     /**
      * Handle the Number "created" event.
@@ -148,14 +155,15 @@ class NumberObserver
         $mainPrize = 0;
         $redoblonaPrize = 0;
 
-        // Verificar si la jugada principal es ganadora
-        if ($this->isWinningPlay($play, $number->value)) {
-            $mainPrize = $this->calculateMainPrize($play, $number->value);
-        }
-
-        // Calcular premio de redoblona si existe
+        // IMPORTANTE: Si hay redoblona, NO se paga premio principal, solo redoblona
         if (!empty($play->numberR) && !empty($play->positionR)) {
-            $redoblonaPrize = $this->calculateRedoblonaPrize($play, $number->date, $play->lottery);
+            // Solo calcular premio de redoblona (se paga TODO como redoblona)
+            $redoblonaPrize = $this->redoblonaService->calculateRedoblonaPrize($play, $number->date, $play->lottery);
+        } else {
+            // Solo calcular premio principal si NO hay redoblona
+            if ($this->isWinningPlay($play, $number->value)) {
+                $mainPrize = $this->calculateMainPrize($play, $number->value);
+            }
         }
 
         return [
@@ -335,56 +343,6 @@ class NumberObserver
         return 0;
     }
 
-    /**
-     * Calcula el premio de redoblona
-     */
-    private function calculateRedoblonaPrize($play, $date, $lotteryCode)
-    {
-        // Buscar número ganador en la posición de redoblona
-        $redoblonaNumber = Number::with(['city', 'extract'])
-            ->whereHas('city', function($query) use ($lotteryCode) {
-                $query->where('code', $lotteryCode);
-            })
-            ->where('index', $play->positionR)
-            ->whereDate('date', $date)
-            ->first();
-
-        if (!$redoblonaNumber) {
-            return 0;
-        }
-
-        // Verificar si la redoblona es ganadora
-        $playNumberR = str_replace('*', '', $play->numberR);
-        $winningNumberStr = str_pad($redoblonaNumber->value, 4, '0', STR_PAD_LEFT);
-        $playLength = strlen($playNumberR);
-        $winningSuffix = substr($winningNumberStr, -$playLength);
-
-        if ($playNumberR !== $winningSuffix) {
-            return 0;
-        }
-
-        // Calcular premio de redoblona
-        $redoblonaTable = $this->getRedoblonaTable($play->positionR);
-        if (!$redoblonaTable) {
-            return 0;
-        }
-
-        return $play->import * (float) $redoblonaTable->multiplier;
-    }
-
-    /**
-     * Obtiene la tabla de redoblona según la posición
-     */
-    private function getRedoblonaTable($position)
-    {
-        if ($position >= 1 && $position <= 4) {
-            return self::$payoutTables['redoblona1toX'];
-        } elseif ($position >= 5 && $position <= 20) {
-            return self::$payoutTables['redoblona5to20'];
-        }
-        
-        return null;
-    }
 
     /**
      * MEJORA: Obtiene el código de lotería completo dinámicamente desde la base de datos
