@@ -292,13 +292,13 @@ class PlaysManager extends Component
 
             'number' => ['required', 'regex:/^[\d*]+$/'],
 
-            'position' => 'nullable|numeric|min:1|max:20|digits_between:1,2', // agregado digits_between para limitar a 2 dígitos
+            'position' => ['nullable', 'numeric', 'in:1,5,10,20'], // Solo permite posiciones 1, 5, 10 y 20
 
             'import' => 'required|numeric|min:0.01',
 
             'numberR' => ['nullable', 'numeric', 'min:0', 'max:99', 'required_with:positionR'],
 
-            'positionR' => ['nullable', 'numeric', 'min:1', 'max:20', 'digits_between:1,2', 'required_with:numberR'], // agregado digits_between para limitar a 2 dígitos
+            'positionR' => ['nullable', 'numeric', 'in:1,5,10,20', 'required_with:numberR'], // Solo permite posiciones 1, 5, 10 y 20
 
         ];
     }
@@ -309,9 +309,9 @@ class PlaysManager extends Component
 
         'number.regex' => 'El campo "Número" solo permite números y asteriscos (*).',
 
-        'position.digits_between' => 'El campo "Posición" debe tener entre 1 y 2 dígitos.', // mensaje agregado para nueva validación
+        'position.in' => 'El campo "Posición" solo permite los valores: 1, 5, 10 y 20.', // Solo posiciones permitidas
 
-        'positionR.digits_between' => 'El campo "Posición" de redoblona debe tener entre 1 y 2 dígitos.', // mensaje agregado para nueva validación
+        'positionR.in' => 'El campo "Posición" de redoblona solo permite los valores: 1, 5, 10 y 20.', // Solo posiciones permitidas
 
     ];
 
