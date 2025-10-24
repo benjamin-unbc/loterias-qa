@@ -255,10 +255,11 @@ class Extracts extends Component
             $this->filterDate   = $today;
             $this->selectedDate = $today;
             
-            // ELIMINAR TODOS LOS VALORES EXISTENTES PARA LA FECHA DE HOY
-            $deletedCount = Number::where('date', $today)->delete();
+            // **SOLUCIÓN MEJORADA: Solo eliminar números si se solicita explícitamente**
+            // Comentado para evitar eliminación accidental de números existentes
+            // $deletedCount = Number::where('date', $today)->delete();
             
-            Log::info("Extracts - resetFilters: Eliminados {$deletedCount} números para fecha {$today}");
+            Log::info("Extracts - resetFilters: Preservando números existentes para fecha {$today}");
             
             // Resetear filtros de ciudad y horarios si es administrador
             if ($this->isAdmin) {

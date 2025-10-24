@@ -41,10 +41,9 @@ class CalculateLotteryResults implements ShouldQueue
     {
         Log::info("CalculateLotteryResults Job: Iniciando para la fecha {$this->date}.");
 
-        // **LA SOLUCIÓN CLAVE: Eliminar resultados antiguos para evitar duplicados**
-        // Esto asegura que no se acumulen registros repetidos si el job se ejecuta varias veces.
-        Result::where('date', $this->date)->delete();
-        Log::info("CalculateLotteryResults Job: Resultados existentes para la fecha {$this->date} eliminados.");
+        // **SOLUCIÓN MEJORADA: Verificar duplicados individualmente en lugar de eliminar todo**
+        // Esto preserva los resultados existentes y solo inserta los nuevos
+        Log::info("CalculateLotteryResults Job: Verificando duplicados individualmente para la fecha {$this->date}.");
 
         // 1. Obtener todos los números ganadores del día y organizarlos para una búsqueda rápida.
         $winningNumbers = WinningNumber::with('city', 'extract')

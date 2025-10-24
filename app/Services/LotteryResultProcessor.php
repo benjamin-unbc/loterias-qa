@@ -46,9 +46,9 @@ class LotteryResultProcessor
     {
         Log::info("LotteryResultProcessor - Iniciando procesamiento para la fecha: " . $dateToCalculate);
 
-        // Delete existing results for the given date to ensure idempotency
-        Result::whereDate('date', $dateToCalculate)->delete();
-        Log::info("LotteryResultProcessor - Resultados existentes para {$dateToCalculate} eliminados.");
+        // **SOLUCIÓN MEJORADA: Verificar duplicados individualmente en lugar de eliminar todo**
+        // Esto preserva los resultados existentes y solo inserta los nuevos
+        Log::info("LotteryResultProcessor - Verificando duplicados individualmente para {$dateToCalculate}.");
 
         // Load settings
         $quiniela = QuinielaModel::first();
