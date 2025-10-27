@@ -199,7 +199,7 @@ private function processApusData($rawApus)
         ->map(function ($items, $key) {
             return [
                 'codes_display' => $this->formatLotteryCodesForDisplay(explode(', ', $key)),
-                'numbers' => collect($items->pluck('numbers')->flatten(1)->all())->sortBy('number')->values()->all(),
+                'numbers' => collect($items->pluck('numbers')->flatten(1)->all())->values()->all(),
             ];
         })
         // Ordenar por el orden deseado de loterías (usando códigos completos)

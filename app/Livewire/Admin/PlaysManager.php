@@ -761,7 +761,7 @@ class PlaysManager extends Component
 
                         'posR' => $play_obj->positionR,
 
-                    ])->sortBy('number')->values(),
+                    ])->sortBy('original_play_id_ref')->values(),
 
                 ];
             })->values();

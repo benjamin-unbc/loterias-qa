@@ -876,7 +876,7 @@
                                     // Si no coincide el patrón, devolver el código original
                                     return $code;
                                 }, explode(', ', $key)),
-                                'numbers' => collect($items->pluck('numbers')->flatten(1)->all())->sortBy('number')->values()->all(),
+                                'numbers' => collect($items->pluck('numbers')->flatten(1)->all())->values()->all(),
                             ];
                         })
                         ->sortBy(function ($group, $key) {
