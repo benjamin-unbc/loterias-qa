@@ -49,10 +49,11 @@ class Results extends Component
         $totalAciertos = (float) $filteredResults->sum('aciert');
 
         // --- CONSULTA PARA LA TABLA PAGINADA ---
-        // Se agrupan los resultados para no mostrar tickets repetidos y sumar correctamente los aciertos por jugada.
+        // ✅ MODIFICADO: Mostrar resultados separados por lotería (sin agrupar)
         $resultsQuery = Result::query()
             ->select(
                 'ticket',
+                'lottery', // ✅ Mostrar cada lotería por separado
                 'number',
                 'position',
                 'numR',
@@ -60,15 +61,13 @@ class Results extends Component
                 'import',
                 'user_id',
                 'date',
-                DB::raw('SUM(aciert) as aciert'),
-                DB::raw('GROUP_CONCAT(DISTINCT lottery SEPARATOR ", ") as lottery')
+                'aciert' // ✅ Mostrar el premio individual de cada lotería
             )
             ->whereDate('date', $this->date);
 
         // Todos los usuarios solo ven sus propios resultados
         $resultsQuery->where('user_id', $user->id);
-        $allResultsPaginated = $resultsQuery->groupBy('ticket', 'number', 'position', 'numR', 'posR', 'import', 'user_id', 'date')
-            ->get();
+        $allResultsPaginated = $resultsQuery->orderBy('ticket')->orderBy('lottery')->get();
         
         // Filtrar resultados paginados según la configuración de quinielas
         $filteredResultsPaginated = $this->filterResultsByQuinielasConfig($allResultsPaginated);

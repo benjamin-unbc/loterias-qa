@@ -93,9 +93,14 @@ class CalculateLotteryResults implements ShouldQueue
 
         // 5. Iterar sobre cada jugada para ver si es ganadora
         foreach ($plays as $play) {
-       if (!isset($codesTicket[$play->lottery])) continue;
+            // ✅ Procesar cada lotería individualmente (separadas por comas)
+            $lotteryCodes = explode(',', $play->lottery);
+            
+            foreach ($lotteryCodes as $lotteryCode) {
+                $lotteryCode = trim($lotteryCode); // Limpiar espacios
+                if (!isset($codesTicket[$lotteryCode])) continue;
 
-            $systemCode = $codesTicket[$play->lottery];
+                $systemCode = $codesTicket[$lotteryCode];
             $aciertoValue = 0;
             $winningNumberData = null;
 
@@ -204,24 +209,25 @@ class CalculateLotteryResults implements ShouldQueue
                 }
             }
 
-            if ($aciertoValue > 0 && $winningNumberData) {
-                $winningPlays[] = [
-                    'user_id' => $play->user_id,
-                    'ticket' => $play->ticket,
-                    'lottery' => $play->lottery,
-                    'number' => $play->number,
-                    'position' => $play->position,
-                    'numR' => $play->numberR,
-                    'posR' => $play->positionR,
-                    'XA' => 'X', // Este valor parece ser estático
-                    'import' => $play->import,
-                    'aciert' => $aciertoValue,
-                    'date' => $this->date,
-                    'time' => $winningNumberData->extract->time,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ];
-            }
+                if ($aciertoValue > 0 && $winningNumberData) {
+                    $winningPlays[] = [
+                        'user_id' => $play->user_id,
+                        'ticket' => $play->ticket,
+                        'lottery' => $lotteryCode, // ✅ Usar solo la lotería específica donde salió el número
+                        'number' => $play->number,
+                        'position' => $play->position,
+                        'numR' => $play->numberR,
+                        'posR' => $play->positionR,
+                        'XA' => 'X', // Este valor parece ser estático
+                        'import' => $play->import,
+                        'aciert' => $aciertoValue,
+                        'date' => $this->date,
+                        'time' => $winningNumberData->extract->time,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+                }
+            } // ✅ Cerrar el bucle foreach de loterías individuales
         }
 
         // 5. Insertar todos los aciertos en la base de datos de una sola vez.

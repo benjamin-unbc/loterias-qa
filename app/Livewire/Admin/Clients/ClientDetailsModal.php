@@ -133,26 +133,20 @@ class ClientDetailsModal extends Component
             $query->whereDate('date', $this->resultadosDate);
         }
 
-        // Agrupar por ticket y tomar el resultado con el acierto más alto para evitar duplicados
+        // ✅ MODIFICADO: Mostrar resultados separados por lotería (sin agrupar)
         $results = $query->select([
                 'ticket',
-                'lottery',
+                'lottery', // ✅ Mostrar cada lotería por separado
                 'number',
                 'position',
                 'numR',
                 'posR',
                 'import',
-                'aciert',
+                'aciert', // ✅ Mostrar el premio individual de cada lotería
                 'date'
             ])
             ->orderBy('created_at', 'desc')
-            ->get()
-            ->groupBy('ticket')
-            ->map(function($ticketResults) {
-                // Tomar el resultado con el acierto más alto
-                return $ticketResults->sortByDesc('aciert')->first();
-            })
-            ->values();
+            ->get();
 
         // Crear paginación manual
         $currentPage = \Illuminate\Pagination\Paginator::resolveCurrentPage();
@@ -273,17 +267,8 @@ class ClientDetailsModal extends Component
             $query->whereDate('date', $this->liquidacionesDate);
         }
 
+        // ✅ MODIFICADO: Mostrar resultados separados por lotería (sin agrupar)
         $results = $query->orderBy('created_at', 'desc')->get();
-
-        // Agrupar por ticket y tomar el resultado con el acierto más alto para evitar duplicados
-        $deduplicatedResults = $results->groupBy('ticket')
-            ->map(function($ticketResults) {
-                // Tomar el resultado con el acierto más alto
-                return $ticketResults->sortByDesc('aciert')->first();
-            })
-            ->values();
-
-        return $deduplicatedResults;
     }
 
     public function getLiquidacionDataProperty()
@@ -314,15 +299,8 @@ class ClientDetailsModal extends Component
                              ->where('user_id', $userId);
         $allResults = $resultsQuery->get();
         
-        // Agrupar por ticket y tomar el resultado con el acierto más alto para evitar duplicados
-        $deduplicatedResults = $allResults->groupBy('ticket')
-            ->map(function($ticketResults) {
-                // Tomar el resultado con el acierto más alto
-                return $ticketResults->sortByDesc('aciert')->first();
-            })
-            ->values();
-        
-        $totalAciert = (float) $deduplicatedResults->sum('aciert');
+        // ✅ MODIFICADO: Usar todos los resultados sin agrupar
+        $totalAciert = (float) $allResults->sum('aciert');
 
         // Consulta de apuestas filtrada por cliente
         $apusQuery = \App\Models\ApusModel::whereDate('created_at', $this->liquidacionesDate)
