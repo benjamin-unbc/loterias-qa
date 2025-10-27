@@ -747,7 +747,7 @@ class PlaysManager extends Component
 
                 return [
 
-                    'codes_display' => $codesArrayForDisplay,
+                    'codes_display' => $this->formatLotteryCodesForDisplay($codesArrayForDisplay),
 
                     'numbers' => collect($playsInLotteryGroup)->map(fn($play_obj) => [
 
@@ -761,7 +761,7 @@ class PlaysManager extends Component
 
                         'posR' => $play_obj->positionR,
 
-                    ])->values(),
+                    ])->sortBy('number')->values(),
 
                 ];
             })->values();
@@ -2875,6 +2875,26 @@ public function addRow()
             $this->dispatch('notify', message: 'La redoblona solo se puede con números de 2 cifras.', type: 'warning');
             throw new \Exception('Redoblona validation failed');
         }
+    }
+
+    /**
+     * Formatea los códigos de lotería para mostrar solo las primeras letras + hora
+     * Ejemplo: NAC2100 -> NAC21, CHA2100 -> CHA21
+     */
+    private function formatLotteryCodesForDisplay(array $codes): array
+    {
+        return array_map(function($code) {
+            // Si el código tiene 4 dígitos al final (ej: NAC2100), quitar los últimos 2
+            if (preg_match('/^([A-Za-z]+)(\d{4})$/', $code, $matches)) {
+                $letters = $matches[1];
+                $time = $matches[2];
+                // Quitar los últimos 2 dígitos del tiempo
+                $shortTime = substr($time, 0, 2);
+                return $letters . $shortTime;
+            }
+            // Si no coincide el patrón, devolver el código original
+            return $code;
+        }, $codes);
     }
 
 }

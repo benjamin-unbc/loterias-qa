@@ -198,8 +198,8 @@ private function processApusData($rawApus)
         ->groupBy('codes_display_string')
         ->map(function ($items, $key) {
             return [
-                'codes_display' => explode(', ', $key),
-                'numbers' => $items->pluck('numbers')->flatten(1)->all(),
+                'codes_display' => $this->formatLotteryCodesForDisplay(explode(', ', $key)),
+                'numbers' => collect($items->pluck('numbers')->flatten(1)->all())->sortBy('number')->values()->all(),
             ];
         })
         // Ordenar por el orden deseado de loterías (usando códigos completos)
@@ -397,5 +397,25 @@ private function processApusData($rawApus)
             'totalPorPagina' => $totalPorPagina,
             'totalGlobal' => $totalGlobal
         ]);
+    }
+
+    /**
+     * Formatea los códigos de lotería para mostrar solo las primeras letras + hora
+     * Ejemplo: NAC2100 -> NAC21, CHA2100 -> CHA21
+     */
+    private function formatLotteryCodesForDisplay(array $codes): array
+    {
+        return array_map(function($code) {
+            // Si el código tiene 4 dígitos al final (ej: NAC2100), quitar los últimos 2
+            if (preg_match('/^([A-Za-z]+)(\d{4})$/', $code, $matches)) {
+                $letters = $matches[1];
+                $time = $matches[2];
+                // Quitar los últimos 2 dígitos del tiempo
+                $shortTime = substr($time, 0, 2);
+                return $letters . $shortTime;
+            }
+            // Si no coincide el patrón, devolver el código original
+            return $code;
+        }, $codes);
     }
 }

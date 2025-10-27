@@ -864,8 +864,19 @@
                         ->groupBy('codes_display_string')
                         ->map(function ($items, $key) {
                             return [
-                                'codes_display' => explode(', ', $key),
-                                'numbers' => $items->pluck('numbers')->flatten(1)->all(),
+                                'codes_display' => array_map(function($code) {
+                                    // Si el código tiene 4 dígitos al final (ej: NAC2100), quitar los últimos 2
+                                    if (preg_match('/^([A-Za-z]+)(\d{4})$/', $code, $matches)) {
+                                        $letters = $matches[1];
+                                        $time = $matches[2];
+                                        // Quitar los últimos 2 dígitos del tiempo
+                                        $shortTime = substr($time, 0, 2);
+                                        return $letters . $shortTime;
+                                    }
+                                    // Si no coincide el patrón, devolver el código original
+                                    return $code;
+                                }, explode(', ', $key)),
+                                'numbers' => collect($items->pluck('numbers')->flatten(1)->all())->sortBy('number')->values()->all(),
                             ];
                         })
                         ->sortBy(function ($group, $key) {
@@ -883,7 +894,7 @@
                 @foreach($groups as $block)
                     {{-- Encabezado de loterías --}}
                     <div class="text-center text-black font-bold py-1" style="border-bottom: 3px solid black;">
-                        {{ implode(', ', $block['codes_display']) }}
+                        {{ implode(' ', $block['codes_display']) }}
                     </div>
 
                     {{-- Lista de números --}}
