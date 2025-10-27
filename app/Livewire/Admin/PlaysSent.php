@@ -360,6 +360,44 @@ private function processApusData($rawApus)
         $this->showApusModal = true;
     }
 
+    public function closeTicketModal()
+    {
+        \Log::info('🔍 DEBUG: Método closeTicketModal() ejecutado', [
+            'showApusModal_before' => $this->showApusModal,
+            'showTicketModal_before' => $this->showTicketModal,
+            'selectedTicket_before' => $this->selectedTicket ? $this->selectedTicket->ticket : null,
+            'play_before' => $this->play ? $this->play->ticket : null
+        ]);
+        
+        $this->showApusModal = false;
+        $this->showTicketModal = false;
+        $this->selectedTicket = null;
+        $this->play = null;
+        
+        \Log::info('🔍 DEBUG: Modal cerrado correctamente', [
+            'showApusModal_after' => $this->showApusModal,
+            'showTicketModal_after' => $this->showTicketModal,
+            'selectedTicket_after' => $this->selectedTicket,
+            'play_after' => $this->play
+        ]);
+        
+        // Enviar notificación de debug al frontend
+        $this->dispatch('debug-modal-closed', [
+            'message' => 'Modal cerrado correctamente',
+            'timestamp' => now()->toDateTimeString()
+        ]);
+        
+        // También enviar notificación de éxito
+        $this->dispatch('notify', message: 'Modal cerrado correctamente', type: 'success');
+    }
+
+    // Método de prueba simple
+    public function testMethod()
+    {
+        \Log::info('🔍 DEBUG: Método testMethod() ejecutado');
+        $this->dispatch('notify', message: 'Método de prueba ejecutado correctamente', type: 'success');
+    }
+
 
 
 
