@@ -612,7 +612,7 @@ class AutoUpdateLotteryNumbers extends Command
                 if ($totalPrize > 0) {
                     // Verificar si ya existe este resultado para evitar duplicados
                     $existingResult = \App\Models\Result::where('ticket', $play->ticket)
-                                                       ->where('lottery', $play->lot)
+                                                       ->where('lottery', $lotteryCode) // ✅ Verificar por la lotería específica donde salió el número
                                                        ->where('number', $play->code) // PlaysSentModel usa 'code' en lugar de 'number'
                                                        ->where('position', $position)
                                                        ->where('date', $date)
@@ -622,7 +622,7 @@ class AutoUpdateLotteryNumbers extends Command
                         // Insertar resultado inmediatamente
                         \App\Models\Result::create([
                             'ticket' => $play->ticket,
-                            'lottery' => $play->lot,
+                            'lottery' => $lotteryCode, // ✅ Usar solo la lotería específica donde salió el número
                             'number' => $play->code, // PlaysSentModel usa 'code'
                             'position' => $position,
                             'import' => $play->amount,

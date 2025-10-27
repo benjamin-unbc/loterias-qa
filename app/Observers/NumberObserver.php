@@ -82,40 +82,43 @@ class NumberObserver
             $totalPrize = 0;
 
             foreach ($matchingPlays as $play) {
-                $result = $this->calculatePlayResult($play, $number);
-                
-                if ($result && $result['totalPrize'] > 0) {
-                    // Verificar si ya existe este resultado
-                    $existingResult = Result::where('ticket', $play->ticket)
-                        ->where('lottery', $play->lottery)
-                        ->where('number', $play->number)
-                        ->where('position', $play->position)
-                        ->where('date', $number->date)
-                        ->first();
+                // ✅ MODIFICADO: Verificar si esta jugada específica es ganadora para esta lotería específica
+                if ($this->isWinningPlayForLottery($play, $number, $lotteryCode)) {
+                    $prize = $this->calculatePrizeForLottery($play, $number, $lotteryCode);
+                    
+                    if ($prize > 0) {
+                        // Verificar si ya existe este resultado específico para esta lotería
+                        $existingResult = Result::where('ticket', $play->ticket)
+                            ->where('lottery', $lotteryCode) // ✅ Solo la lotería específica donde salió el número
+                            ->where('number', $play->number)
+                            ->where('position', $play->position)
+                            ->where('date', $number->date)
+                            ->first();
 
-                    if (!$existingResult) {
-                        // Insertar resultado automáticamente
-                        Result::create([
-                            'user_id' => $play->user_id,
-                            'ticket' => $play->ticket,
-                            'lottery' => $play->lottery,
-                            'number' => $play->number,
-                            'position' => $play->position,
-                            'numR' => $play->numberR,
-                            'posR' => $play->positionR,
-                            'XA' => 'X',
-                            'import' => $play->import,
-                            'aciert' => $result['totalPrize'],
-                            'date' => $number->date,
-                            'time' => $number->extract->time,
-                            'created_at' => now(),
-                            'updated_at' => now(),
-                        ]);
+                        if (!$existingResult) {
+                            // ✅ Insertar resultado SEPARADO para esta lotería específica
+                            Result::create([
+                                'user_id' => $play->user_id,
+                                'ticket' => $play->ticket,
+                                'lottery' => $lotteryCode, // ✅ Solo la lotería específica donde salió el número
+                                'number' => $play->number,
+                                'position' => $play->position,
+                                'numR' => $play->numberR,
+                                'posR' => $play->positionR,
+                                'XA' => 'X',
+                                'import' => $play->import,
+                                'aciert' => $prize, // ✅ Solo el premio de esta lotería específica
+                                'date' => $number->date,
+                                'time' => $number->extract->time,
+                                'created_at' => now(),
+                                'updated_at' => now(),
+                            ]);
 
-                        $resultsInserted++;
-                        $totalPrize += $result['totalPrize'];
+                            $resultsInserted++;
+                            $totalPrize += $prize;
 
-                        Log::info("NumberObserver - Resultado automático insertado: Ticket {$play->ticket} - Premio: {$result['totalPrize']}");
+                            Log::info("NumberObserver - Resultado SEPARADO insertado: Ticket {$play->ticket} - Lotería {$lotteryCode} - Premio: {$prize}");
+                        }
                     }
                 }
             }
@@ -189,6 +192,7 @@ class NumberObserver
 
     /**
      * Obtiene las jugadas que pueden ser ganadoras con un número específico
+     * ✅ MODIFICADO: Busca jugadas que contengan la lotería específica (pueden tener múltiples loterías)
      */
     private function getMatchingPlaysForNumber(Number $number, $lotteryCode)
     {
@@ -198,7 +202,7 @@ class NumberObserver
         if ($winningPosition == 1) {
             return ApusModel::whereDate('created_at', $number->date)
                 ->where('position', 1)
-                ->where('lottery', $lotteryCode)
+                ->where('lottery', 'LIKE', "%{$lotteryCode}%") // ✅ Buscar jugadas que contengan esta lotería
                 ->get();
         }
         
@@ -225,7 +229,7 @@ class NumberObserver
         foreach ($searchRanges as $range) {
             $plays = ApusModel::whereDate('created_at', $number->date)
                 ->whereBetween('position', $range)
-                ->where('lottery', $lotteryCode)
+                ->where('lottery', 'LIKE', "%{$lotteryCode}%") // ✅ Buscar jugadas que contengan esta lotería
                 ->get();
             
             $matchingPlays = $matchingPlays->merge($plays);
@@ -363,5 +367,44 @@ class NumberObserver
             Log::error("NumberObserver - Error obteniendo código de lotería: " . $e->getMessage());
             return null;
         }
+    }
+
+    /**
+     * ✅ NUEVO: Verifica si una jugada es ganadora para una lotería específica
+     */
+    private function isWinningPlayForLottery($play, $number, $lotteryCode)
+    {
+        // Verificar que la jugada contenga esta lotería específica
+        $playLotteries = explode(',', $play->lottery);
+        $playLotteries = array_map('trim', $playLotteries);
+        
+        if (!in_array($lotteryCode, $playLotteries)) {
+            return false;
+        }
+        
+        // Verificar si los números coinciden
+        return $this->isWinningPlay($play, $number->value);
+    }
+
+    /**
+     * ✅ NUEVO: Calcula el premio para una lotería específica
+     */
+    private function calculatePrizeForLottery($play, $number, $lotteryCode)
+    {
+        $mainPrize = 0;
+        $redoblonaPrize = 0;
+
+        // IMPORTANTE: Si hay redoblona, NO se paga premio principal, solo redoblona
+        if (!empty($play->numberR) && !empty($play->positionR)) {
+            // Solo calcular premio de redoblona (se paga TODO como redoblona)
+            $redoblonaPrize = $this->redoblonaService->calculateRedoblonaPrize($play, $number->date, $lotteryCode);
+        } else {
+            // Solo calcular premio principal si NO hay redoblona
+            if ($this->isWinningPlay($play, $number->value)) {
+                $mainPrize = $this->calculateMainPrize($play, $number->value);
+            }
+        }
+
+        return $mainPrize + $redoblonaPrize;
     }
 }

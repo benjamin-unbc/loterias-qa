@@ -155,9 +155,9 @@ class AutoPaymentSystem extends Command
 
         Log::info("AutoPaymentSystem - Procesando turno: {$turnKey} -> Código: {$lotteryCode}");
 
-        // Buscar jugadas para este turno específico usando código completo
+        // ✅ MODIFICADO: Buscar jugadas que contengan esta lotería específica (pueden tener múltiples loterías)
         $plays = ApusModel::whereDate('created_at', $date)
-            ->where('lottery', $lotteryCode)  // Usar código completo dinámico
+            ->where('lottery', 'LIKE', "%{$lotteryCode}%")  // ✅ Buscar jugadas que contengan esta lotería
             ->get();
 
         if ($plays->isEmpty()) {
@@ -171,42 +171,45 @@ class AutoPaymentSystem extends Command
         $resultsInserted = 0;
         $totalPrize = 0;
 
-        // 3. Para cada jugada, verificar si es ganadora
+        // 3. Para cada jugada, verificar si es ganadora para esta lotería específica
         foreach ($plays as $play) {
-            $result = $this->calculatePlayResult($play, $numbers, $date);
-            
-            if ($result && $result['totalPrize'] > 0) {
-                // Verificar si ya existe este resultado
-                $existingResult = Result::where('ticket', $play->ticket)
-                    ->where('lottery', $play->lottery)
-                    ->where('number', $play->number)
-                    ->where('position', $play->position)
-                    ->where('date', $date)
-                    ->first();
+            // ✅ MODIFICADO: Verificar si esta jugada específica es ganadora para esta lotería específica
+            if ($this->isWinningPlayForLottery($play, $numbers, $lotteryCode)) {
+                $prize = $this->calculatePrizeForLottery($play, $numbers, $lotteryCode);
+                
+                if ($prize > 0) {
+                    // Verificar si ya existe este resultado específico para esta lotería
+                    $existingResult = Result::where('ticket', $play->ticket)
+                        ->where('lottery', $lotteryCode) // ✅ Solo la lotería específica donde salió el número
+                        ->where('number', $play->number)
+                        ->where('position', $play->position)
+                        ->where('date', $date)
+                        ->first();
 
-                if (!$existingResult) {
-                    // Insertar resultado automáticamente
-                    Result::create([
-                        'user_id' => $play->user_id,
-                        'ticket' => $play->ticket,
-                        'lottery' => $play->lottery,
-                        'number' => $play->number,
-                        'position' => $play->position,
-                        'numR' => $play->numberR,
-                        'posR' => $play->positionR,
-                        'XA' => 'X',
-                        'import' => $play->import,
-                        'aciert' => $result['totalPrize'],
-                        'date' => $date,
-                        'time' => $time,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
+                    if (!$existingResult) {
+                        // ✅ Insertar resultado SEPARADO para esta lotería específica
+                        Result::create([
+                            'user_id' => $play->user_id,
+                            'ticket' => $play->ticket,
+                            'lottery' => $lotteryCode, // ✅ Solo la lotería específica donde salió el número
+                            'number' => $play->number,
+                            'position' => $play->position,
+                            'numR' => $play->numberR,
+                            'posR' => $play->positionR,
+                            'XA' => 'X',
+                            'import' => $play->import,
+                            'aciert' => $prize, // ✅ Solo el premio de esta lotería específica
+                            'date' => $date,
+                            'time' => $time,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]);
 
-                    $resultsInserted++;
-                    $totalPrize += $result['totalPrize'];
+                        $resultsInserted++;
+                        $totalPrize += $prize;
 
-                    Log::info("AutoPaymentSystem - Resultado insertado: Ticket {$play->ticket} - Premio: {$result['totalPrize']}");
+                        Log::info("AutoPaymentSystem - Resultado SEPARADO insertado: Ticket {$play->ticket} - Lotería {$lotteryCode} - Premio: {$prize}");
+                    }
                 }
             }
         }
@@ -471,5 +474,53 @@ class AutoPaymentSystem extends Command
             Log::error("AutoPaymentSystem - Error generando código de lotería: " . $e->getMessage());
             return null;
         }
+    }
+
+    /**
+     * ✅ NUEVO: Verifica si una jugada es ganadora para una lotería específica
+     */
+    private function isWinningPlayForLottery($play, $numbers, $lotteryCode)
+    {
+        // Verificar que la jugada contenga esta lotería específica
+        $playLotteries = explode(',', $play->lottery);
+        $playLotteries = array_map('trim', $playLotteries);
+        
+        if (!in_array($lotteryCode, $playLotteries)) {
+            return false;
+        }
+        
+        // Verificar si los números coinciden con alguno de los números ganadores
+        foreach ($numbers as $number) {
+            if ($this->isWinningPlay($play, $number->value)) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * ✅ NUEVO: Calcula el premio para una lotería específica
+     */
+    private function calculatePrizeForLottery($play, $numbers, $lotteryCode)
+    {
+        $mainPrize = 0;
+        $redoblonaPrize = 0;
+
+        // IMPORTANTE: Si hay redoblona, NO se paga premio principal, solo redoblona
+        if (!empty($play->numberR) && !empty($play->positionR)) {
+            // Solo calcular premio de redoblona (se paga TODO como redoblona)
+            $redoblonaPrize = $this->redoblonaService->calculateRedoblonaPrize($play, $numbers->first()->date, $lotteryCode);
+        } else {
+            // Solo calcular premio principal si NO hay redoblona
+            foreach ($numbers as $number) {
+                if ($this->isWinningPlay($play, $number->value)) {
+                    $mainPrize = $this->calculateMainPrize($play, $number->value);
+                    break; // Solo calcular para el primer número que coincida
+                }
+            }
+        }
+
+        return $mainPrize + $redoblonaPrize;
     }
 }

@@ -256,10 +256,10 @@ class AutoExtractNumbers extends Command
             Log::info("AutoExtractNumbers - Usando código completo de lotería: {$lotteryCode}");
             
             // Buscar jugadas que coincidan con este número ganador
-            // Ahora busca por el código completo (ej: CHA1800, TUCU2200)
+            // ✅ Buscar jugadas que contengan esta lotería (pueden tener múltiples loterías separadas por comas)
             $matchingPlays = \App\Models\ApusModel::whereDate('created_at', $date)
                                                  ->where('position', $position)
-                                                 ->where('lottery', $lotteryCode)
+                                                 ->where('lottery', 'LIKE', "%{$lotteryCode}%")
                                                  ->get();
             
             Log::info("AutoExtractNumbers - Encontradas " . $matchingPlays->count() . " jugadas para posición {$position} y lotería {$lotteryCode}");
@@ -299,7 +299,7 @@ class AutoExtractNumbers extends Command
                 if ($totalPrize > 0) {
                     // Verificar si ya existe este resultado para evitar duplicados
                     $existingResult = \App\Models\Result::where('ticket', $play->ticket)
-                                                       ->where('lottery', $play->lottery)
+                                                       ->where('lottery', $lotteryCode) // ✅ Verificar por la lotería específica donde salió el número
                                                        ->where('number', $play->number)
                                                        ->where('position', $play->position)
                                                        ->where('date', $date)
@@ -309,7 +309,7 @@ class AutoExtractNumbers extends Command
                         // Insertar resultado inmediatamente
                         \App\Models\Result::create([
                             'ticket' => $play->ticket,
-                            'lottery' => $play->lottery,
+                            'lottery' => $lotteryCode, // ✅ Usar solo la lotería específica donde salió el número
                             'number' => $play->number,
                             'position' => $play->position,
                             'import' => $play->import,
