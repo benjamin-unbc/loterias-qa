@@ -156,7 +156,7 @@
                         <x-ticket-modal wire:model="showApusModal" overlayClasses="bg-gray-500 bg-opacity-25">
                             <x-slot name="title">
                                 Información del Ticket
-                                <button onclick="cerrarModal()" id="buttonCancel"
+                                <button onclick="cerrarModalDirecto()" id="buttonCancel"
                                         class="bg-red-500 text-white px-4 py-1 text-sm rounded-md no-print">
                                     Cerrar
                                 </button>
@@ -316,9 +316,69 @@
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script>
-    // Función simple para cerrar el modal
-    function cerrarModal() {
-        window.location.reload();
+    // Función para cerrar el modal directamente manipulando el DOM
+    function cerrarModalDirecto() {
+        console.log('🔍 DEBUG: Cerrando modal directamente');
+        
+        try {
+            // Buscar el modal por diferentes selectores posibles
+            let modal = null;
+            
+            // Intentar diferentes selectores
+            const selectors = [
+                '[wire\\:model="showApusModal"]',
+                '.modal',
+                '[role="dialog"]',
+                '.fixed.inset-0',
+                '.bg-gray-500.bg-opacity-25'
+            ];
+            
+            for (const selector of selectors) {
+                modal = document.querySelector(selector);
+                if (modal) {
+                    console.log('🔍 DEBUG: Modal encontrado con selector:', selector);
+                    break;
+                }
+            }
+            
+            if (modal) {
+                // Ocultar el modal
+                modal.style.display = 'none';
+                modal.style.visibility = 'hidden';
+                modal.style.opacity = '0';
+                modal.classList.remove('fixed', 'inset-0', 'z-50');
+                
+                console.log('✅ Modal cerrado correctamente');
+                
+                // Actualizar el estado de Livewire sin hacer llamada HTTP
+                setTimeout(() => {
+                    try {
+                        const livewireComponent = document.querySelector('[wire\\:id]');
+                        if (livewireComponent && livewireComponent.__livewire) {
+                            livewireComponent.__livewire.showApusModal = false;
+                            livewireComponent.__livewire.showTicketModal = false;
+                            livewireComponent.__livewire.selectedTicket = null;
+                            livewireComponent.__livewire.play = null;
+                            console.log('🔄 Estado Livewire actualizado');
+                        }
+                    } catch (e) {
+                        console.log('⚠️ Error actualizando estado Livewire:', e);
+                    }
+                }, 100);
+                
+            } else {
+                console.log('❌ Modal no encontrado, ocultando todos los modales');
+                
+                // Intentar cerrar todos los elementos con clase modal
+                const modals = document.querySelectorAll('.modal, [role="dialog"], .fixed.inset-0');
+                modals.forEach((m) => {
+                    m.style.display = 'none';
+                });
+            }
+            
+        } catch (error) {
+            console.error('❌ Error cerrando modal:', error);
+        }
     }
 
     function printTicket() {
@@ -404,6 +464,23 @@
 
     window.addEventListener('descargar-imagen', () => {
         guardarTicket();
+    });
+
+    // Listener para debug del modal cerrado
+    window.addEventListener('debug-modal-closed', (event) => {
+        console.log('🔍 DEBUG: Evento debug-modal-closed recibido:', event.detail);
+        
+        const debugDiv = document.createElement('div');
+        debugDiv.id = 'debug-modal-closed';
+        debugDiv.style.cssText = 'position: fixed; top: 60px; right: 10px; background: #51cf66; color: white; padding: 10px; border-radius: 5px; z-index: 9999; font-family: monospace; font-size: 12px;';
+        debugDiv.innerHTML = '✅ DEBUG: Modal cerrado por Livewire<br>' + event.detail.message + '<br>' + event.detail.timestamp;
+        document.body.appendChild(debugDiv);
+        
+        setTimeout(() => {
+            if (document.getElementById('debug-modal-closed')) {
+                document.body.removeChild(debugDiv);
+            }
+        }, 5000);
     });
     </script>
 
