@@ -23,7 +23,6 @@ Route::middleware([
     'role'
 ])->group(function () {
     Route::get('/', PlaysManager::class)->name('plays-manager');
-    Route::get('/plays-manager', PlaysManager::class)->name('plays-manager');
     Route::get('/plays-sent', PlaysSent::class)->name('plays-sent');
     Route::get('/pay-award', PayAward::class)->name('pay-award');
     Route::get('/results', Results::class)->name('results');
