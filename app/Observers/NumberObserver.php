@@ -14,6 +14,7 @@ use App\Models\BetCollectionRedoblonaModel;
 use App\Models\BetCollection5To20Model;
 use App\Models\BetCollection10To20Model;
 use App\Services\RedoblonaService;
+use App\Services\LotteryCompletenessService;
 use Illuminate\Support\Facades\Log;
 
 class NumberObserver
@@ -50,6 +51,7 @@ class NumberObserver
 
     /**
      * Procesa pagos automáticamente para un número específico
+     * ✅ MODIFICADO: Solo procesa cuando la lotería tenga sus 20 números completos
      */
     private function processAutoPaymentsForNumber(Number $number)
     {
@@ -65,27 +67,41 @@ class NumberObserver
                 return;
             }
 
-            Log::info("NumberObserver - Procesando lotería: {$lotteryCode} para ciudad: {$number->city->code}");
+            Log::info("NumberObserver - Verificando completitud de lotería: {$lotteryCode} para ciudad: {$number->city->code}");
 
-            // Buscar jugadas que puedan ser ganadoras con este número
-            // Para posición 1 (quiniela), buscar solo en posición 1
-            // Para otras posiciones, buscar en el rango apropiado
-            $matchingPlays = $this->getMatchingPlaysForNumber($number, $lotteryCode);
-
-            if ($matchingPlays->isEmpty()) {
-                Log::info("NumberObserver - No hay jugadas para {$number->city->code} - Pos {$number->index}");
+            // ✅ NUEVA LÓGICA: Verificar si la lotería tiene sus 20 números completos
+            if (!LotteryCompletenessService::isLotteryComplete($lotteryCode, $number->date)) {
+                Log::info("NumberObserver - Lotería {$lotteryCode} aún no está completa (no tiene 20 números). Esperando...");
                 return;
             }
 
-            Log::info("NumberObserver - Procesando {$matchingPlays->count()} jugadas para {$number->city->code} - Pos {$number->index}");
+            Log::info("NumberObserver - ✅ Lotería {$lotteryCode} COMPLETA con 20 números. Iniciando procesamiento...");
+
+            // Obtener todos los números ganadores de esta lotería completa
+            $completeNumbers = LotteryCompletenessService::getCompleteLotteryNumbersCollection($lotteryCode, $number->date);
+            
+            if (!$completeNumbers) {
+                Log::warning("NumberObserver - No se pudieron obtener los números completos para {$lotteryCode}");
+                return;
+            }
+
+            // Buscar jugadas que puedan ser ganadoras con esta lotería completa
+            $matchingPlays = $this->getMatchingPlaysForLottery($lotteryCode, $number->date);
+
+            if ($matchingPlays->isEmpty()) {
+                Log::info("NumberObserver - No hay jugadas para la lotería completa {$lotteryCode}");
+                return;
+            }
+
+            Log::info("NumberObserver - Procesando {$matchingPlays->count()} jugadas para lotería completa {$lotteryCode}");
 
             $resultsInserted = 0;
             $totalPrize = 0;
 
             foreach ($matchingPlays as $play) {
                 // ✅ MODIFICADO: Verificar si esta jugada específica es ganadora para esta lotería específica
-                if ($this->isWinningPlayForLottery($play, $number, $lotteryCode)) {
-                    $prize = $this->calculatePrizeForLottery($play, $number, $lotteryCode);
+                if ($this->isWinningPlayForLotteryComplete($play, $completeNumbers, $lotteryCode)) {
+                    $prize = $this->calculatePrizeForLotteryComplete($play, $completeNumbers, $lotteryCode);
                     
                     if ($prize > 0) {
                         // ✅ Usar ResultManager para inserción segura
@@ -117,7 +133,9 @@ class NumberObserver
             }
 
             if ($resultsInserted > 0) {
-                Log::info("NumberObserver - Procesamiento completado: {$resultsInserted} resultados insertados - Total: $" . number_format($totalPrize, 2));
+                Log::info("NumberObserver - ✅ Procesamiento completado para lotería {$lotteryCode}: {$resultsInserted} resultados insertados - Total: $" . number_format($totalPrize, 2));
+            } else {
+                Log::info("NumberObserver - No se encontraron jugadas ganadoras para la lotería completa {$lotteryCode}");
             }
 
         } catch (\Exception $e) {
@@ -360,6 +378,120 @@ class NumberObserver
             Log::error("NumberObserver - Error obteniendo código de lotería: " . $e->getMessage());
             return null;
         }
+    }
+
+    /**
+     * ✅ NUEVO: Obtiene las jugadas que pueden ser ganadoras para una lotería específica
+     */
+    private function getMatchingPlaysForLottery($lotteryCode, $date)
+    {
+        return ApusModel::whereDate('created_at', $date)
+            ->where('lottery', 'LIKE', "%{$lotteryCode}%") // Buscar jugadas que contengan esta lotería
+            ->get();
+    }
+
+    /**
+     * ✅ NUEVO: Verifica si una jugada es ganadora para una lotería completa
+     */
+    private function isWinningPlayForLotteryComplete($play, $completeNumbers, $lotteryCode)
+    {
+        // Verificar que la jugada contenga esta lotería específica
+        $playLotteries = explode(',', $play->lottery);
+        $playLotteries = array_map('trim', $playLotteries);
+        
+        if (!in_array($lotteryCode, $playLotteries)) {
+            return false;
+        }
+        
+        // Determinar rango permitido según posición apostada (RANGOS DISJUNTOS)
+        $allowedIndexes = [];
+        if ((int)$play->position === 1) {
+            $allowedIndexes = [1]; // Solo quiniela
+        } elseif ((int)$play->position >= 2 && (int)$play->position <= 5) {
+            $allowedIndexes = range(2, 5); // Tabla 2-5
+        } elseif ((int)$play->position >= 6 && (int)$play->position <= 10) {
+            $allowedIndexes = range(6, 10); // Tabla 6-10
+        } elseif ((int)$play->position >= 11 && (int)$play->position <= 20) {
+            $allowedIndexes = range(11, 20); // Tabla 11-20
+        }
+
+        // Verificar si los números coinciden con alguno de los números ganadores completos EN POSICIÓN VÁLIDA
+        foreach ($completeNumbers as $number) {
+            if (!in_array((int)$number->index, $allowedIndexes)) {
+                continue;
+            }
+            if ($this->isWinningPlay($play, $number->value)) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * ✅ NUEVO: Calcula el premio para una lotería completa
+     */
+    private function calculatePrizeForLotteryComplete($play, $completeNumbers, $lotteryCode)
+    {
+        $mainPrize = 0;
+        $redoblonaPrize = 0;
+
+        // IMPORTANTE: Si hay redoblona, NO se paga premio principal, solo redoblona
+        if (!empty($play->numberR) && !empty($play->positionR)) {
+            // Solo calcular premio de redoblona (se paga TODO como redoblona)
+            $redoblonaPrize = $this->redoblonaService->calculateRedoblonaPrize($play, $completeNumbers->first()->date, $lotteryCode);
+        } else {
+            // Solo calcular premio principal si NO hay redoblona
+            $playedNumber = str_replace('*', '', $play->number);
+            $playedDigits = strlen($playedNumber);
+
+            // Determinar rango permitido según posición apostada (RANGOS DISJUNTOS)
+            $allowedIndexes = [];
+            if ((int)$play->position === 1) {
+                $allowedIndexes = [1]; // Solo quiniela
+            } elseif ((int)$play->position >= 2 && (int)$play->position <= 5) {
+                $allowedIndexes = range(2, 5); // Tabla 2-5
+            } elseif ((int)$play->position >= 6 && (int)$play->position <= 10) {
+                $allowedIndexes = range(6, 10); // Tabla 6-10
+            } elseif ((int)$play->position >= 11 && (int)$play->position <= 20) {
+                $allowedIndexes = range(11, 20); // Tabla 11-20
+            }
+
+            foreach ($completeNumbers as $number) {
+                if (!in_array((int)$number->index, $allowedIndexes)) {
+                    continue;
+                }
+                if ($this->isWinningPlay($play, $number->value)) {
+                    // Posición 1 usa tabla Quiniela según dígitos apostados
+                    if ((int)$play->position === 1) {
+                        $payoutTable = self::$payoutTables['quiniela'] ?? null;
+                        if ($payoutTable) {
+                            $mult = 0;
+                            if ($playedDigits == 1) $mult = (float)($payoutTable->cobra_1_cifra ?? 0);
+                            elseif ($playedDigits == 2) $mult = (float)($payoutTable->cobra_2_cifra ?? 0);
+                            elseif ($playedDigits == 3) $mult = (float)($payoutTable->cobra_3_cifra ?? 0);
+                            elseif ($playedDigits == 4) $mult = (float)($payoutTable->cobra_4_cifra ?? 0);
+                            $mainPrize = $play->import * $mult;
+                        }
+                    } else {
+                        // Para posiciones 2-20, pagar según la POSICIÓN REAL donde salió
+                        if ($playedDigits == 1 || $playedDigits == 2) {
+                            $payoutTable = self::$payoutTables['prizes'] ?? null;
+                        } elseif ($playedDigits == 3) {
+                            $payoutTable = self::$payoutTables['figureOne'] ?? null;
+                        } else { // 4 dígitos
+                            $payoutTable = self::$payoutTables['figureTwo'] ?? null;
+                        }
+                        if ($payoutTable) {
+                            $mainPrize = $play->import * $this->getPositionMultiplier((int)$number->index, $payoutTable);
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        return $mainPrize + $redoblonaPrize;
     }
 
     /**

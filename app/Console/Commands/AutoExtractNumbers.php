@@ -6,6 +6,7 @@ use App\Models\City;
 use App\Models\Number;
 use App\Services\WinningNumbersService;
 use App\Services\RedoblonaService;
+use App\Services\LotteryCompletenessService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -103,6 +104,9 @@ class AutoExtractNumbers extends Command
         if ($totalInserted > 0 || $totalUpdated > 0) {
             $this->info("✅ Extracción completada: {$totalInserted} nuevos, {$totalUpdated} actualizados");
             Log::info("AutoExtractNumbers - Extracción: {$totalInserted} nuevos, {$totalUpdated} actualizados");
+            
+            // ✅ NUEVA LÓGICA: Procesar loterías completas después de la extracción
+            $this->processCompleteLotteries($todayDate);
         } else {
             $this->line("ℹ️  No se encontraron números nuevos");
         }
@@ -470,5 +474,199 @@ class AutoExtractNumbers extends Command
         } catch (\Exception $e) {
             Log::error("Error notificando ganador: " . $e->getMessage());
         }
+    }
+
+    /**
+     * ✅ NUEVO: Procesa loterías completas después de la extracción
+     */
+    private function processCompleteLotteries($date)
+    {
+        try {
+            Log::info("AutoExtractNumbers - Verificando loterías completas para {$date}");
+
+            // Obtener solo las loterías que tengan sus 20 números completos
+            $completeLotteries = LotteryCompletenessService::getCompleteLotteries($date);
+
+            if (empty($completeLotteries)) {
+                Log::info("AutoExtractNumbers - No hay loterías completas para procesar en {$date}");
+                return;
+            }
+
+            Log::info("AutoExtractNumbers - Loterías completas encontradas: " . implode(', ', $completeLotteries));
+            $this->info("🎯 Procesando loterías completas: " . implode(', ', $completeLotteries));
+
+            $totalResultsInserted = 0;
+            $totalPrizeAmount = 0;
+
+            // Procesar cada lotería completa
+            foreach ($completeLotteries as $lotteryCode) {
+                $result = $this->processCompleteLottery($lotteryCode, $date);
+                $totalResultsInserted += $result['resultsInserted'];
+                $totalPrizeAmount += $result['totalPrize'];
+            }
+
+            if ($totalResultsInserted > 0) {
+                $this->info("✅ Procesamiento completado: {$totalResultsInserted} resultados insertados - Total: $" . number_format($totalPrizeAmount, 2));
+                Log::info("AutoExtractNumbers - Procesamiento completado: {$totalResultsInserted} resultados - Total: $" . number_format($totalPrizeAmount, 2));
+            } else {
+                Log::info("AutoExtractNumbers - No se encontraron jugadas ganadoras en las loterías completas");
+            }
+
+        } catch (\Exception $e) {
+            Log::error("AutoExtractNumbers - Error procesando loterías completas: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * ✅ NUEVO: Procesa una lotería completa (con sus 20 números)
+     */
+    private function processCompleteLottery($lotteryCode, $date)
+    {
+        try {
+            Log::info("AutoExtractNumbers - Procesando lotería completa: {$lotteryCode} para {$date}");
+
+            // Obtener todos los números ganadores de esta lotería completa
+            $completeNumbers = LotteryCompletenessService::getCompleteLotteryNumbersCollection($lotteryCode, $date);
+            
+            if (!$completeNumbers) {
+                Log::warning("AutoExtractNumbers - No se pudieron obtener los números completos para {$lotteryCode}");
+                return ['resultsInserted' => 0, 'totalPrize' => 0];
+            }
+
+            // Buscar jugadas que puedan ser ganadoras con esta lotería completa
+            $plays = \App\Models\ApusModel::whereDate('created_at', $date)
+                ->where('lottery', 'LIKE', "%{$lotteryCode}%")
+                ->get();
+
+            if ($plays->isEmpty()) {
+                Log::info("AutoExtractNumbers - No hay jugadas para la lotería completa {$lotteryCode}");
+                return ['resultsInserted' => 0, 'totalPrize' => 0];
+            }
+
+            Log::info("AutoExtractNumbers - Procesando lotería completa: {$lotteryCode} - {$plays->count()} jugadas");
+
+            $resultsInserted = 0;
+            $totalPrize = 0;
+
+            // Para cada jugada, verificar si es ganadora para esta lotería específica
+            foreach ($plays as $play) {
+                if ($this->isWinningPlayForLotteryComplete($play, $completeNumbers, $lotteryCode)) {
+                    $prize = $this->calculatePrizeForLotteryComplete($play, $completeNumbers, $lotteryCode);
+                    
+                    if ($prize > 0) {
+                        // Verificar si ya existe este resultado específico para esta lotería
+                        $existingResult = \App\Models\Result::where('ticket', $play->ticket)
+                            ->where('lottery', $lotteryCode)
+                            ->where('number', $play->number)
+                            ->where('position', $play->position)
+                            ->where('date', $date)
+                            ->first();
+
+                        if (!$existingResult) {
+                            // Usar ResultManager para inserción segura
+                            $resultData = [
+                                'user_id' => $play->user_id,
+                                'ticket' => $play->ticket,
+                                'lottery' => $lotteryCode,
+                                'number' => $play->number,
+                                'position' => $play->position,
+                                'numR' => $play->numberR,
+                                'posR' => $play->positionR,
+                                'XA' => 'X',
+                                'import' => $play->import,
+                                'aciert' => $prize,
+                                'date' => $date,
+                                'time' => $completeNumbers->first()->extract->time,
+                                'created_at' => now(),
+                                'updated_at' => now(),
+                            ];
+
+                            $result = \App\Services\ResultManager::createResultSafely($resultData);
+                            if ($result) {
+                                $resultsInserted++;
+                                $totalPrize += $prize;
+                                Log::info("AutoExtractNumbers - Resultado insertado: Ticket {$play->ticket} - Lotería {$lotteryCode} - Premio: {$prize}");
+                                
+                                // Notificar ganador encontrado
+                                $this->notifyWinner($play, $prize, $completeNumbers->first()->value, $completeNumbers->first()->index);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if ($resultsInserted > 0) {
+                Log::info("AutoExtractNumbers - Lotería {$lotteryCode} completada: {$resultsInserted} resultados - Total: $" . number_format($totalPrize, 2));
+            }
+
+            return ['resultsInserted' => $resultsInserted, 'totalPrize' => $totalPrize];
+
+        } catch (\Exception $e) {
+            Log::error("AutoExtractNumbers - Error procesando lotería completa {$lotteryCode}: " . $e->getMessage());
+            return ['resultsInserted' => 0, 'totalPrize' => 0];
+        }
+    }
+
+    /**
+     * ✅ NUEVO: Verifica si una jugada es ganadora para una lotería completa
+     */
+    private function isWinningPlayForLotteryComplete($play, $completeNumbers, $lotteryCode)
+    {
+        // Verificar que la jugada contenga esta lotería específica
+        $playLotteries = explode(',', $play->lottery);
+        $playLotteries = array_map('trim', $playLotteries);
+        
+        if (!in_array($lotteryCode, $playLotteries)) {
+            return false;
+        }
+        
+        // Determinar rango permitido según posición apostada (RANGOS DISJUNTOS)
+        $allowedIndexes = [];
+        if ((int)$play->position === 1) {
+            $allowedIndexes = [1]; // Solo quiniela
+        } elseif ((int)$play->position >= 2 && (int)$play->position <= 5) {
+            $allowedIndexes = range(2, 5); // Tabla 2-5
+        } elseif ((int)$play->position >= 6 && (int)$play->position <= 10) {
+            $allowedIndexes = range(6, 10); // Tabla 6-10
+        } elseif ((int)$play->position >= 11 && (int)$play->position <= 20) {
+            $allowedIndexes = range(11, 20); // Tabla 11-20
+        }
+        
+        // Verificar si los números coinciden con alguno de los números ganadores completos EN POSICIÓN VÁLIDA
+        foreach ($completeNumbers as $number) {
+            if (!in_array((int)$number->index, $allowedIndexes)) {
+                continue;
+            }
+            if ($this->isWinningPlay($play, $number->value)) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * ✅ NUEVO: Calcula el premio para una lotería completa
+     */
+    private function calculatePrizeForLotteryComplete($play, $completeNumbers, $lotteryCode)
+    {
+        $mainPrize = 0;
+        $redoblonaPrize = 0;
+
+        // IMPORTANTE: Si hay redoblona, NO se paga premio principal, solo redoblona
+        if (!empty($play->numberR) && !empty($play->positionR)) {
+            // Solo calcular premio de redoblona (se paga TODO como redoblona)
+            $redoblonaPrize = $this->redoblonaService->calculateRedoblonaPrize($play, $completeNumbers->first()->date, $lotteryCode);
+        } else {
+            // Solo calcular premio principal si NO hay redoblona
+            foreach ($completeNumbers as $number) {
+                if ($this->isWinningPlay($play, $number->value)) {
+                    $mainPrize = $this->calculateMainPrize($play, $number->value);
+                    break; // Solo calcular para el primer número que coincida
+                }
+            }
+        }
+
+        return $mainPrize + $redoblonaPrize;
     }
 }
