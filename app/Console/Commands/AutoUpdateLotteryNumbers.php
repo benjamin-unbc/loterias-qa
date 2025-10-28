@@ -618,31 +618,31 @@ class AutoUpdateLotteryNumbers extends Command
                                                        ->where('date', $date)
                                                        ->first();
                     
-                    if (!$existingResult) {
-                        // Insertar resultado inmediatamente
-                        \App\Models\Result::create([
-                            'ticket' => $play->ticket,
-                            'lottery' => $lotteryCode, // ✅ Usar solo la lotería específica donde salió el número
-                            'number' => $play->code, // PlaysSentModel usa 'code'
-                            'position' => $position,
-                            'import' => $play->amount,
-                            'aciert' => $totalPrize,
-                            'date' => $date,
-                            'time' => $extract->time,
-                            'user_id' => $play->user_id,
-                            'XA' => 'X',
-                            'numero_g' => $winningNumber,
-                            'posicion_g' => $position,
-                            'numR' => null, // PlaysSentModel no tiene redoblona
-                            'posR' => null, // PlaysSentModel no tiene redoblona
-                            'num_g_r' => null,
-                            'pos_g_r' => null,
-                            'created_at' => now(),
-                            'updated_at' => now(),
-                        ]);
-                        
+                    // Insertar de forma segura (evita duplicados y descarta premio 0)
+                    $result = \App\Services\ResultManager::createResultSafely([
+                        'ticket' => $play->ticket,
+                        'lottery' => $lotteryCode,
+                        'number' => $play->code,
+                        'position' => $position,
+                        'import' => $play->amount,
+                        'aciert' => $totalPrize,
+                        'date' => $date,
+                        'time' => $extract->time,
+                        'user_id' => $play->user_id,
+                        'XA' => 'X',
+                        'numero_g' => $winningNumber,
+                        'posicion_g' => $position,
+                        'numR' => null,
+                        'posR' => null,
+                        'num_g_r' => null,
+                        'pos_g_r' => null,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+
+                    if ($result) {
                         $resultsInserted++;
-                        Log::info("AutoUpdateLotteryNumbers - Resultado insertado: Ticket {$play->ticket} - Premio principal: \${$aciertoValue} - Premio redoblona: \${$redoblonaValue} - Total: \${$totalPrize}");
+                        Log::info("AutoUpdateLotteryNumbers - Resultado insertado: Ticket {$play->ticket} - Premio principal: \${$aciertoValue} - Total: \${$totalPrize}");
                     }
                 }
             }

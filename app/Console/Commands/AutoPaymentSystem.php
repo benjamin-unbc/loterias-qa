@@ -6,6 +6,7 @@ use App\Models\City;
 use App\Models\Number;
 use App\Models\ApusModel;
 use App\Models\Result;
+use App\Services\ResultManager;
 use App\Models\QuinielaModel;
 use App\Models\PrizesModel;
 use App\Models\FigureOneModel;
@@ -186,29 +187,29 @@ class AutoPaymentSystem extends Command
                         ->where('date', $date)
                         ->first();
 
-                    if (!$existingResult) {
-                        // ✅ Insertar resultado SEPARADO para esta lotería específica
-                        Result::create([
-                            'user_id' => $play->user_id,
-                            'ticket' => $play->ticket,
-                            'lottery' => $lotteryCode, // ✅ Solo la lotería específica donde salió el número
-                            'number' => $play->number,
-                            'position' => $play->position,
-                            'numR' => $play->numberR,
-                            'posR' => $play->positionR,
-                            'XA' => 'X',
-                            'import' => $play->import,
-                            'aciert' => $prize, // ✅ Solo el premio de esta lotería específica
-                            'date' => $date,
-                            'time' => $time,
-                            'created_at' => now(),
-                            'updated_at' => now(),
-                        ]);
+                    // ✅ Usar ResultManager para inserción segura
+                    $resultData = [
+                        'user_id' => $play->user_id,
+                        'ticket' => $play->ticket,
+                        'lottery' => $lotteryCode, // ✅ Solo la lotería específica donde salió el número
+                        'number' => $play->number,
+                        'position' => $play->position,
+                        'numR' => $play->numberR,
+                        'posR' => $play->positionR,
+                        'XA' => 'X',
+                        'import' => $play->import,
+                        'aciert' => $prize, // ✅ Solo el premio de esta lotería específica
+                        'date' => $date,
+                        'time' => $time,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
 
+                    $result = ResultManager::createResultSafely($resultData);
+                    if ($result) {
                         $resultsInserted++;
                         $totalPrize += $prize;
-
-                        Log::info("AutoPaymentSystem - Resultado SEPARADO insertado: Ticket {$play->ticket} - Lotería {$lotteryCode} - Premio: {$prize}");
+                        Log::info("AutoPaymentSystem - Resultado insertado: Ticket {$play->ticket} - Lotería {$lotteryCode} - Premio: {$prize}");
                     }
                 }
             }

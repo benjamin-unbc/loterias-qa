@@ -5,6 +5,7 @@ namespace App\Observers;
 use App\Models\Number;
 use App\Models\ApusModel;
 use App\Models\Result;
+use App\Services\ResultManager;
 use App\Models\QuinielaModel;
 use App\Models\PrizesModel;
 use App\Models\FigureOneModel;
@@ -87,37 +88,29 @@ class NumberObserver
                     $prize = $this->calculatePrizeForLottery($play, $number, $lotteryCode);
                     
                     if ($prize > 0) {
-                        // Verificar si ya existe este resultado específico para esta lotería
-                        $existingResult = Result::where('ticket', $play->ticket)
-                            ->where('lottery', $lotteryCode) // ✅ Solo la lotería específica donde salió el número
-                            ->where('number', $play->number)
-                            ->where('position', $play->position)
-                            ->where('date', $number->date)
-                            ->first();
+                        // ✅ Usar ResultManager para inserción segura
+                        $resultData = [
+                            'user_id' => $play->user_id,
+                            'ticket' => $play->ticket,
+                            'lottery' => $lotteryCode, // ✅ Solo la lotería específica donde salió el número
+                            'number' => $play->number,
+                            'position' => $play->position,
+                            'numR' => $play->numberR,
+                            'posR' => $play->positionR,
+                            'XA' => 'X',
+                            'import' => $play->import,
+                            'aciert' => $prize, // ✅ Solo el premio de esta lotería específica
+                            'date' => $number->date,
+                            'time' => $number->extract->time,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ];
 
-                        if (!$existingResult) {
-                            // ✅ Insertar resultado SEPARADO para esta lotería específica
-                            Result::create([
-                                'user_id' => $play->user_id,
-                                'ticket' => $play->ticket,
-                                'lottery' => $lotteryCode, // ✅ Solo la lotería específica donde salió el número
-                                'number' => $play->number,
-                                'position' => $play->position,
-                                'numR' => $play->numberR,
-                                'posR' => $play->positionR,
-                                'XA' => 'X',
-                                'import' => $play->import,
-                                'aciert' => $prize, // ✅ Solo el premio de esta lotería específica
-                                'date' => $number->date,
-                                'time' => $number->extract->time,
-                                'created_at' => now(),
-                                'updated_at' => now(),
-                            ]);
-
+                        $result = ResultManager::createResultSafely($resultData);
+                        if ($result) {
                             $resultsInserted++;
                             $totalPrize += $prize;
-
-                            Log::info("NumberObserver - Resultado SEPARADO insertado: Ticket {$play->ticket} - Lotería {$lotteryCode} - Premio: {$prize}");
+                            Log::info("NumberObserver - Resultado insertado: Ticket {$play->ticket} - Lotería {$lotteryCode} - Premio: {$prize}");
                         }
                     }
                 }

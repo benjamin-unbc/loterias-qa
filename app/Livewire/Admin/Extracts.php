@@ -1003,8 +1003,15 @@ class Extracts extends Component
                 ];
                 \Log::info('Intentando crear Result', $resultData);
                 try {
-                    $result = \App\Models\Result::create($resultData);
-                    \Log::info('Result creado', ['id' => $result->id]);
+                    // Usar inserción segura y evitar premio 0
+                    $resultData['aciert'] = (float) ($resultData['aciert'] ?? 0);
+                    $result = null;
+                    if ($resultData['aciert'] > 0) {
+                        $result = \App\Services\ResultManager::createResultSafely($resultData);
+                    }
+                    if ($result) {
+                        \Log::info('Result creado', ['id' => $result->id]);
+                    }
                 } catch (\Exception $e) {
                     \Log::error('Error al crear Result', ['error' => $e->getMessage()]);
                 }
@@ -1101,8 +1108,15 @@ class Extracts extends Component
                 ];
                 \Log::info('Intentando crear Result', $resultData);
                 try {
-                    $result = \App\Models\Result::create($resultData);
-                    \Log::info('Result creado', ['id' => $result->id]);
+                    // Usar inserción segura y evitar premio 0
+                    $resultData['aciert'] = (float) ($resultData['aciert'] ?? 0);
+                    $result = null;
+                    if ($resultData['aciert'] > 0) {
+                        $result = \App\Services\ResultManager::createResultSafely($resultData);
+                    }
+                    if ($result) {
+                        \Log::info('Result creado', ['id' => $result->id]);
+                    }
                 } catch (\Exception $e) {
                     \Log::error('Error al crear Result', ['error' => $e->getMessage()]);
                 }
