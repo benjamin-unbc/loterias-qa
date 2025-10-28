@@ -16,6 +16,7 @@ use App\Models\BetCollection5To20Model;
 use App\Models\BetCollection10To20Model;
 use App\Services\WinningNumbersService;
 use App\Services\RedoblonaService;
+use App\Services\LotteryCompletenessService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -107,121 +108,181 @@ class AutoPaymentSystem extends Command
 
     /**
      * Procesa pagos automáticamente detectando turnos jugados
+     * ✅ MODIFICADO: Solo procesa loterías que tengan sus 20 números completos
      */
     private function processAutoPayments()
     {
         $today = Carbon::now()->format('Y-m-d');
         
-        // 1. Obtener todos los números ganadores del día
-        $winningNumbers = Number::with(['city', 'extract'])
-            ->whereDate('date', $today)
-            ->get()
-            ->groupBy(function($number) {
-                return $number->city->code . '_' . $number->extract->time;
-            });
+        Log::info("AutoPaymentSystem - Verificando loterías completas para {$today}");
 
-        if ($winningNumbers->isEmpty()) {
+        // ✅ NUEVA LÓGICA: Obtener solo las loterías que tengan sus 20 números completos
+        $completeLotteries = LotteryCompletenessService::getCompleteLotteries($today);
+
+        if (empty($completeLotteries)) {
+            Log::info("AutoPaymentSystem - No hay loterías completas para procesar en {$today}");
             return;
         }
 
-        // 2. Para cada turno con números ganadores, verificar si hay jugadas
-        foreach ($winningNumbers as $turnKey => $numbers) {
-            $this->processTurnPayments($turnKey, $numbers, $today);
+        Log::info("AutoPaymentSystem - Loterías completas encontradas: " . implode(', ', $completeLotteries));
+
+        $totalResultsInserted = 0;
+        $totalPrizeAmount = 0;
+
+        // Procesar cada lotería completa
+        foreach ($completeLotteries as $lotteryCode) {
+            $result = $this->processCompleteLottery($lotteryCode, $today);
+            $totalResultsInserted += $result['resultsInserted'];
+            $totalPrizeAmount += $result['totalPrize'];
+        }
+
+        if ($totalResultsInserted > 0) {
+            $this->info("✅ Procesamiento completado: {$totalResultsInserted} resultados insertados - Total: $" . number_format($totalPrizeAmount, 2));
+            Log::info("AutoPaymentSystem - Procesamiento completado: {$totalResultsInserted} resultados - Total: $" . number_format($totalPrizeAmount, 2));
+        } else {
+            Log::info("AutoPaymentSystem - No se encontraron jugadas ganadoras en las loterías completas");
         }
     }
 
     /**
-     * Procesa pagos para un turno específico
+     * ✅ NUEVO: Procesa una lotería completa (con sus 20 números)
      */
-    private function processTurnPayments($turnKey, $numbers, $date)
+    private function processCompleteLottery($lotteryCode, $date)
     {
-        // Extraer información del turno
-        $parts = explode('_', $turnKey);
-        $cityCode = $parts[0];
-        $time = $parts[1];
-
-        // Verificar si ya procesamos este turno
-        $processedKey = $date . '_' . $turnKey;
+        // Verificar si ya procesamos esta lotería completa
+        $processedKey = $date . '_' . $lotteryCode;
         if (in_array($processedKey, $this->processedNumbers)) {
-            return;
+            Log::info("AutoPaymentSystem - Lotería {$lotteryCode} ya fue procesada para {$date}");
+            return ['resultsInserted' => 0, 'totalPrize' => 0];
         }
 
-        // MEJORA: Generar código de lotería completo dinámicamente
-        $lotteryCode = $this->generateLotteryCode($cityCode, $time);
+        Log::info("AutoPaymentSystem - Procesando lotería completa: {$lotteryCode} para {$date}");
+
+        // Obtener todos los números ganadores de esta lotería completa
+        $completeNumbers = LotteryCompletenessService::getCompleteLotteryNumbersCollection($lotteryCode, $date);
         
-        if (!$lotteryCode) {
-            Log::warning("AutoPaymentSystem - No se pudo generar código de lotería para: {$cityCode}_{$time}");
-            return;
+        if (!$completeNumbers) {
+            Log::warning("AutoPaymentSystem - No se pudieron obtener los números completos para {$lotteryCode}");
+            return ['resultsInserted' => 0, 'totalPrize' => 0];
         }
 
-        Log::info("AutoPaymentSystem - Procesando turno: {$turnKey} -> Código: {$lotteryCode}");
-
-        // ✅ MODIFICADO: Buscar jugadas que contengan esta lotería específica (pueden tener múltiples loterías)
+        // Buscar jugadas que puedan ser ganadoras con esta lotería completa
         $plays = ApusModel::whereDate('created_at', $date)
-            ->where('lottery', 'LIKE', "%{$lotteryCode}%")  // ✅ Buscar jugadas que contengan esta lotería
+            ->where('lottery', 'LIKE', "%{$lotteryCode}%")
             ->get();
 
         if ($plays->isEmpty()) {
-            Log::info("AutoPaymentSystem - No hay jugadas para el turno {$turnKey}");
-            return;
+            Log::info("AutoPaymentSystem - No hay jugadas para la lotería completa {$lotteryCode}");
+            return ['resultsInserted' => 0, 'totalPrize' => 0];
         }
 
-        $this->info("🎯 Procesando turno: {$turnKey} - {$plays->count()} jugadas encontradas");
-        Log::info("AutoPaymentSystem - Procesando turno: {$turnKey} - {$plays->count()} jugadas");
+        $this->info("🎯 Procesando lotería completa: {$lotteryCode} - {$plays->count()} jugadas encontradas");
+        Log::info("AutoPaymentSystem - Procesando lotería completa: {$lotteryCode} - {$plays->count()} jugadas");
 
         $resultsInserted = 0;
         $totalPrize = 0;
 
-        // 3. Para cada jugada, verificar si es ganadora para esta lotería específica
+        // Para cada jugada, verificar si es ganadora para esta lotería específica
         foreach ($plays as $play) {
-            // ✅ MODIFICADO: Verificar si esta jugada específica es ganadora para esta lotería específica
-            if ($this->isWinningPlayForLottery($play, $numbers, $lotteryCode)) {
-                $prize = $this->calculatePrizeForLottery($play, $numbers, $lotteryCode);
+            if ($this->isWinningPlayForLotteryComplete($play, $completeNumbers, $lotteryCode)) {
+                $prize = $this->calculatePrizeForLotteryComplete($play, $completeNumbers, $lotteryCode);
                 
                 if ($prize > 0) {
                     // Verificar si ya existe este resultado específico para esta lotería
                     $existingResult = Result::where('ticket', $play->ticket)
-                        ->where('lottery', $lotteryCode) // ✅ Solo la lotería específica donde salió el número
+                        ->where('lottery', $lotteryCode)
                         ->where('number', $play->number)
                         ->where('position', $play->position)
                         ->where('date', $date)
                         ->first();
 
-                    // ✅ Usar ResultManager para inserción segura
-                    $resultData = [
-                        'user_id' => $play->user_id,
-                        'ticket' => $play->ticket,
-                        'lottery' => $lotteryCode, // ✅ Solo la lotería específica donde salió el número
-                        'number' => $play->number,
-                        'position' => $play->position,
-                        'numR' => $play->numberR,
-                        'posR' => $play->positionR,
-                        'XA' => 'X',
-                        'import' => $play->import,
-                        'aciert' => $prize, // ✅ Solo el premio de esta lotería específica
-                        'date' => $date,
-                        'time' => $time,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ];
+                    if (!$existingResult) {
+                        // Usar ResultManager para inserción segura
+                        $resultData = [
+                            'user_id' => $play->user_id,
+                            'ticket' => $play->ticket,
+                            'lottery' => $lotteryCode,
+                            'number' => $play->number,
+                            'position' => $play->position,
+                            'numR' => $play->numberR,
+                            'posR' => $play->positionR,
+                            'XA' => 'X',
+                            'import' => $play->import,
+                            'aciert' => $prize,
+                            'date' => $date,
+                            'time' => $completeNumbers->first()->extract->time,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ];
 
-                    $result = ResultManager::createResultSafely($resultData);
-                    if ($result) {
-                        $resultsInserted++;
-                        $totalPrize += $prize;
-                        Log::info("AutoPaymentSystem - Resultado insertado: Ticket {$play->ticket} - Lotería {$lotteryCode} - Premio: {$prize}");
+                        $result = ResultManager::createResultSafely($resultData);
+                        if ($result) {
+                            $resultsInserted++;
+                            $totalPrize += $prize;
+                            Log::info("AutoPaymentSystem - Resultado insertado: Ticket {$play->ticket} - Lotería {$lotteryCode} - Premio: {$prize}");
+                        }
                     }
                 }
             }
         }
 
         if ($resultsInserted > 0) {
-            $this->info("✅ Turno {$turnKey}: {$resultsInserted} resultados insertados - Total: $" . number_format($totalPrize, 2));
-            Log::info("AutoPaymentSystem - Turno {$turnKey} completado: {$resultsInserted} resultados - Total: $" . number_format($totalPrize, 2));
+            $this->info("✅ Lotería {$lotteryCode}: {$resultsInserted} resultados insertados - Total: $" . number_format($totalPrize, 2));
+            Log::info("AutoPaymentSystem - Lotería {$lotteryCode} completada: {$resultsInserted} resultados - Total: $" . number_format($totalPrize, 2));
         }
 
-        // Marcar este turno como procesado
+        // Marcar esta lotería como procesada
         $this->processedNumbers[] = $processedKey;
+
+        return ['resultsInserted' => $resultsInserted, 'totalPrize' => $totalPrize];
+    }
+
+    /**
+     * ✅ NUEVO: Verifica si una jugada es ganadora para una lotería completa
+     */
+    private function isWinningPlayForLotteryComplete($play, $completeNumbers, $lotteryCode)
+    {
+        // Verificar que la jugada contenga esta lotería específica
+        $playLotteries = explode(',', $play->lottery);
+        $playLotteries = array_map('trim', $playLotteries);
+        
+        if (!in_array($lotteryCode, $playLotteries)) {
+            return false;
+        }
+        
+        // Verificar si los números coinciden con alguno de los números ganadores completos
+        foreach ($completeNumbers as $number) {
+            if ($this->isWinningPlay($play, $number->value)) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * ✅ NUEVO: Calcula el premio para una lotería completa
+     */
+    private function calculatePrizeForLotteryComplete($play, $completeNumbers, $lotteryCode)
+    {
+        $mainPrize = 0;
+        $redoblonaPrize = 0;
+
+        // IMPORTANTE: Si hay redoblona, NO se paga premio principal, solo redoblona
+        if (!empty($play->numberR) && !empty($play->positionR)) {
+            // Solo calcular premio de redoblona (se paga TODO como redoblona)
+            $redoblonaPrize = $this->redoblonaService->calculateRedoblonaPrize($play, $completeNumbers->first()->date, $lotteryCode);
+        } else {
+            // Solo calcular premio principal si NO hay redoblona
+            foreach ($completeNumbers as $number) {
+                if ($this->isWinningPlay($play, $number->value)) {
+                    $mainPrize = $this->calculateMainPrize($play, $number->value);
+                    break; // Solo calcular para el primer número que coincida
+                }
+            }
+        }
+
+        return $mainPrize + $redoblonaPrize;
     }
 
     /**
@@ -395,24 +456,28 @@ class AutoPaymentSystem extends Command
 
     /**
      * Determina el rango de posiciones donde buscar el número ganador
-     * basado en la posición apostada
+     * basado en la posición apostada (RANGOS DISJUNTOS)
      */
     private function getSearchRangeForPosition(int $apostadaPosition): array
     {
-        // Si apostaste a posición 5, buscar en posiciones 1-5
-        if ($apostadaPosition <= 5) {
-            return range(1, 5);
+        // Quiniela: solo posición 1
+        if ($apostadaPosition === 1) {
+            return [1];
         }
-        // Si apostaste a posición 10, buscar en posiciones 1-10
-        elseif ($apostadaPosition <= 10) {
-            return range(1, 10);
+        // Tabla 2-5: posiciones 2-5
+        elseif ($apostadaPosition >= 2 && $apostadaPosition <= 5) {
+            return range(2, 5);
         }
-        // Si apostaste a posición 20, buscar en posiciones 1-20
-        elseif ($apostadaPosition <= 20) {
-            return range(1, 20);
+        // Tabla 6-10: posiciones 6-10
+        elseif ($apostadaPosition >= 6 && $apostadaPosition <= 10) {
+            return range(6, 10);
+        }
+        // Tabla 11-20: posiciones 11-20
+        elseif ($apostadaPosition >= 11 && $apostadaPosition <= 20) {
+            return range(11, 20);
         }
         
-        // Si apostaste a una posición mayor a 20, no hay premio
+        // Si apostaste a una posición fuera de rango, no hay premio
         return [];
     }
 
