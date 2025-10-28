@@ -37,7 +37,13 @@ class AutoExtractNumbers extends Command
         $interval = (int) $this->option('interval');
         $this->info("🔄 Iniciando extracción automática cada {$interval} segundos (detección rápida)...");
         $this->info("📅 Fecha actual: " . Carbon::now()->format('Y-m-d H:i:s'));
-        $this->info("⏰ Horario de funcionamiento: 10:25 AM - 12:00 AM");
+        $this->info("⏰ Horarios de funcionamiento:");
+        $this->info("   • 10:30-11:30 (Primera extracción)");
+        $this->info("   • 12:00-13:00 (Segunda extracción)");
+        $this->info("   • 15:00-16:00 (Tercera extracción)");
+        $this->info("   • 18:00-19:00 (Cuarta extracción)");
+        $this->info("   • 21:00-22:00 (Quinta extracción)");
+        $this->info("   • 22:00-23:00 (Sexta extracción)");
         $this->info("⏹️  Presiona Ctrl+C para detener");
         
         // Inicializar servicio de redoblona
@@ -52,7 +58,7 @@ class AutoExtractNumbers extends Command
                     $this->extractNumbers();
                     $this->info("⏰ Esperando {$interval} segundos... (" . Carbon::now()->format('H:i:s') . ")");
                 } else {
-                    $this->line("😴 Fuera del horario de funcionamiento (10:25 AM - 12:00 AM). Esperando...");
+                    $this->line("😴 Fuera del horario de funcionamiento. Próximos horarios: 10:30-11:30, 12:00-13:00, 15:00-16:00, 18:00-19:00, 21:00-22:00, 22:00-23:00");
                     // Esperar 5 minutos cuando está fuera del horario
                     sleep(300);
                     continue;
@@ -224,18 +230,31 @@ class AutoExtractNumbers extends Command
 
     /**
      * Verifica si la hora actual está dentro del horario de funcionamiento
-     * Horario: 10:25 AM - 12:00 AM (00:00)
+     * Horarios específicos: 10:30-11:30, 12:00-13:00, 15:00-16:00, 18:00-19:00, 21:00-22:00, 22:00-23:00
      */
     private function isWithinOperatingHours()
     {
         $now = Carbon::now();
         $currentTime = $now->format('H:i:s');
         
-        // Horario de funcionamiento: 10:25:00 - 23:59:59
-        $startTime = '10:25:00';
-        $endTime = '23:59:59';
+        // Definir los horarios de funcionamiento específicos
+        $operatingHours = [
+            ['10:30:00', '11:30:00'], // Primera extracción
+            ['12:00:00', '13:00:00'], // Segunda extracción
+            ['15:00:00', '16:00:00'], // Tercera extracción
+            ['18:00:00', '19:00:00'], // Cuarta extracción
+            ['21:00:00', '22:00:00'], // Quinta extracción
+            ['22:00:00', '23:00:00']  // Sexta extracción
+        ];
         
-        return $currentTime >= $startTime && $currentTime <= $endTime;
+        // Verificar si la hora actual está dentro de alguno de los horarios
+        foreach ($operatingHours as $timeSlot) {
+            if ($currentTime >= $timeSlot[0] && $currentTime <= $timeSlot[1]) {
+                return true;
+            }
+        }
+        
+        return false;
     }
 
     /**

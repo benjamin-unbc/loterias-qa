@@ -15,8 +15,12 @@
 # * 10-23 * * * /usr/bin/php /home/tu_usuario/public_html/artisan lottery:auto-extract --interval=60
 
 # HORARIOS DE FUNCIONAMIENTO:
-# - Inicio: 10:25 AM
-# - Fin: 12:00 AM (00:00)
+# - 10:30-11:30 (Primera extracción)
+# - 12:00-13:00 (Segunda extracción)
+# - 15:00-16:00 (Tercera extracción)
+# - 18:00-19:00 (Cuarta extracción)
+# - 21:00-22:00 (Quinta extracción)
+# - 22:00-23:00 (Sexta extracción)
 # - El sistema verifica automáticamente si está en horario de funcionamiento
 
 # HORARIOS DE LOTERÍA:

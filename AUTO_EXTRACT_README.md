@@ -57,9 +57,13 @@ tail -f storage/logs/auto_extract.log
 
 ## ⏰ Horarios de Funcionamiento
 
-- **Inicio**: 10:30 AM
-- **Fin**: 23:59 PM
-- **Frecuencia**: Cada 30 segundos
+- **10:30-11:30**: Primera extracción
+- **12:00-13:00**: Segunda extracción  
+- **15:00-16:00**: Tercera extracción
+- **18:00-19:00**: Cuarta extracción
+- **21:00-22:00**: Quinta extracción
+- **22:00-23:00**: Sexta extracción
+- **Frecuencia**: Cada 30 segundos durante los horarios activos
 - **El sistema verifica automáticamente si está en horario de funcionamiento**
 
 ## 🎲 Horarios de Lotería
