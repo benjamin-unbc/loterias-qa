@@ -14,6 +14,7 @@ use App\Models\PrizesModel;
 use App\Models\FigureOneModel;
 use App\Models\FigureTwoModel;
 use App\Models\Result;
+use App\Services\ResultManager;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -230,10 +231,10 @@ class CalculateLotteryResults implements ShouldQueue
             } // ✅ Cerrar el bucle foreach de loterías individuales
         }
 
-        // 5. Insertar todos los aciertos en la base de datos de una sola vez.
+        // 5. Insertar todos los aciertos en la base de datos de forma segura.
         if (!empty($winningPlays)) {
-            Result::insert($winningPlays);
-            Log::info("🎉 Job CalculateLotteryResults: Se insertaron " . count($winningPlays) . " aciertos para la fecha {$this->date}.");
+            $createdCount = ResultManager::createMultipleResultsSafely($winningPlays);
+            Log::info("🎉 Job CalculateLotteryResults: Se procesaron " . count($winningPlays) . " aciertos, creados {$createdCount} para la fecha {$this->date}.");
         } else {
             Log::info("Job CalculateLotteryResults: No se encontraron nuevos aciertos para la fecha {$this->date}.");
         }

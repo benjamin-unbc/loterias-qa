@@ -305,32 +305,31 @@ class AutoExtractNumbers extends Command
                                                        ->where('date', $date)
                                                        ->first();
                     
-                    if (!$existingResult) {
-                        // Insertar resultado inmediatamente
-                        \App\Models\Result::create([
-                            'ticket' => $play->ticket,
-                            'lottery' => $lotteryCode, // ✅ Usar solo la lotería específica donde salió el número
-                            'number' => $play->number,
-                            'position' => $play->position,
-                            'import' => $play->import,
-                            'aciert' => $totalPrize,
-                            'date' => $date,
-                            'time' => $extract->time,
-                            'user_id' => $play->user_id,
-                            'XA' => 'X',
-                            'numero_g' => $winningNumber,
-                            'posicion_g' => $position,
-                            'numR' => $play->numberR ?? null,
-                            'posR' => $play->positionR ?? null,
-                            'num_g_r' => null, // Se llenará si hay redoblona ganadora
-                            'pos_g_r' => null, // Se llenará si hay redoblona ganadora
-                            'created_at' => now(),
-                            'updated_at' => now(),
-                        ]);
-                        
+                    // Insertar de forma segura (evita duplicados y descarta premio 0)
+                    $result = \App\Services\ResultManager::createResultSafely([
+                        'ticket' => $play->ticket,
+                        'lottery' => $lotteryCode,
+                        'number' => $play->number,
+                        'position' => $play->position,
+                        'import' => $play->import,
+                        'aciert' => $totalPrize,
+                        'date' => $date,
+                        'time' => $extract->time,
+                        'user_id' => $play->user_id,
+                        'XA' => 'X',
+                        'numero_g' => $winningNumber,
+                        'posicion_g' => $position,
+                        'numR' => $play->numberR ?? null,
+                        'posR' => $play->positionR ?? null,
+                        'num_g_r' => null,
+                        'pos_g_r' => null,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+
+                    if ($result) {
                         $resultsInserted++;
                         Log::info("AutoExtractNumbers - Resultado insertado: Ticket {$play->ticket} - Premio principal: \${$aciertoValue} - Premio redoblona: \${$redoblonaValue} - Total: \${$totalPrize}");
-                        
                         // Notificar ganador encontrado
                         $this->notifyWinner($play, $totalPrize, $winningNumber, $position);
                     }
