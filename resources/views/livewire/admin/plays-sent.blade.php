@@ -101,9 +101,10 @@
                                 @endif
                             </td>
                             <td class="px-2 py-4 flex gap-1 items-center justify-center">
-                                <button wire:click='viewApus("{{ $playItem->ticket }}")'
+                                <button wire:click='viewTicket("{{ $playItem->ticket }}")'
                                         class="font-medium text-center text-yellow-200 bg-gray-700 p-1 px-2 rounded-md
-                                               hover:underline hover:bg-gray-700/50 duration-200">
+                                               hover:underline hover:bg-gray-700/50 duration-200"
+                                        title="Ver ticket">
                                     <i class="fa-solid fa-rug rotate-90"></i>
                                 </button>
 
@@ -152,67 +153,42 @@
                         </x-confirmation-modal>
                     @endif
 
-                    @if($showApusModal && $play)
-                        <x-ticket-modal wire:model="showApusModal" overlayClasses="bg-gray-500 bg-opacity-25">
+                    @if($showTicketModal && $selectedTicket)
+                        <x-ticket-modal wire:model="showTicketModal" overlayClasses="bg-gray-500 bg-opacity-25">
                             <x-slot name="title">
                                 Información del Ticket
-                                <button onclick="cerrarModalDirecto()" id="buttonCancel"
-                                        class="bg-red-500 text-white px-4 py-1 text-sm rounded-md no-print">
+                                <button wire:click="closeTicketModal" class="bg-red-500 text-white px-4 py-1 text-sm rounded-md no-print">
                                     Cerrar
                                 </button>
                             </x-slot>
 
-                            
                             <x-slot name="content">
-                                {{-- DEBUG INFO --}}
-                                @if(session('debug_info') && session('debug_info')['ticket'] === '24-0008')
-                                    <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4 no-print">
-                                        <h4 class="font-bold">DEBUG INFO - Raw APUs:</h4>
-                                        <p><strong>Count:</strong> {{ session('debug_info')['raw_apus_count'] }}</p>
-                                        <p><strong>Loterías únicas en BD:</strong> {{ implode(', ', session('debug_info')['unique_lotteries']) }}</p>
-                                        <details class="mt-2">
-                                            <summary class="cursor-pointer font-semibold">Ver datos completos</summary>
-                                            <pre class="mt-2 text-xs overflow-auto max-h-40">{{ json_encode(session('debug_info')['raw_apus_data'], JSON_PRETTY_PRINT) }}</pre>
-                                        </details>
-                                    </div>
-                                @endif
-                                
-                                @if(session('debug_groups') && session('debug_groups')['ticket'] === '24-0008')
-                                    <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mb-4 no-print">
-                                        <h4 class="font-bold">DEBUG INFO - Processed Groups:</h4>
-                                        <details class="mt-2">
-                                            <summary class="cursor-pointer font-semibold">Ver grupos procesados</summary>
-                                            <pre class="mt-2 text-xs overflow-auto max-h-40">{{ json_encode(session('debug_groups')['processed_groups'], JSON_PRETTY_PRINT) }}</pre>
-                                        </details>
-                                    </div>
-                                @endif
-                                
                                 <div class="flex items-center justify-between gap-2 no-print z-10 mt-3" id="buttonsContainer">
                                     <a href="/"
                                        class="w-full text-sm px-3 py-1 bg-teal-500 text-white rounded-md flex justify-center
                                               items-center gap-2 hover:bg-teal-600/90 duration-200">
                                         <i class="fa-solid fa-rug rotate-90"></i> Nuevo ticket
                                     </a>
-    
+
                                     <button onclick="printTicket()"
                                             class="w-full text-sm px-3 py-1 bg-blue-500 text-white rounded-md
                                                    flex justify-center items-center gap-2 hover:bg-blue-600/90 duration-200">
                                         <i class="fas fa-print"></i> Imprimir
                                     </button>
-    
+
                                     <button onclick="guardarTicket()"
                                             class="w-full text-sm px-3 py-1 bg-green-500 text-white rounded-md
                                                    flex justify-center items-center gap-2 hover:bg-green-600/90 duration-200">
                                         <i class="fas fa-save"></i> Guardar
                                     </button>
-    
-                                    <button wire:click="shareTicket('{{ $play->ticket }}')" onclick="guardarTicket()"
+
+                                    <button wire:click="shareTicket('{{ $selectedTicket->ticket }}')" onclick="guardarTicket()"
                                             class="w-full text-sm px-3 py-1 bg-yellow-200 text-gray-600 rounded-md
                                                    flex justify-center items-center gap-2 hover:bg-yellow-200/85 duration-200">
                                         <i class="fas fa-share"></i> Compartir
                                     </button>
                                 </div>
-                                <div id="ticketContainer" data-code="{{ $play->code }}" data-ticket="{{ $play->ticket }}"
+                                <div id="ticketContainer" data-code="{{ $selectedTicket->code }}" data-ticket="{{ $selectedTicket->ticket }}"
                                      class="w-[80mm] mx-auto p-2 text-black bg-white relative">
                                     <div class="flex items-center justify-center mb-2">
                                         @if(Auth::user()->hasRole('Cliente') && Auth::user()->profile_photo_path)
@@ -230,27 +206,104 @@
                                         @endif
                                     </div>
 
-                                    {{-- <h3 class="text-center font-bold text-lg">
-                                        REIMPRESIÓN
-                                    </h3> --}}
-
                                     <div class="flex justify-between border-b border-gray-400 py-1 text-lg">
-                                        <span>Vendedor: <strong>{{ $play->user_id }}</strong></span>
-                                        <span>Ticket: <strong>{{ $play->ticket }}</strong></span>
+                                        <span>Vendedor: <strong>{{ $selectedTicket->user_id }}</strong></span>
+                                        <span>Ticket: <strong>{{ $selectedTicket->ticket }}</strong></span>
                                     </div><br>
 
-                                    <div class="flex justify-between text-lg py-1"style="border-bottom: 3px solid black;">
+                                    <div class="flex justify-between text-lg py-1" style="border-bottom: 3px solid black;">
                                         <div>
                                             <p class="font-semibold">FECHA:</p>
-                                            <p class="font-semibold">{{ $play->date }}</p>
+                                            <p class="font-semibold">{{ $selectedTicket->date }}</p>
                                         </div>
                                         <div>
                                             <p class="font-semibold">HORA:</p>
-                                            <p class="font-semibold">{{ $play->time }}</p>
+                                            <p class="font-semibold">{{ $selectedTicket->time }}</p>
                                         </div>
                                     </div>
 
                                     <div class="space-y-6">
+                                        @php
+                                            // Replicar la lógica exacta del componente PlaysSent
+                                            $rawApus = $selectedTicket->apus->sortBy('original_play_id')->sortBy('id');
+                                            $groupedByPlayId = $rawApus->groupBy('original_play_id');
+                                            
+                                            // Mapeo de códigos del sistema a códigos cortos (igual que PlaysManager)
+                                            $systemToShortCodes = [
+                                                'NAC1015' => 'AB', 'CHA1015' => 'CH1', 'PRO1015' => 'QW', 'MZA1015' => 'M10', 'CTE1015' => '!',
+                                                'ER' => 'SFE1015', 'SD' => 'COR1015', 'RT' => 'RIO1015', 'Q' => 'NAC1200', 'CH2' => 'CHA1200',
+                                                'W' => 'PRO1200', 'M1' => 'MZA1200', 'M' => 'CTE1200', 'R' => 'SFE1200', 'T' => 'COR1200',
+                                                'K' => 'RIO1200', 'A' => 'NAC1500', 'CH3' => 'CHA1500', 'E' => 'PRO1500', 'M2' => 'MZA1500',
+                                                'Ct3' => 'CTE1500', 'D' => 'SFE1500', 'L' => 'COR1500', 'J' => 'RIO1500', 'S' => 'ORO1800',
+                                                'F' => 'NAC1800', 'CH4' => 'CHA1800', 'B' => 'PRO1800', 'M3' => 'MZA1800', 'Z' => 'CTE1800',
+                                                'V' => 'SFE1800', 'H' => 'COR1800', 'U' => 'RIO1800', 'N' => 'NAC2100', 'CH5' => 'CHA2100',
+                                                'P' => 'PRO2100', 'M4' => 'MZA2100', 'G' => 'CTE2100', 'I' => 'SFE2100', 'C' => 'COR2100',
+                                                'Y' => 'RIO2100', 'O' => 'ORO2100',
+                                                // Nuevos códigos para las loterías adicionales
+                                                'NQN1015' => 'NQ1', 'MIS1030' => 'MI1', 'Rio1015' => 'RN1', 'Tucu1130' => 'TU1', 'San1015' => 'SG1',
+                                                'NQN1200' => 'NQ2', 'MIS1215' => 'MI2', 'JUJ1200' => 'JU1', 'Salt1130' => 'SA1', 'Rio1200' => 'RN2',
+                                                'Tucu1430' => 'TU2', 'San1200' => 'SG2', 'NQN1500' => 'NQ3', 'MIS1500' => 'MI3', 'JUJ1500' => 'JU2',
+                                                'Salt1400' => 'SA2', 'Rio1500' => 'RN3', 'Tucu1730' => 'TU3', 'San1500' => 'SG3', 'NQN1800' => 'NQ4',
+                                                'MIS1800' => 'MI4', 'JUJ1800' => 'JU3', 'Salt1730' => 'SA3', 'Rio1800' => 'RN4', 'Tucu1930' => 'TU4',
+                                                'San1945' => 'SG4', 'NQN2100' => 'NQ5', 'JUJ2100' => 'JU4', 'Rio2100' => 'RN5', 'Salt2100' => 'SA4',
+                                                'Tucu2200' => 'TU5', 'MIS2115' => 'MI5', 'San2200' => 'SG5'
+                                            ];
+                                            
+                                            $processedGroups = $groupedByPlayId->map(function ($groupOfApusFromSameOriginalPlay) use ($systemToShortCodes) {
+                                                $representativeApu = $groupOfApusFromSameOriginalPlay->first();
+                                                
+                                                $lotteryCodes = $groupOfApusFromSameOriginalPlay
+                                                    ->pluck('lottery')
+                                                    ->filter()
+                                                    ->unique()
+                                                    ->values()
+                                                    ->toArray();
+                                                
+                                                $displayCodes = [];
+                                                foreach ($lotteryCodes as $code) {
+                                                    $code = trim($code);
+                                                    if (preg_match_all('/[A-Za-z]+\d{4}/', $code, $matches)) {
+                                                        foreach ($matches[0] as $validCode) {
+                                                            $displayCodes[] = $validCode;
+                                                        }
+                                                    } elseif (preg_match('/^[A-Za-z]+\d{4}$/', $code)) {
+                                                        $displayCodes[] = $code;
+                                                    }
+                                                }
+                                                
+                                                $uniqueDisplayCodes = array_unique($displayCodes);
+                                                $codesDisplayString = implode(', ', $uniqueDisplayCodes);
+                                                
+                                                return [
+                                                    'codes_display_string' => $codesDisplayString,
+                                                    'numbers' => [[
+                                                        'number' => $representativeApu->number,
+                                                        'pos' => $representativeApu->position,
+                                                        'imp' => $representativeApu->import,
+                                                        'numR' => $representativeApu->numberR,
+                                                        'posR' => $representativeApu->positionR,
+                                                    ]],
+                                                ];
+                                            });
+                                            
+                                            $groups = $processedGroups
+                                                ->groupBy('codes_display_string')
+                                                ->map(function ($items, $key) {
+                                                    return [
+                                                        'codes_display' => array_map(function($code) {
+                                                            if (preg_match('/^([A-Za-z]+)(\d{4})$/', $code, $matches)) {
+                                                                $letters = $matches[1];
+                                                                $time = $matches[2];
+                                                                $shortTime = substr($time, 0, 2);
+                                                                return $letters . $shortTime;
+                                                            }
+                                                            return $code;
+                                                        }, explode(', ', $key)),
+                                                        'numbers' => collect($items->pluck('numbers')->flatten(1)->all())->values()->all(),
+                                                    ];
+                                                })
+                                                ->values();
+                                        @endphp
 
                                         @foreach($groups as $block)
                                             {{-- Encabezado de loterías --}}
@@ -281,13 +334,13 @@
                                             <h4 class="text-lg">
                                                 TOTAL:
                                                 <span class="font-extrabold">
-                                                    ${{ number_format($totalImport, 2, ',', '.') }}
+                                                    ${{ number_format($selectedTicket->amount ?? 0, 2, ',', '.') }}
                                                 </span>
                                             </h4>
                                         </div>
                                         <div class="flex justify-end">
                                             <p class="text-sm text-gray-500">
-                                                {{ $play->code }}
+                                                {{ $selectedTicket->code }}
                                             </p>
                                         </div>
                                     </div>
@@ -316,70 +369,6 @@
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script>
-    // Función para cerrar el modal directamente manipulando el DOM
-    function cerrarModalDirecto() {
-        console.log('🔍 DEBUG: Cerrando modal directamente');
-        
-        try {
-            // Buscar el modal por diferentes selectores posibles
-            let modal = null;
-            
-            // Intentar diferentes selectores
-            const selectors = [
-                '[wire\\:model="showApusModal"]',
-                '.modal',
-                '[role="dialog"]',
-                '.fixed.inset-0',
-                '.bg-gray-500.bg-opacity-25'
-            ];
-            
-            for (const selector of selectors) {
-                modal = document.querySelector(selector);
-                if (modal) {
-                    console.log('🔍 DEBUG: Modal encontrado con selector:', selector);
-                    break;
-                }
-            }
-            
-            if (modal) {
-                // Ocultar el modal
-                modal.style.display = 'none';
-                modal.style.visibility = 'hidden';
-                modal.style.opacity = '0';
-                modal.classList.remove('fixed', 'inset-0', 'z-50');
-                
-                console.log('✅ Modal cerrado correctamente');
-                
-                // Actualizar el estado de Livewire sin hacer llamada HTTP
-                setTimeout(() => {
-                    try {
-                        const livewireComponent = document.querySelector('[wire\\:id]');
-                        if (livewireComponent && livewireComponent.__livewire) {
-                            livewireComponent.__livewire.showApusModal = false;
-                            livewireComponent.__livewire.showTicketModal = false;
-                            livewireComponent.__livewire.selectedTicket = null;
-                            livewireComponent.__livewire.play = null;
-                            console.log('🔄 Estado Livewire actualizado');
-                        }
-                    } catch (e) {
-                        console.log('⚠️ Error actualizando estado Livewire:', e);
-                    }
-                }, 100);
-                
-            } else {
-                console.log('❌ Modal no encontrado, ocultando todos los modales');
-                
-                // Intentar cerrar todos los elementos con clase modal
-                const modals = document.querySelectorAll('.modal, [role="dialog"], .fixed.inset-0');
-                modals.forEach((m) => {
-                    m.style.display = 'none';
-                });
-            }
-            
-        } catch (error) {
-            console.error('❌ Error cerrando modal:', error);
-        }
-    }
 
     function printTicket() {
         html2canvas(document.getElementById('ticketContainer'), { scale: 2 }).then(canvas => {
@@ -464,23 +453,6 @@
 
     window.addEventListener('descargar-imagen', () => {
         guardarTicket();
-    });
-
-    // Listener para debug del modal cerrado
-    window.addEventListener('debug-modal-closed', (event) => {
-        console.log('🔍 DEBUG: Evento debug-modal-closed recibido:', event.detail);
-        
-        const debugDiv = document.createElement('div');
-        debugDiv.id = 'debug-modal-closed';
-        debugDiv.style.cssText = 'position: fixed; top: 60px; right: 10px; background: #51cf66; color: white; padding: 10px; border-radius: 5px; z-index: 9999; font-family: monospace; font-size: 12px;';
-        debugDiv.innerHTML = '✅ DEBUG: Modal cerrado por Livewire<br>' + event.detail.message + '<br>' + event.detail.timestamp;
-        document.body.appendChild(debugDiv);
-        
-        setTimeout(() => {
-            if (document.getElementById('debug-modal-closed')) {
-                document.body.removeChild(debugDiv);
-            }
-        }, 5000);
     });
     </script>
 
