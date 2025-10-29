@@ -103,9 +103,270 @@ class Results extends Component
 
     public function resetFilter()
     {
-        $this->date = date('Y-m-d');
-        $this->resetPage();
-        // Livewire se encarga de volver a renderizar automáticamente.
+        try {
+            $this->date = date('Y-m-d');
+            $this->resetPage();
+            
+            // ✅ NUEVO: Eliminar y recalcular resultados con la nueva lógica
+            $this->recalculateResults();
+            
+            // Livewire se encarga de volver a renderizar automáticamente.
+        } catch (\Exception $e) {
+            Log::error("Results - Error en resetFilter: " . $e->getMessage());
+            session()->flash('error', 'Error al reiniciar resultados: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * ✅ NUEVO: Elimina y recalcula todos los resultados para la fecha actual
+     */
+    private function recalculateResults()
+    {
+        try {
+            $user = auth()->user();
+            $date = $this->date;
+            
+            Log::info("Results - Iniciando recálculo de resultados para fecha: {$date}, usuario: {$user->id}");
+            
+            // 1. Eliminar todos los resultados existentes para esta fecha y usuario
+            $deletedCount = Result::whereDate('date', $date)
+                ->where('user_id', $user->id)
+                ->delete();
+                
+            Log::info("Results - Eliminados {$deletedCount} resultados existentes");
+            
+            // 2. Obtener todas las jugadas enviadas para esta fecha y usuario
+            $playsSent = PlaysSentModel::whereDate('date', $date)
+                ->where('user_id', $user->id)
+                ->where('status', '!=', 'I')
+                ->get();
+                
+            Log::info("Results - Encontradas {$playsSent->count()} jugadas para recalcular");
+            
+            if ($playsSent->isEmpty()) {
+                Log::info("Results - No hay jugadas para recalcular");
+                return;
+            }
+            
+            // 3. Obtener todos los números ganadores para esta fecha
+            $winningNumbers = \App\Models\Number::whereDate('date', $date)
+                ->with('city')
+                ->get();
+                
+            if ($winningNumbers->isEmpty()) {
+                Log::warning("Results - No hay números ganadores para la fecha {$date}");
+                return;
+            }
+            
+            // 4. Agrupar números ganadores por código de lotería
+            $groupedWinningNumbers = [];
+            foreach ($winningNumbers as $wn) {
+                if ($wn->city) {
+                    $lotteryKey = $wn->city->code;
+                    if (!isset($groupedWinningNumbers[$lotteryKey])) {
+                        $groupedWinningNumbers[$lotteryKey] = [];
+                    }
+                    $groupedWinningNumbers[$lotteryKey][$wn->index] = $wn->value;
+                }
+            }
+            
+            Log::info("Results - Números ganadores agrupados por lotería: " . count($groupedWinningNumbers) . " loterías");
+            
+            // 5. Recalcular resultados para cada jugada
+            $resultsInserted = 0;
+            $totalPrize = 0;
+            
+            foreach ($playsSent as $play) {
+                // Obtener las loterías de esta jugada
+                $playLotteries = explode(',', $play->lottery);
+                $playLotteries = array_map('trim', $playLotteries);
+                
+                foreach ($playLotteries as $lotteryCode) {
+                    if (!isset($groupedWinningNumbers[$lotteryCode])) {
+                        continue; // No hay números ganadores para esta lotería
+                    }
+                    
+                    $lotteryNumbers = $groupedWinningNumbers[$lotteryCode];
+                    
+                    // Verificar si la jugada es ganadora para esta lotería
+                    $isWinner = $this->isWinningPlayForLottery($play, $lotteryNumbers, $lotteryCode);
+                    
+                    if ($isWinner['isWinner']) {
+                        // Calcular premio
+                        $prize = $this->calculatePrizeForPlay($play, $isWinner['winningNumber'], $isWinner['winningPosition'], $lotteryCode);
+                        
+                        if ($prize > 0) {
+                            // Insertar resultado
+                            Result::create([
+                                'ticket' => $play->ticket,
+                                'lottery' => $lotteryCode,
+                                'number' => $play->number,
+                                'position' => $play->position,
+                                'numR' => $play->numberR ?? '',
+                                'posR' => $play->positionR ?? '',
+                                'import' => $play->amount,
+                                'aciert' => $prize,
+                                'user_id' => $user->id,
+                                'date' => $date,
+                                'created_at' => now(),
+                                'updated_at' => now(),
+                            ]);
+                            
+                            $resultsInserted++;
+                            $totalPrize += $prize;
+                            
+                            Log::info("Results - Resultado insertado: Ticket {$play->ticket}, Lotería {$lotteryCode}, Premio: \${$prize}");
+                        }
+                    }
+                }
+            }
+            
+            Log::info("Results - Recalculo completado: {$resultsInserted} resultados insertados, Total premios: \${$totalPrize}");
+            
+            session()->flash('success', "✅ Resultados recalculados exitosamente. {$resultsInserted} resultados insertados.");
+            
+        } catch (\Exception $e) {
+            Log::error("Results - Error en recalculateResults: " . $e->getMessage());
+            throw $e;
+        }
+    }
+    
+    /**
+     * ✅ NUEVO: Verifica si una jugada es ganadora para una lotería específica
+     */
+    private function isWinningPlayForLottery($play, $lotteryNumbers, $lotteryCode)
+    {
+        $playNumber = str_replace('*', '', $play->number);
+        $playLength = strlen($playNumber);
+        
+        if ($playLength <= 0 || $playLength > 4) {
+            return ['isWinner' => false];
+        }
+        
+        // Buscar coincidencia en todas las posiciones de la lotería
+        foreach ($lotteryNumbers as $position => $winningNumber) {
+            $winningNumberStr = str_pad($winningNumber, 4, '0', STR_PAD_LEFT);
+            $winningSuffix = substr($winningNumberStr, -$playLength);
+            
+            if ($playNumber === $winningSuffix) {
+                // Verificar que la posición sea correcta según las reglas de quiniela
+                if ($this->isPositionCorrect($play->position, $position)) {
+                    return [
+                        'isWinner' => true,
+                        'winningNumber' => $winningNumber,
+                        'winningPosition' => $position
+                    ];
+                }
+            }
+        }
+        
+        return ['isWinner' => false];
+    }
+    
+    /**
+     * ✅ NUEVO: Verifica si la posición apostada es correcta según las reglas de quiniela
+     */
+    private function isPositionCorrect($playedPosition, $winningPosition)
+    {
+        // Reglas de quiniela:
+        // - Posición 1 (Quiniela): Solo gana si sale en posición 1
+        // - Posición 5: Gana si sale en posiciones 2-5
+        // - Posición 10: Gana si sale en posiciones 6-10  
+        // - Posición 20: Gana si sale en posiciones 11-20
+        
+        switch ($playedPosition) {
+            case 1:
+                // Quiniela: solo gana si sale en posición 1
+                return $winningPosition == 1;
+                
+            case 5:
+                // A los 5: gana si sale en posiciones 2-5
+                return $winningPosition >= 2 && $winningPosition <= 5;
+                
+            case 10:
+                // A los 10: gana si sale en posiciones 6-10
+                return $winningPosition >= 6 && $winningPosition <= 10;
+                
+            case 20:
+                // A los 20: gana si sale en posiciones 11-20
+                return $winningPosition >= 11 && $winningPosition <= 20;
+                
+            default:
+                // Para otras posiciones, verificar coincidencia exacta
+                return $playedPosition == $winningPosition;
+        }
+    }
+    
+    /**
+     * ✅ NUEVO: Calcula el premio para una jugada ganadora
+     */
+    private function calculatePrizeForPlay($play, $winningNumber, $winningPosition, $lotteryCode)
+    {
+        try {
+            // Obtener configuraciones de premios
+            $quinielaPayouts = \App\Models\QuinielaModel::first();
+            $prizesPayouts = \App\Models\PrizesModel::first();
+            $figureOnePayouts = \App\Models\FigureOneModel::first();
+            $figureTwoPayouts = \App\Models\FigureTwoModel::first();
+            
+            if (!$quinielaPayouts || !$prizesPayouts || !$figureOnePayouts || !$figureTwoPayouts) {
+                Log::warning("Results - Faltan configuraciones de premios");
+                return 0;
+            }
+            
+            $playNumber = str_replace('*', '', $play->number);
+            $playedDigits = strlen($playNumber);
+            $prize = 0;
+            
+            // Calcular premio según la posición apostada
+            if ($play->position == 1) {
+                // Posición 1 (Quiniela): usar tabla de quiniela
+                $multiplier = 0;
+                if ($playedDigits == 1) $multiplier = (float)($quinielaPayouts->cobra_1_cifra ?? 0);
+                elseif ($playedDigits == 2) $multiplier = (float)($quinielaPayouts->cobra_2_cifra ?? 0);
+                elseif ($playedDigits == 3) $multiplier = (float)($quinielaPayouts->cobra_3_cifra ?? 0);
+                elseif ($playedDigits == 4) $multiplier = (float)($quinielaPayouts->cobra_4_cifra ?? 0);
+                
+                $prize = $play->amount * $multiplier;
+            } else {
+                // Otras posiciones: usar tabla de premios según dígitos
+                $multiplier = 0;
+                if ($playedDigits == 1 || $playedDigits == 2) {
+                    // Usar tabla de premios (A los 5, 10, 20)
+                    $multiplier = $this->getPositionMultiplier($winningPosition, $prizesPayouts);
+                } elseif ($playedDigits == 3) {
+                    // Usar tabla de figura 1
+                    $multiplier = $this->getPositionMultiplier($winningPosition, $figureOnePayouts);
+                } elseif ($playedDigits == 4) {
+                    // Usar tabla de figura 2
+                    $multiplier = $this->getPositionMultiplier($winningPosition, $figureTwoPayouts);
+                }
+                
+                $prize = $play->amount * $multiplier;
+            }
+            
+            return $prize;
+            
+        } catch (\Exception $e) {
+            Log::error("Results - Error calculando premio: " . $e->getMessage());
+            return 0;
+        }
+    }
+    
+    /**
+     * ✅ NUEVO: Obtiene el multiplicador de premio según la posición
+     */
+    private function getPositionMultiplier($position, $payoutTable)
+    {
+        if ($position >= 1 && $position <= 5) {
+            return (float)($payoutTable->pos_5 ?? 0);
+        } elseif ($position >= 6 && $position <= 10) {
+            return (float)($payoutTable->pos_10 ?? 0);
+        } elseif ($position >= 11 && $position <= 20) {
+            return (float)($payoutTable->pos_20 ?? 0);
+        }
+        
+        return 0;
     }
 
     /**
