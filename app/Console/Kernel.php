@@ -35,6 +35,13 @@ class Kernel extends ConsoleKernel
                  ->everyFiveMinutes()
                  ->between('10:00', '23:59')
                  ->withoutOverlapping();
+                 
+        // ✅ NUEVO: Extracción automática de números cada hora con validación
+        $schedule->command('lottery:auto-extract')
+                 ->hourly()
+                 ->between('10:00', '23:59')
+                 ->withoutOverlapping()
+                 ->runInBackground();
     }
 
     /**
