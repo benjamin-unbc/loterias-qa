@@ -287,11 +287,10 @@ class AutoExtractNumbers extends Command
             
             Log::info("AutoExtractNumbers - ✅ Lotería {$lotteryCode} COMPLETA con 20 números. Procediendo con inserción de resultados...");
             
-            // Buscar jugadas que coincidan con este número ganador
-            // ✅ Buscar jugadas que contengan esta lotería (pueden tener múltiples loterías separadas por comas)
+            // Buscar jugadas candidatas por lotería EXACTA (campo lottery puede tener múltiples códigos separados por coma)
+            // Usamos FIND_IN_SET para coincidencia exacta del código dentro de la lista
             $matchingPlays = \App\Models\ApusModel::whereDate('created_at', $date)
-                                                 ->where('position', $position)
-                                                 ->where('lottery', 'LIKE', "%{$lotteryCode}%")
+                                                 ->whereRaw('FIND_IN_SET(?, lottery)', [$lotteryCode])
                                                  ->get();
             
             Log::info("AutoExtractNumbers - Encontradas " . $matchingPlays->count() . " jugadas para posición {$position} y lotería {$lotteryCode}");
@@ -387,7 +386,9 @@ class AutoExtractNumbers extends Command
         $playedDigits = strlen($playedNumber);
         
         if ($playedDigits > 0 && $playedDigits <= 4) {
-            $winningLastDigits = substr($winningNumber, -$playedDigits);
+            // Normalizar ganador a 4 dígitos y comparar por sufijo
+            $winner4 = str_pad((string)$winningNumber, 4, '0', STR_PAD_LEFT);
+            $winningLastDigits = substr($winner4, -$playedDigits);
             $numbersMatch = $playedNumber === $winningLastDigits;
             
             if (!$numbersMatch) {

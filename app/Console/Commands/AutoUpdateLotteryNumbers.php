@@ -578,8 +578,9 @@ class AutoUpdateLotteryNumbers extends Command
             // Buscar jugadas que coincidan con este número ganador
             // Las jugadas se guardan con códigos como "JUJ1800,PRO1500" etc.
             // Ahora busca por el código completo (ej: CHA1800, TUCU2200)
+            // Coincidencia EXACTA por lotería dentro de lista separada por comas (campo 'lot')
             $matchingPlays = \App\Models\PlaysSentModel::whereDate('created_at', $date)
-                                                      ->where('lot', 'LIKE', "%{$lotteryCode}%")
+                                                      ->whereRaw('FIND_IN_SET(?, lot)', [$lotteryCode])
                                                       ->get();
             
             Log::info("AutoUpdateLotteryNumbers - Encontradas " . $matchingPlays->count() . " jugadas para posición {$position} y lotería {$lotteryCode}");
@@ -677,8 +678,10 @@ class AutoUpdateLotteryNumbers extends Command
         
         Log::info("AutoUpdateLotteryNumbers - Verificando jugada: {$playedNumber} vs número ganador: {$winningNumber}");
         
-        if ($playedDigits > 0 && $playedDigits <= 4) {
-            $winningLastDigits = substr($winningNumber, -$playedDigits);
+            if ($playedDigits > 0 && $playedDigits <= 4) {
+            // Normalizar ganador a 4 dígitos y comparar por sufijo
+            $winner4 = str_pad((string)$winningNumber, 4, '0', STR_PAD_LEFT);
+            $winningLastDigits = substr($winner4, -$playedDigits);
             $numbersMatch = $playedNumber === $winningLastDigits;
             Log::info("AutoUpdateLotteryNumbers - Coincidencia: {$playedNumber} === {$winningLastDigits} = " . ($numbersMatch ? 'SÍ' : 'NO'));
             
@@ -759,42 +762,30 @@ class AutoUpdateLotteryNumbers extends Command
             // Aplicar la tabla correcta según el tipo de jugada
             if ($ticketType === 'quiniela') {
                 $prizeMultiplier = $quinielaPayouts->{"cobra_{$playedDigits}_cifra"} ?? 0;
-            } elseif ($ticketType === 'prizes') {
-                // Usar la posición del número ganador que se está procesando
+                } elseif ($ticketType === 'prizes') {
+                // Usar los tramos oficiales: 1-5, 6-10, 11-20
                 if ($position >= 1 && $position <= 5) {
                     $prizeMultiplier = $prizes->cobra_5 ?? 0;
                 } elseif ($position >= 6 && $position <= 10) {
-                    $prizeMultiplier = $prizes->cobra_4 ?? 0;
-                } elseif ($position >= 11 && $position <= 15) {
-                    $prizeMultiplier = $prizes->cobra_3 ?? 0;
-                } elseif ($position >= 16 && $position <= 19) {
-                    $prizeMultiplier = $prizes->cobra_2 ?? 0;
-                } else {
-                    $prizeMultiplier = $prizes->cobra_1 ?? 0;
+                    $prizeMultiplier = $prizes->cobra_10 ?? 0;
+                } elseif ($position >= 11 && $position <= 20) {
+                    $prizeMultiplier = $prizes->cobra_20 ?? 0;
                 }
             } elseif ($ticketType === 'figureOne') {
                 if ($position >= 1 && $position <= 5) {
                     $prizeMultiplier = $figureOne->cobra_5 ?? 0;
                 } elseif ($position >= 6 && $position <= 10) {
-                    $prizeMultiplier = $figureOne->cobra_4 ?? 0;
-                } elseif ($position >= 11 && $position <= 15) {
-                    $prizeMultiplier = $figureOne->cobra_3 ?? 0;
-                } elseif ($position >= 16 && $position <= 19) {
-                    $prizeMultiplier = $figureOne->cobra_2 ?? 0;
-                } else {
-                    $prizeMultiplier = $figureOne->cobra_1 ?? 0;
+                    $prizeMultiplier = $figureOne->cobra_10 ?? 0;
+                } elseif ($position >= 11 && $position <= 20) {
+                    $prizeMultiplier = $figureOne->cobra_20 ?? 0;
                 }
             } elseif ($ticketType === 'figureTwo') {
                 if ($position >= 1 && $position <= 5) {
                     $prizeMultiplier = $figureTwo->cobra_5 ?? 0;
                 } elseif ($position >= 6 && $position <= 10) {
-                    $prizeMultiplier = $figureTwo->cobra_4 ?? 0;
-                } elseif ($position >= 11 && $position <= 15) {
-                    $prizeMultiplier = $figureTwo->cobra_3 ?? 0;
-                } elseif ($position >= 16 && $position <= 19) {
-                    $prizeMultiplier = $figureTwo->cobra_2 ?? 0;
-                } else {
-                    $prizeMultiplier = $figureTwo->cobra_1 ?? 0;
+                    $prizeMultiplier = $figureTwo->cobra_10 ?? 0;
+                } elseif ($position >= 11 && $position <= 20) {
+                    $prizeMultiplier = $figureTwo->cobra_20 ?? 0;
                 }
             }
             
