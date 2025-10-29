@@ -1,6 +1,6 @@
 <div>
-    <div class=" bg-[#1b1f22] w-full h-screen max-h-screen p-3 md:p-4 flex flex-col justify-between gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div class="flex flex-col gap-3 rounded-lg item text-sm w-full max-w-6xl mx-auto">
+    <div class=" bg-[#1b1f22] w-full h-screen max-h-screen p-3 md:p-4 flex flex-col justify-between gap-3 lg:flex-row lg:items-start lg:gap-4">
+        <div class="flex flex-col gap-3 rounded-lg item text-sm w-full lg:w-1/2">
 
             <div class="flex justify-between items-center gap-2 pb-2">
                 <h2 class="font-bold text-xl text-white">Gestor de jugada</h2>
@@ -299,7 +299,7 @@
         </div>
 
         <div
-            class="flex flex-col gap-5 items-center h-full border-gray-600 lg:ps-3 lg:border-s w-full sm:w-full lg:w-3/6 pb-3 lg:p-0">
+            class="flex flex-col gap-5 items-center h-full border-gray-600 lg:ps-3 lg:border-s w-full sm:w-full lg:w-1/2 pb-3 lg:p-0">
             @if ($rows->count() > 0)
                 <div class="w-full flex flex-col justify-between rounded-lg h-full ">
                     <div id="paginated-users" class="flex flex-col relative">
@@ -515,7 +515,7 @@
                                 </div>
                                 <div class="space-y-4">
                                     @foreach ($groups as $block)
-                                        <div class="text-center text-black font-bold py-1" style="border-bottom: 3px solid black;">
+                                        <div class="text-left text-black font-bold py-1" style="border-bottom: 3px solid black;">
                                             {{ implode(' ', $block['codes_display']) }}
                                         </div>
                                         <div class="space-y-1 text-sm">
