@@ -172,11 +172,15 @@ class Results extends Component
             
             Log::info("Results - Números ganadores agrupados por lotería: " . count($groupedWinningNumbers) . " loterías");
             
-            // 5. Recalcular resultados para cada jugada
+            // 5. Recalcular resultados para cada jugada usando la nueva lógica
             $resultsInserted = 0;
             $totalPrize = 0;
+            $analyzedPlays = 0;
+            
+            Log::info("Results - Iniciando análisis de jugadas con nueva lógica de verificación de posiciones");
             
             foreach ($playsSent as $play) {
+                $analyzedPlays++;
                 // Obtener las loterías de esta jugada
                 $playLotteries = explode(',', $play->lottery);
                 $playLotteries = array_map('trim', $playLotteries);
@@ -188,7 +192,7 @@ class Results extends Component
                     
                     $lotteryNumbers = $groupedWinningNumbers[$lotteryCode];
                     
-                    // Verificar si la jugada es ganadora para esta lotería
+                    // ✅ NUEVA LÓGICA: Verificar si la jugada es ganadora con verificación de posición
                     $isWinner = $this->isWinningPlayForLottery($play, $lotteryNumbers, $lotteryCode);
                     
                     if ($isWinner['isWinner']) {
@@ -196,7 +200,7 @@ class Results extends Component
                         $prize = $this->calculatePrizeForPlay($play, $isWinner['winningNumber'], $isWinner['winningPosition'], $lotteryCode);
                         
                         if ($prize > 0) {
-                            // Insertar resultado
+                            // Insertar SOLO resultados correctos
                             Result::create([
                                 'ticket' => $play->ticket,
                                 'lottery' => $lotteryCode,
@@ -215,18 +219,27 @@ class Results extends Component
                             $resultsInserted++;
                             $totalPrize += $prize;
                             
-                            Log::info("Results - Resultado insertado: Ticket {$play->ticket}, Lotería {$lotteryCode}, Premio: \${$prize}");
+                            Log::info("Results - ✅ Resultado CORRECTO insertado: Ticket {$play->ticket}, Lotería {$lotteryCode}, Número: {$play->number}, Posición apostada: {$play->position}, Posición ganadora: {$isWinner['winningPosition']}, Premio: \${$prize}");
                         }
+                    } else {
+                        Log::debug("Results - ❌ Jugada NO ganadora (filtrada por nueva lógica): Ticket {$play->ticket}, Lotería {$lotteryCode}, Número: {$play->number}, Posición apostada: {$play->position}");
                     }
                 }
             }
             
+            Log::info("Results - Análisis completado: {$analyzedPlays} jugadas analizadas, {$resultsInserted} resultados correctos insertados");
+            
             Log::info("Results - Recalculo completado: {$resultsInserted} resultados insertados, Total premios: \${$totalPrize}");
             
-            session()->flash('success', "✅ Resultados recalculados exitosamente. {$resultsInserted} resultados insertados.");
+            if ($resultsInserted > 0) {
+                session()->flash('success', "✅ Resultados recalculados exitosamente. Se eliminaron {$deletedCount} resultados anteriores y se insertaron {$resultsInserted} resultados correctos usando la nueva lógica de verificación de posiciones.");
+            } else {
+                session()->flash('info', "ℹ️ No se encontraron jugadas ganadoras para la fecha {$date}. Se eliminaron {$deletedCount} resultados anteriores.");
+            }
             
         } catch (\Exception $e) {
             Log::error("Results - Error en recalculateResults: " . $e->getMessage());
+            session()->flash('error', 'Error al recalcular resultados: ' . $e->getMessage());
             throw $e;
         }
     }
