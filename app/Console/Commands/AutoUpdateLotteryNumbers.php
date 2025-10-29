@@ -633,7 +633,8 @@ class AutoUpdateLotteryNumbers extends Command
                         'ticket' => $play->ticket,
                         'lottery' => $lotteryCode,
                         'number' => $play->code,
-                        'position' => $position,
+                        // Guardar la POSICIÓN APOSTADA en 'position' y la GANADORA en 'posicion_g'
+                        'position' => $play->position,
                         'import' => $play->amount,
                         'aciert' => $totalPrize,
                         'date' => $date,
