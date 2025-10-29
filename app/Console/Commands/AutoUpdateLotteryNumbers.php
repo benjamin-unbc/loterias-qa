@@ -600,7 +600,7 @@ class AutoUpdateLotteryNumbers extends Command
                 $aciertoValue = 0;
                 $redoblonaValue = 0;
                 
-                if ($this->isWinningPlay($play, $winningNumber)) {
+                if ($this->isWinningPlay($play, $winningNumber, $position)) {
                     $aciertoValue = $this->calculatePrize($play, $winningNumber, $quinielaPayouts, $position);
                 }
                 
@@ -658,8 +658,9 @@ class AutoUpdateLotteryNumbers extends Command
     
     /**
      * Verifica si una jugada es ganadora
+     * ✅ MODIFICADO: Ahora verifica tanto los números como las posiciones correctas
      */
-    private function isWinningPlay($play, $winningNumber)
+    private function isWinningPlay($play, $winningNumber, $winningPosition = null)
     {
         // PlaysSentModel ahora usa 'code' que contiene el número de quiniela (4 dígitos)
         $playedNumber = str_replace('*', '', $play->code);
@@ -669,12 +670,59 @@ class AutoUpdateLotteryNumbers extends Command
         
         if ($playedDigits > 0 && $playedDigits <= 4) {
             $winningLastDigits = substr($winningNumber, -$playedDigits);
-            $isWinner = $playedNumber === $winningLastDigits;
-            Log::info("AutoUpdateLotteryNumbers - Coincidencia: {$playedNumber} === {$winningLastDigits} = " . ($isWinner ? 'SÍ' : 'NO'));
-            return $isWinner;
+            $numbersMatch = $playedNumber === $winningLastDigits;
+            Log::info("AutoUpdateLotteryNumbers - Coincidencia: {$playedNumber} === {$winningLastDigits} = " . ($numbersMatch ? 'SÍ' : 'NO'));
+            
+            if (!$numbersMatch) {
+                return false;
+            }
+            
+            // Si no se proporciona la posición ganadora, solo verificar números (comportamiento anterior)
+            if ($winningPosition === null) {
+                return true;
+            }
+            
+            // Verificar que la posición sea correcta según las reglas de quiniela
+            $positionCorrect = $this->isPositionCorrect($play->position, $winningPosition);
+            Log::info("AutoUpdateLotteryNumbers - Posición correcta: apostada {$play->position} vs ganadora {$winningPosition} = " . ($positionCorrect ? 'SÍ' : 'NO'));
+            return $positionCorrect;
         }
         
         return false;
+    }
+    
+    /**
+     * ✅ NUEVO: Verifica si la posición apostada es correcta según las reglas de quiniela
+     */
+    private function isPositionCorrect($playedPosition, $winningPosition)
+    {
+        // Reglas de quiniela:
+        // - Posición 1 (Quiniela): Solo gana si sale en posición 1
+        // - Posición 5: Gana si sale en posiciones 2-5
+        // - Posición 10: Gana si sale en posiciones 6-10  
+        // - Posición 20: Gana si sale en posiciones 11-20
+        
+        switch ($playedPosition) {
+            case 1:
+                // Quiniela: solo gana si sale en posición 1
+                return $winningPosition == 1;
+                
+            case 5:
+                // A los 5: gana si sale en posiciones 2-5
+                return $winningPosition >= 2 && $winningPosition <= 5;
+                
+            case 10:
+                // A los 10: gana si sale en posiciones 6-10
+                return $winningPosition >= 6 && $winningPosition <= 10;
+                
+            case 20:
+                // A los 20: gana si sale en posiciones 11-20
+                return $winningPosition >= 11 && $winningPosition <= 20;
+                
+            default:
+                // Para otras posiciones, verificar coincidencia exacta
+                return $playedPosition == $winningPosition;
+        }
     }
     
     /**

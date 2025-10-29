@@ -58,14 +58,25 @@ class PlaysSent extends Component
      */
     public function viewTicket($ticket)
     {
-        // OPTIMIZACIÓN: Consulta optimizada con select específico
-        $this->selectedTicket = PlaysSentModel::select([
-                'ticket', 'code', 'date', 'time', 'user_id', 'amount', 'type', 'status'
-            ])
-            ->where('ticket', $ticket)
-            ->where('user_id', Auth::user()->id)
-            ->first();
-        $this->showTicketModal = true;
+        try {
+            // Buscar la jugada enviada con relaciones por número de ticket
+            $this->selectedTicket = PlaysSentModel::with(['apus', 'ticket'])
+                ->where('ticket', $ticket)
+                ->where('user_id', Auth::user()->id)
+                ->first();
+            
+            if ($this->selectedTicket) {
+                $this->showTicketModal = true;
+                \Log::info('Ticket modal opened for ticket: ' . $ticket, [
+                    'ticket' => $this->selectedTicket->ticket,
+                    'apus_count' => $this->selectedTicket->apus->count()
+                ]);
+            } else {
+                \Log::warning('Ticket not found for ticket: ' . $ticket);
+            }
+        } catch (\Exception $e) {
+            \Log::error('Error opening ticket modal: ' . $e->getMessage());
+        }
     }
 
     // Standardized codes array (consistent with LotteryResultProcessor and PlaysManager)
@@ -114,45 +125,25 @@ class PlaysSent extends Component
  */
 public function viewApus($ticket)
 {
-    // OPTIMIZACIÓN 1: Consulta optimizada con select específico y índices
-    $rawApus = ApusModel::select([
-            'id', 'ticket', 'user_id', 'number', 'position', 'import', 
-            'lottery', 'numberR', 'positionR', 'original_play_id'
-        ])
-        ->where('ticket', $ticket)
-        ->where('user_id', Auth::user()->id)
-        ->orderBy('original_play_id', 'asc')
-        ->orderBy('id', 'asc')
-        ->get();
-
-
-    if ($rawApus->isEmpty()) {
-        $this->apusData = collect();
-        $this->groups = collect();
-        $this->totalImport = 0;
-        // OPTIMIZACIÓN 2: Consulta paralela para el play
-        $this->play = PlaysSentModel::select(['ticket', 'code', 'date', 'time', 'user_id', 'amount'])
+    try {
+        // Buscar la jugada enviada con relaciones por número de ticket (igual que en ClientDetailsModal)
+        $this->selectedTicket = PlaysSentModel::with(['apus', 'ticket'])
             ->where('ticket', $ticket)
             ->where('user_id', Auth::user()->id)
             ->first();
-        $this->showApusModal = true;
-        return;
+        
+        if ($this->selectedTicket) {
+            $this->showApusModal = true;
+            \Log::info('Apus modal opened for ticket: ' . $ticket, [
+                'ticket' => $this->selectedTicket->ticket,
+                'apus_count' => $this->selectedTicket->apus->count()
+            ]);
+        } else {
+            \Log::warning('Ticket not found for ticket: ' . $ticket);
+        }
+    } catch (\Exception $e) {
+        \Log::error('Error opening apus modal: ' . $e->getMessage());
     }
-
-    // OPTIMIZACIÓN 3: Procesamiento optimizado de agrupaciones
-    $this->processApusData($rawApus);
-
-
-    // OPTIMIZACIÓN 4: Consulta paralela para el play (ya no bloquea el procesamiento)
-    $this->play = PlaysSentModel::select(['ticket', 'code', 'date', 'time', 'user_id', 'amount'])
-        ->where('ticket', $ticket)
-        ->where('user_id', Auth::user()->id)
-        ->first();
-    
-    $this->apusData = $rawApus;
-    // OPTIMIZACIÓN 5: Cálculo optimizado del total
-    $this->totalImport = $rawApus->sum('import');
-    $this->showApusModal = true;
 }
 
 /**
@@ -362,41 +353,12 @@ private function processApusData($rawApus)
 
     public function closeTicketModal()
     {
-        \Log::info('🔍 DEBUG: Método closeTicketModal() ejecutado', [
-            'showApusModal_before' => $this->showApusModal,
-            'showTicketModal_before' => $this->showTicketModal,
-            'selectedTicket_before' => $this->selectedTicket ? $this->selectedTicket->ticket : null,
-            'play_before' => $this->play ? $this->play->ticket : null
-        ]);
-        
-        $this->showApusModal = false;
         $this->showTicketModal = false;
+        $this->showApusModal = false;
         $this->selectedTicket = null;
         $this->play = null;
-        
-        \Log::info('🔍 DEBUG: Modal cerrado correctamente', [
-            'showApusModal_after' => $this->showApusModal,
-            'showTicketModal_after' => $this->showTicketModal,
-            'selectedTicket_after' => $this->selectedTicket,
-            'play_after' => $this->play
-        ]);
-        
-        // Enviar notificación de debug al frontend
-        $this->dispatch('debug-modal-closed', [
-            'message' => 'Modal cerrado correctamente',
-            'timestamp' => now()->toDateTimeString()
-        ]);
-        
-        // También enviar notificación de éxito
-        $this->dispatch('notify', message: 'Modal cerrado correctamente', type: 'success');
     }
 
-    // Método de prueba simple
-    public function testMethod()
-    {
-        \Log::info('🔍 DEBUG: Método testMethod() ejecutado');
-        $this->dispatch('notify', message: 'Método de prueba ejecutado correctamente', type: 'success');
-    }
 
 
 

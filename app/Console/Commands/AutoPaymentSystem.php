@@ -252,7 +252,7 @@ class AutoPaymentSystem extends Command
         
         // Verificar si los números coinciden con alguno de los números ganadores completos
         foreach ($completeNumbers as $number) {
-            if ($this->isWinningPlay($play, $number->value)) {
+            if ($this->isWinningPlay($play, $number->value, $number->index)) {
                 return true;
             }
         }
@@ -275,7 +275,7 @@ class AutoPaymentSystem extends Command
         } else {
             // Solo calcular premio principal si NO hay redoblona
             foreach ($completeNumbers as $number) {
-                if ($this->isWinningPlay($play, $number->value)) {
+                if ($this->isWinningPlay($play, $number->value, $number->index)) {
                     $mainPrize = $this->calculateMainPrize($play, $number->value);
                     break; // Solo calcular para el primer número que coincida
                 }
@@ -320,8 +320,9 @@ class AutoPaymentSystem extends Command
 
     /**
      * Verifica si una jugada es ganadora
+     * ✅ MODIFICADO: Ahora verifica tanto los números como las posiciones correctas
      */
-    private function isWinningPlay($play, $winningNumber)
+    private function isWinningPlay($play, $winningNumber, $winningPosition = null)
     {
         $playNumber = str_replace('*', '', $play->number);
         $winningNumberStr = str_pad($winningNumber, 4, '0', STR_PAD_LEFT);
@@ -329,7 +330,54 @@ class AutoPaymentSystem extends Command
         $playLength = strlen($playNumber);
         $winningSuffix = substr($winningNumberStr, -$playLength);
         
-        return $playNumber === $winningSuffix;
+        // Verificar que los números coincidan
+        $numbersMatch = $playNumber === $winningSuffix;
+        
+        if (!$numbersMatch) {
+            return false;
+        }
+        
+        // Si no se proporciona la posición ganadora, solo verificar números (comportamiento anterior)
+        if ($winningPosition === null) {
+            return true;
+        }
+        
+        // Verificar que la posición sea correcta según las reglas de quiniela
+        return $this->isPositionCorrect($play->position, $winningPosition);
+    }
+    
+    /**
+     * ✅ NUEVO: Verifica si la posición apostada es correcta según las reglas de quiniela
+     */
+    private function isPositionCorrect($playedPosition, $winningPosition)
+    {
+        // Reglas de quiniela:
+        // - Posición 1 (Quiniela): Solo gana si sale en posición 1
+        // - Posición 5: Gana si sale en posiciones 2-5
+        // - Posición 10: Gana si sale en posiciones 6-10  
+        // - Posición 20: Gana si sale en posiciones 11-20
+        
+        switch ($playedPosition) {
+            case 1:
+                // Quiniela: solo gana si sale en posición 1
+                return $winningPosition == 1;
+                
+            case 5:
+                // A los 5: gana si sale en posiciones 2-5
+                return $winningPosition >= 2 && $winningPosition <= 5;
+                
+            case 10:
+                // A los 10: gana si sale en posiciones 6-10
+                return $winningPosition >= 6 && $winningPosition <= 10;
+                
+            case 20:
+                // A los 20: gana si sale en posiciones 11-20
+                return $winningPosition >= 11 && $winningPosition <= 20;
+                
+            default:
+                // Para otras posiciones, verificar coincidencia exacta
+                return $playedPosition == $winningPosition;
+        }
     }
 
     /**
@@ -557,7 +605,7 @@ class AutoPaymentSystem extends Command
         
         // Verificar si los números coinciden con alguno de los números ganadores
         foreach ($numbers as $number) {
-            if ($this->isWinningPlay($play, $number->value)) {
+            if ($this->isWinningPlay($play, $number->value, $number->index)) {
                 return true;
             }
         }
@@ -580,7 +628,7 @@ class AutoPaymentSystem extends Command
         } else {
             // Solo calcular premio principal si NO hay redoblona
             foreach ($numbers as $number) {
-                if ($this->isWinningPlay($play, $number->value)) {
+                if ($this->isWinningPlay($play, $number->value, $number->index)) {
                     $mainPrize = $this->calculateMainPrize($play, $number->value);
                     break; // Solo calcular para el primer número que coincida
                 }

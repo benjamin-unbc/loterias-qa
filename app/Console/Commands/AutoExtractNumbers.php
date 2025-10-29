@@ -312,7 +312,7 @@ class AutoExtractNumbers extends Command
                     $redoblonaValue = $this->redoblonaService->calculateRedoblonaPrize($play, $date, $lotteryCode);
                 } else {
                     // Solo calcular premio principal si NO hay redoblona
-                    if ($this->isWinningPlay($play, $winningNumber)) {
+                    if ($this->isWinningPlay($play, $winningNumber, $position)) {
                         $aciertoValue = $this->calculatePrize($play, $winningNumber, $quinielaPayouts);
                     }
                 }
@@ -370,18 +370,65 @@ class AutoExtractNumbers extends Command
     
     /**
      * Verifica si una jugada es ganadora
+     * ✅ MODIFICADO: Ahora verifica tanto los números como las posiciones correctas
      */
-    private function isWinningPlay($play, $winningNumber)
+    private function isWinningPlay($play, $winningNumber, $winningPosition = null)
     {
         $playedNumber = str_replace('*', '', $play->number);
         $playedDigits = strlen($playedNumber);
         
         if ($playedDigits > 0 && $playedDigits <= 4) {
             $winningLastDigits = substr($winningNumber, -$playedDigits);
-            return $playedNumber === $winningLastDigits;
+            $numbersMatch = $playedNumber === $winningLastDigits;
+            
+            if (!$numbersMatch) {
+                return false;
+            }
+            
+            // Si no se proporciona la posición ganadora, solo verificar números (comportamiento anterior)
+            if ($winningPosition === null) {
+                return true;
+            }
+            
+            // Verificar que la posición sea correcta según las reglas de quiniela
+            return $this->isPositionCorrect($play->position, $winningPosition);
         }
         
         return false;
+    }
+    
+    /**
+     * ✅ NUEVO: Verifica si la posición apostada es correcta según las reglas de quiniela
+     */
+    private function isPositionCorrect($playedPosition, $winningPosition)
+    {
+        // Reglas de quiniela:
+        // - Posición 1 (Quiniela): Solo gana si sale en posición 1
+        // - Posición 5: Gana si sale en posiciones 2-5
+        // - Posición 10: Gana si sale en posiciones 6-10  
+        // - Posición 20: Gana si sale en posiciones 11-20
+        
+        switch ($playedPosition) {
+            case 1:
+                // Quiniela: solo gana si sale en posición 1
+                return $winningPosition == 1;
+                
+            case 5:
+                // A los 5: gana si sale en posiciones 2-5
+                return $winningPosition >= 2 && $winningPosition <= 5;
+                
+            case 10:
+                // A los 10: gana si sale en posiciones 6-10
+                return $winningPosition >= 6 && $winningPosition <= 10;
+                
+            case 20:
+                // A los 20: gana si sale en posiciones 11-20
+                return $winningPosition >= 11 && $winningPosition <= 20;
+                
+            default:
+                // Para otras posiciones, verificar coincidencia exacta
+                return $playedPosition == $winningPosition;
+        }
     }
     
     /**
@@ -656,7 +703,7 @@ class AutoExtractNumbers extends Command
             if (!in_array((int)$number->index, $allowedIndexes)) {
                 continue;
             }
-            if ($this->isWinningPlay($play, $number->value)) {
+            if ($this->isWinningPlay($play, $number->value, $number->index)) {
                 return true;
             }
         }
@@ -679,7 +726,7 @@ class AutoExtractNumbers extends Command
         } else {
             // Solo calcular premio principal si NO hay redoblona
             foreach ($completeNumbers as $number) {
-                if ($this->isWinningPlay($play, $number->value)) {
+                if ($this->isWinningPlay($play, $number->value, $number->index)) {
                     $mainPrize = $this->calculateMainPrize($play, $number->value);
                     break; // Solo calcular para el primer número que coincida
                 }
