@@ -440,6 +440,7 @@ class NumberObserver
 
     /**
      * ✅ NUEVO: Verifica si una jugada es ganadora para una lotería completa
+     * CORREGIDO: Ahora verifica correctamente las posiciones según reglas de quiniela
      */
     private function isWinningPlayForLotteryComplete($play, $completeNumbers, $lotteryCode)
     {
@@ -451,16 +452,30 @@ class NumberObserver
             return false;
         }
         
-        // Determinar rango permitido según posición apostada (RANGOS DISJUNTOS)
+        // ✅ CORREGIDO: Determinar rango permitido según posición apostada (REGLAS DE QUINIELA)
         $allowedIndexes = [];
-        if ((int)$play->position === 1) {
-            $allowedIndexes = [1]; // Solo quiniela
-        } elseif ((int)$play->position >= 2 && (int)$play->position <= 5) {
-            $allowedIndexes = range(2, 5); // Tabla 2-5
-        } elseif ((int)$play->position >= 6 && (int)$play->position <= 10) {
-            $allowedIndexes = range(6, 10); // Tabla 6-10
-        } elseif ((int)$play->position >= 11 && (int)$play->position <= 20) {
-            $allowedIndexes = range(11, 20); // Tabla 11-20
+        $playedPosition = (int)$play->position;
+        
+        switch ($playedPosition) {
+            case 1:
+                // Quiniela: solo posición 1
+                $allowedIndexes = [1];
+                break;
+            case 5:
+                // A los 5: posiciones 2-5
+                $allowedIndexes = range(2, 5);
+                break;
+            case 10:
+                // A los 10: posiciones 6-10
+                $allowedIndexes = range(6, 10);
+                break;
+            case 20:
+                // A los 20: posiciones 11-20
+                $allowedIndexes = range(11, 20);
+                break;
+            default:
+                // Para otras posiciones específicas, solo esa posición
+                $allowedIndexes = [$playedPosition];
         }
 
         // Verificar si los números coinciden con alguno de los números ganadores completos EN POSICIÓN VÁLIDA
@@ -468,6 +483,7 @@ class NumberObserver
             if (!in_array((int)$number->index, $allowedIndexes)) {
                 continue;
             }
+            // ✅ Verificar tanto números como posición correcta
             if ($this->isWinningPlay($play, $number->value, $number->index)) {
                 return true;
             }
@@ -493,22 +509,37 @@ class NumberObserver
             $playedNumber = str_replace('*', '', $play->number);
             $playedDigits = strlen($playedNumber);
 
-            // Determinar rango permitido según posición apostada (RANGOS DISJUNTOS)
+            // ✅ CORREGIDO: Determinar rango permitido según posición apostada (REGLAS DE QUINIELA)
             $allowedIndexes = [];
-            if ((int)$play->position === 1) {
-                $allowedIndexes = [1]; // Solo quiniela
-            } elseif ((int)$play->position >= 2 && (int)$play->position <= 5) {
-                $allowedIndexes = range(2, 5); // Tabla 2-5
-            } elseif ((int)$play->position >= 6 && (int)$play->position <= 10) {
-                $allowedIndexes = range(6, 10); // Tabla 6-10
-            } elseif ((int)$play->position >= 11 && (int)$play->position <= 20) {
-                $allowedIndexes = range(11, 20); // Tabla 11-20
+            $playedPosition = (int)$play->position;
+            
+            switch ($playedPosition) {
+                case 1:
+                    // Quiniela: solo posición 1
+                    $allowedIndexes = [1];
+                    break;
+                case 5:
+                    // A los 5: posiciones 2-5
+                    $allowedIndexes = range(2, 5);
+                    break;
+                case 10:
+                    // A los 10: posiciones 6-10
+                    $allowedIndexes = range(6, 10);
+                    break;
+                case 20:
+                    // A los 20: posiciones 11-20
+                    $allowedIndexes = range(11, 20);
+                    break;
+                default:
+                    // Para otras posiciones específicas, solo esa posición
+                    $allowedIndexes = [$playedPosition];
             }
 
             foreach ($completeNumbers as $number) {
                 if (!in_array((int)$number->index, $allowedIndexes)) {
                     continue;
                 }
+                // ✅ Verificar tanto números como posición correcta
                 if ($this->isWinningPlay($play, $number->value, $number->index)) {
                     // Posición 1 usa tabla Quiniela según dígitos apostados
                     if ((int)$play->position === 1) {
