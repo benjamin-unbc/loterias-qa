@@ -143,11 +143,11 @@ class Results extends Component
         try {
             Log::info("Results - Iniciando proceso de recálculo para fecha: {$date}");
             
-            // 1. Extraer números ganadores desde la web
-            $this->extractAndProcessWinningNumbers($date);
+            // 1. Usar el comando automático existente para recalcular
+            $this->dispatch('notify', message: "🔄 Extrayendo números ganadores desde la web...", type: 'info');
             
-            // 2. Re-calcular resultados para todas las jugadas del día
-            $this->recalculateResultsForDate($date, $userId);
+            // 2. Ejecutar el comando automático de extracción
+            \Artisan::call('auto:extract-numbers', ['--date' => $date]);
             
             // 3. Mostrar notificación de éxito
             $this->dispatch('notify', message: "✅ Resultados reiniciados y recalculados correctamente", type: 'success');
