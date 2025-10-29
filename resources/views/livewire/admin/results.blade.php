@@ -118,3 +118,12 @@
 
     @livewire('show-codes')
 </main>
+
+<script>
+document.addEventListener('livewire:init', () => {
+    Livewire.on('executeResetProcess', (event) => {
+        console.log('Ejecutando proceso de recálculo...');
+        // El proceso se ejecuta automáticamente en el backend
+    });
+});
+</script>

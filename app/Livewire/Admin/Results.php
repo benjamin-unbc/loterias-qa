@@ -119,24 +119,45 @@ class Results extends Component
                 
             Log::info("Results - resetFilter: Eliminados {$deletedCount} resultados para {$today}");
             
-            // 2. Re-ejecutar proceso de detección de números ganadores
+            // 2. Mostrar notificación de inicio
             $this->dispatch('notify', message: "🔄 Reiniciando resultados... Eliminando y recalculando...", type: 'info');
             
-            // 3. Extraer números ganadores desde la web
-            $this->extractAndProcessWinningNumbers($today);
-            
-            // 4. Re-calcular resultados para todas las jugadas del día
-            $this->recalculateResultsForDate($today, $user->id);
-            
-            // 5. Resetear fecha y paginación
+            // 3. Resetear fecha y paginación PRIMERO
             $this->date = $today;
             $this->resetPage();
             
-            $this->dispatch('notify', message: "✅ Resultados reiniciados y recalculados correctamente", type: 'success');
+            // 4. Ejecutar el proceso de recálculo de forma asíncrona
+            $this->dispatch('executeResetProcess', date: $today, userId: $user->id);
             
         } catch (\Exception $e) {
             Log::error("Results - Error en resetFilter: " . $e->getMessage());
             $this->dispatch('notify', message: 'Error al reiniciar: ' . $e->getMessage(), type: 'error');
+        }
+    }
+
+    /**
+     * Ejecuta el proceso de recálculo de forma asíncrona
+     */
+    public function executeResetProcess($date, $userId)
+    {
+        try {
+            Log::info("Results - Iniciando proceso de recálculo para fecha: {$date}");
+            
+            // 1. Extraer números ganadores desde la web
+            $this->extractAndProcessWinningNumbers($date);
+            
+            // 2. Re-calcular resultados para todas las jugadas del día
+            $this->recalculateResultsForDate($date, $userId);
+            
+            // 3. Mostrar notificación de éxito
+            $this->dispatch('notify', message: "✅ Resultados reiniciados y recalculados correctamente", type: 'success');
+            
+            // 4. Forzar re-renderizado
+            $this->render();
+            
+        } catch (\Exception $e) {
+            Log::error("Results - Error en executeResetProcess: " . $e->getMessage());
+            $this->dispatch('notify', message: 'Error al recalcular: ' . $e->getMessage(), type: 'error');
         }
     }
 
