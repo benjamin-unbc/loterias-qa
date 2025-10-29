@@ -117,6 +117,10 @@ class AutoExtractNumbers extends Command
             $this->line("ℹ️  No se encontraron números nuevos");
         }
         
+        // ✅ NUEVA FUNCIONALIDAD: Validación automática de resultados cada hora
+        $this->info("🔍 Iniciando validación automática de resultados...");
+        $this->validateAndCorrectAllResults($todayDate);
+        
         if (!empty($errors)) {
             $this->warn("⚠️  Errores: " . implode(', ', $errors));
         }
@@ -783,5 +787,172 @@ class AutoExtractNumbers extends Command
         }
 
         return $mainPrize + $redoblonaPrize;
+    }
+    
+    /**
+     * ✅ NUEVA FUNCIONALIDAD: Valida y corrige todos los resultados para una fecha
+     * Se ejecuta automáticamente cada hora después de la extracción
+     */
+    private function validateAndCorrectAllResults($date)
+    {
+        try {
+            $this->info("🔍 Validando resultados para fecha: {$date}");
+            Log::info("AutoExtractNumbers - Iniciando validación automática de resultados para {$date}");
+            
+            // 1. Obtener todas las loterías completas para esta fecha
+            $completeLotteries = \App\Services\LotteryCompletenessService::getCompleteLotteries($date);
+            
+            if (empty($completeLotteries)) {
+                $this->line("ℹ️  No hay loterías completas para validar en {$date}");
+                return;
+            }
+            
+            $this->info("📊 Validando " . count($completeLotteries) . " loterías completas");
+            
+            $totalValidated = 0;
+            $totalCorrected = 0;
+            $totalRemoved = 0;
+            
+            // 2. Para cada lotería completa, validar sus resultados
+            foreach ($completeLotteries as $lotteryCode) {
+                $result = $this->validateLotteryResults($lotteryCode, $date);
+                $totalValidated += $result['validated'];
+                $totalCorrected += $result['corrected'];
+                $totalRemoved += $result['removed'];
+            }
+            
+            $this->info("✅ Validación completada: {$totalValidated} resultados analizados, {$totalCorrected} corregidos, {$totalRemoved} eliminados");
+            Log::info("AutoExtractNumbers - Validación completada: {$totalValidated} analizados, {$totalCorrected} corregidos, {$totalRemoved} eliminados");
+            
+        } catch (\Exception $e) {
+            $this->error("❌ Error en validación automática: " . $e->getMessage());
+            Log::error("AutoExtractNumbers - Error en validación automática: " . $e->getMessage());
+        }
+    }
+    
+    /**
+     * ✅ Valida los resultados de una lotería específica
+     */
+    private function validateLotteryResults($lotteryCode, $date)
+    {
+        try {
+            // 1. Obtener todos los resultados existentes para esta lotería
+            $existingResults = \App\Models\Result::where('lottery', $lotteryCode)
+                ->whereDate('date', $date)
+                ->get();
+            
+            if ($existingResults->isEmpty()) {
+                return ['validated' => 0, 'corrected' => 0, 'removed' => 0];
+            }
+            
+            // 2. Obtener los números ganadores completos de esta lotería
+            $completeNumbers = \App\Services\LotteryCompletenessService::getCompleteLotteryNumbersCollection($lotteryCode, $date);
+            
+            if (!$completeNumbers) {
+                Log::warning("AutoExtractNumbers - No se pudieron obtener números completos para validar {$lotteryCode}");
+                return ['validated' => 0, 'corrected' => 0, 'removed' => 0];
+            }
+            
+            // 3. Agrupar números ganadores por posición
+            $winningNumbersByPosition = [];
+            foreach ($completeNumbers as $number) {
+                $winningNumbersByPosition[$number->index] = $number->value;
+            }
+            
+            $validated = 0;
+            $corrected = 0;
+            $removed = 0;
+            
+            // 4. Validar cada resultado existente
+            foreach ($existingResults as $result) {
+                $validated++;
+                
+                // Verificar si este resultado es correcto con la nueva lógica
+                $isCorrect = $this->isResultCorrect($result, $winningNumbersByPosition);
+                
+                if (!$isCorrect) {
+                    // Resultado incorrecto: eliminarlo
+                    $result->delete();
+                    $removed++;
+                    
+                    Log::info("AutoExtractNumbers - Resultado INCORRECTO eliminado: Ticket {$result->ticket}, Lotería {$result->lottery}, Número {$result->number}, Posición {$result->position}");
+                } else {
+                    // Resultado correcto: mantenerlo
+                    Log::debug("AutoExtractNumbers - Resultado CORRECTO mantenido: Ticket {$result->ticket}, Lotería {$result->lottery}, Número {$result->number}, Posición {$result->position}");
+                }
+            }
+            
+            Log::info("AutoExtractNumbers - Lotería {$lotteryCode}: {$validated} validados, {$removed} eliminados");
+            
+            return ['validated' => $validated, 'corrected' => $corrected, 'removed' => $removed];
+            
+        } catch (\Exception $e) {
+            Log::error("AutoExtractNumbers - Error validando lotería {$lotteryCode}: " . $e->getMessage());
+            return ['validated' => 0, 'corrected' => 0, 'removed' => 0];
+        }
+    }
+    
+    /**
+     * ✅ Verifica si un resultado es correcto usando la nueva lógica de posiciones
+     */
+    private function isResultCorrect($result, $winningNumbersByPosition)
+    {
+        try {
+            // 1. Verificar que el número coincida con algún número ganador
+            $playNumber = str_replace('*', '', $result->number);
+            $playLength = strlen($playNumber);
+            
+            if ($playLength <= 0 || $playLength > 4) {
+                return false;
+            }
+            
+            // 2. Determinar rango permitido según posición apostada (REGLAS DE QUINIELA)
+            $allowedIndexes = [];
+            $playedPosition = (int)$result->position;
+            
+            switch ($playedPosition) {
+                case 1:
+                    // Quiniela: solo posición 1
+                    $allowedIndexes = [1];
+                    break;
+                case 5:
+                    // A los 5: posiciones 2-5
+                    $allowedIndexes = range(2, 5);
+                    break;
+                case 10:
+                    // A los 10: posiciones 6-10
+                    $allowedIndexes = range(6, 10);
+                    break;
+                case 20:
+                    // A los 20: posiciones 11-20
+                    $allowedIndexes = range(11, 20);
+                    break;
+                default:
+                    // Para otras posiciones específicas, solo esa posición
+                    $allowedIndexes = [$playedPosition];
+            }
+            
+            // 3. Buscar coincidencia en posiciones válidas
+            foreach ($winningNumbersByPosition as $position => $winningNumber) {
+                if (!in_array($position, $allowedIndexes)) {
+                    continue;
+                }
+                
+                $winningNumberStr = str_pad($winningNumber, 4, '0', STR_PAD_LEFT);
+                $winningSuffix = substr($winningNumberStr, -$playLength);
+                
+                if ($playNumber === $winningSuffix) {
+                    // Número y posición coinciden: resultado correcto
+                    return true;
+                }
+            }
+            
+            // No se encontró coincidencia válida: resultado incorrecto
+            return false;
+            
+        } catch (\Exception $e) {
+            Log::error("AutoExtractNumbers - Error verificando resultado: " . $e->getMessage());
+            return false;
+        }
     }
 }
