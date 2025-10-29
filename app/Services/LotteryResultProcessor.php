@@ -14,6 +14,7 @@ use App\Models\PlaysSentModel;
 use App\Models\PrizesModel;
 use App\Models\QuinielaModel;
 use App\Models\Result; // Ensure this is the correct model for the results table
+use App\Services\LotteryCompletenessService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
@@ -46,6 +47,19 @@ class LotteryResultProcessor
     {
         Log::info("LotteryResultProcessor - Iniciando procesamiento para la fecha: " . $dateToCalculate);
 
+        // ✅ NUEVA LÓGICA: Solo procesar loterías que tengan sus 20 números completos
+        Log::info("LotteryResultProcessor - Verificando loterías completas para la fecha {$dateToCalculate}.");
+
+        // Obtener solo las loterías que tengan sus 20 números completos
+        $completeLotteries = LotteryCompletenessService::getCompleteLotteries($dateToCalculate);
+
+        if (empty($completeLotteries)) {
+            Log::info("LotteryResultProcessor - No hay loterías completas para procesar en la fecha {$dateToCalculate}. Finalizando procesamiento.");
+            return;
+        }
+
+        Log::info("LotteryResultProcessor - Loterías completas encontradas: " . implode(', ', $completeLotteries));
+
         // **SOLUCIÓN MEJORADA: Verificar duplicados individualmente en lugar de eliminar todo**
         // Esto preserva los resultados existentes y solo inserta los nuevos
         Log::info("LotteryResultProcessor - Verificando duplicados individualmente para {$dateToCalculate}.");
@@ -64,19 +78,23 @@ class LotteryResultProcessor
             return;
         }
 
+        // Solo obtener números de las loterías completas
         $winningNumbers = Number::whereDate('date', Carbon::parse($dateToCalculate))
             ->with('city')
+            ->whereHas('city', function($query) use ($completeLotteries) {
+                $query->whereIn('code', $completeLotteries);
+            })
             ->get();
 
         if ($winningNumbers->isEmpty()) {
-            Log::warning("LotteryResultProcessor - No hay números ganadores para la fecha " . $dateToCalculate);
+            Log::warning("LotteryResultProcessor - No hay números ganadores para las loterías completas en la fecha " . $dateToCalculate);
             return;
         }
 
-        // Group winning numbers by system lottery code and position
+        // Group winning numbers by system lottery code and position (solo loterías completas)
         $groupedWinningNumbers = [];
         foreach ($winningNumbers as $wn) {
-            if ($wn->city) {
+            if ($wn->city && in_array($wn->city->code, $completeLotteries)) {
                 // This mapping is crucial. It assumes city->code is the system code.
                 // Example: 'NAC1015', 'SFE1015', etc.
                 $lotteryKey = $wn->city->code;
@@ -86,7 +104,7 @@ class LotteryResultProcessor
                 $groupedWinningNumbers[$lotteryKey][$wn->index] = $wn->value;
             }
         }
-        Log::info("LotteryResultProcessor - Números ganadores agrupados:", $groupedWinningNumbers);
+        Log::info("LotteryResultProcessor - Números ganadores agrupados (solo loterías completas):", $groupedWinningNumbers);
 
         $playsSents = PlaysSentModel::whereDate('date', Carbon::parse($dateToCalculate))
             ->with('apus')

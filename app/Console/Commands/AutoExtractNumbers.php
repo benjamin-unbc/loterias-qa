@@ -259,6 +259,7 @@ class AutoExtractNumbers extends Command
 
     /**
      * Calcula resultados inmediatamente después de insertar un número ganador
+     * ✅ MODIFICADO: Solo procesa cuando la lotería tenga sus 20 números completos
      */
     private function calculateResultsForNumber($city, $extractId, $position, $date, $winningNumber)
     {
@@ -277,6 +278,14 @@ class AutoExtractNumbers extends Command
             $lotteryCode = $city->code;
             
             Log::info("AutoExtractNumbers - Usando código completo de lotería: {$lotteryCode}");
+            
+            // ✅ NUEVA LÓGICA: Verificar si la lotería tiene sus 20 números completos
+            if (!\App\Services\LotteryCompletenessService::isLotteryComplete($lotteryCode, $date)) {
+                Log::info("AutoExtractNumbers - Lotería {$lotteryCode} aún no está completa (no tiene 20 números). NO se insertarán resultados hasta que esté completa.");
+                return;
+            }
+            
+            Log::info("AutoExtractNumbers - ✅ Lotería {$lotteryCode} COMPLETA con 20 números. Procediendo con inserción de resultados...");
             
             // Buscar jugadas que coincidan con este número ganador
             // ✅ Buscar jugadas que contengan esta lotería (pueden tener múltiples loterías separadas por comas)

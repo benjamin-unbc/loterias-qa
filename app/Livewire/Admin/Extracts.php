@@ -961,8 +961,19 @@ class Extracts extends Component
         $city = \App\Models\City::find($cityId);
         if ($city) {
             $lotteryCode = $city->code;
+            
+            // ✅ VERIFICAR COMPLETITUD: Solo insertar resultados si la lotería tiene 20 números completos
+            if (!\App\Services\LotteryCompletenessService::isLotteryComplete($lotteryCode, $dateToStore)) {
+                \Log::info('Extracts - Lotería incompleta: NO se insertarán resultados hasta tener 20 números', [
+                    'lotteryCode' => $lotteryCode,
+                    'date' => $dateToStore
+                ]);
+                $this->dispatch('notify', message: "Lotería {$lotteryCode} incompleta. Se insertarán resultados cuando tenga 20 números.", type: 'info');
+                return;
+            }
+            
             $cityInitial = substr($lotteryCode, 0, 1);
-            \Log::info('Premiación rápida: buscando jugadas', [
+            \Log::info('Premiación rápida: buscando jugadas (lotería completa)', [
                 'lotteryCode' => $lotteryCode,
                 'cityInitial' => $cityInitial,
                 'index' => $index,
@@ -1066,8 +1077,19 @@ class Extracts extends Component
         $city = $numero->city;
         if ($city) {
             $lotteryCode = $city->code;
+            
+            // ✅ VERIFICAR COMPLETITUD: Solo insertar resultados si la lotería tiene 20 números completos
+            if (!\App\Services\LotteryCompletenessService::isLotteryComplete($lotteryCode, $numero->date)) {
+                \Log::info('Extracts - Lotería incompleta (update): NO se insertarán resultados hasta tener 20 números', [
+                    'lotteryCode' => $lotteryCode,
+                    'date' => $numero->date
+                ]);
+                $this->dispatch('notify', message: "Lotería {$lotteryCode} incompleta. Se insertarán resultados cuando tenga 20 números.", type: 'info');
+                return;
+            }
+            
             $cityInitial = substr($lotteryCode, 0, 1);
-            \Log::info('Premiación rápida (update): buscando jugadas', [
+            \Log::info('Premiación rápida (update): buscando jugadas (lotería completa)', [
                 'lotteryCode' => $lotteryCode,
                 'cityInitial' => $cityInitial,
                 'index' => $numero->index,
