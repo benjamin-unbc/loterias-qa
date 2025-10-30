@@ -564,6 +564,10 @@ class AutoExtractNumbers extends Command
     private function processCompleteLotteries($date)
     {
         try {
+            if (!\App\Services\AnalysisSchedule::isWithinAnalysisWindow()) {
+                Log::info("AutoExtractNumbers - Fuera de ventana de análisis. Se omite procesamiento de loterías completas.");
+                return;
+            }
             Log::info("AutoExtractNumbers - Verificando loterías completas para {$date}");
 
             // Obtener solo las loterías que tengan sus 20 números completos
@@ -605,6 +609,10 @@ class AutoExtractNumbers extends Command
     private function processCompleteLottery($lotteryCode, $date)
     {
         try {
+            if (!\App\Services\AnalysisSchedule::isWithinAnalysisWindow()) {
+                Log::info("AutoExtractNumbers - Fuera de ventana de análisis. Se omite procesamiento de {$lotteryCode}.");
+                return ['resultsInserted' => 0, 'totalPrize' => 0];
+            }
             Log::info("AutoExtractNumbers - Procesando lotería completa: {$lotteryCode} para {$date}");
 
             // Obtener todos los números ganadores de esta lotería completa
@@ -617,7 +625,7 @@ class AutoExtractNumbers extends Command
 
             // Buscar jugadas que puedan ser ganadoras con esta lotería completa
             $plays = \App\Models\ApusModel::whereDate('created_at', $date)
-                ->where('lottery', 'LIKE', "%{$lotteryCode}%")
+                ->whereRaw('FIND_IN_SET(?, lottery)', [$lotteryCode])
                 ->get();
 
             if ($plays->isEmpty()) {

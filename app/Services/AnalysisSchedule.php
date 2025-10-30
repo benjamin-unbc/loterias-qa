@@ -26,10 +26,12 @@ class AnalysisSchedule
      */
     public static function isWithinAnalysisWindow(?\DateTimeInterface $now = null): bool
     {
-        $now = $now ? (clone $now) : new \DateTime('now');
+        // Usar la zona horaria de la app para evitar desfases
+        $tz = config('app.timezone') ?: 'UTC';
+        $now = $now ? (clone $now) : new \DateTime('now', new \DateTimeZone($tz));
 
         foreach (self::$windows as [$h, $m]) {
-            $start = (new \DateTime($now->format('Y-m-d')))->setTime((int)$h, (int)$m, 0);
+            $start = (new \DateTime($now->format('Y-m-d'), new \DateTimeZone($tz)))->setTime((int)$h, (int)$m, 0);
             $end = (clone $start)->modify('+' . self::WINDOW_MINUTES . ' minutes');
             if ($now >= $start && $now <= $end) {
                 return true;
