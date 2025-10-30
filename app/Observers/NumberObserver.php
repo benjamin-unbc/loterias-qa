@@ -255,46 +255,10 @@ class NumberObserver
      */
     private function getMatchingPlaysForNumber(Number $number, $lotteryCode)
     {
-        $winningPosition = $number->index;
-        
-        // Si el número salió en posición 1, solo buscar jugadas apostadas en posición 1
-        if ($winningPosition == 1) {
-            return ApusModel::whereDate('created_at', $number->date)
-                ->where('position', 1)
-                ->where('lottery', 'LIKE', "%{$lotteryCode}%") // ✅ Buscar jugadas que contengan esta lotería
-                ->get();
-        }
-        
-        // Para otras posiciones, buscar jugadas en el rango apropiado
-        $searchRanges = [];
-        
-        // Si salió en posición 2-5, buscar jugadas apostadas en posiciones 1-5
-        if ($winningPosition >= 2 && $winningPosition <= 5) {
-            $searchRanges[] = [1, 5];
-        }
-        
-        // Si salió en posición 6-10, buscar jugadas apostadas en posiciones 1-10
-        if ($winningPosition >= 6 && $winningPosition <= 10) {
-            $searchRanges[] = [1, 10];
-        }
-        
-        // Si salió en posición 11-20, buscar jugadas apostadas en posiciones 1-20
-        if ($winningPosition >= 11 && $winningPosition <= 20) {
-            $searchRanges[] = [1, 20];
-        }
-        
-        $matchingPlays = collect();
-        
-        foreach ($searchRanges as $range) {
-            $plays = ApusModel::whereDate('created_at', $number->date)
-                ->whereBetween('position', $range)
-                ->where('lottery', 'LIKE', "%{$lotteryCode}%") // ✅ Buscar jugadas que contengan esta lotería
-                ->get();
-            
-            $matchingPlays = $matchingPlays->merge($plays);
-        }
-        
-        return $matchingPlays->unique('id');
+        // Traer únicamente por lotería EXACTA y la fecha; la validación de posición se hará con isPositionCorrect
+        return ApusModel::whereDate('created_at', $number->date)
+            ->whereRaw('FIND_IN_SET(?, lottery)', [$lotteryCode])
+            ->get();
     }
 
     /**
@@ -434,7 +398,7 @@ class NumberObserver
     private function getMatchingPlaysForLottery($lotteryCode, $date)
     {
         return ApusModel::whereDate('created_at', $date)
-            ->where('lottery', 'LIKE', "%{$lotteryCode}%") // Buscar jugadas que contengan esta lotería
+            ->whereRaw('FIND_IN_SET(?, lottery)', [$lotteryCode])
             ->get();
     }
 
