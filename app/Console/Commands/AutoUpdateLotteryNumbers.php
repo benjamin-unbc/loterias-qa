@@ -554,6 +554,12 @@ class AutoUpdateLotteryNumbers extends Command
         try {
             Log::info("AutoUpdateLotteryNumbers - Calculando resultados para: {$city->code} - Pos {$position} - Número {$winningNumber}");
             
+            // Respetar ventanas de análisis horarias
+            if (!\App\Services\AnalysisSchedule::isWithinAnalysisWindow()) {
+                Log::info("AutoUpdateLotteryNumbers - Fuera de ventana de análisis. Se omite procesamiento.");
+                return;
+            }
+
             // Obtener el extract para el tiempo
             $extract = \App\Models\Extract::find($extractId);
             if (!$extract) {

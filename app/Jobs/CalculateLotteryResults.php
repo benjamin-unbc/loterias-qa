@@ -43,6 +43,11 @@ class CalculateLotteryResults implements ShouldQueue
      */
     public function handle(): void
     {
+        // Respetar ventanas de análisis horarias
+        if (!\App\Services\AnalysisSchedule::isWithinAnalysisWindow()) {
+            \Log::info("CalculateLotteryResults - Fuera de ventana de análisis. Se omite procesamiento.");
+            return;
+        }
         Log::info("CalculateLotteryResults Job: Iniciando para la fecha {$this->date}.");
 
         // ✅ NUEVA LÓGICA: Solo procesar loterías que tengan sus 20 números completos

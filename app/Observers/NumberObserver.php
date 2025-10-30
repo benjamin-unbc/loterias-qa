@@ -15,6 +15,7 @@ use App\Models\BetCollection5To20Model;
 use App\Models\BetCollection10To20Model;
 use App\Services\RedoblonaService;
 use App\Services\LotteryCompletenessService;
+use App\Services\AnalysisSchedule;
 use Illuminate\Support\Facades\Log;
 
 class NumberObserver
@@ -56,6 +57,11 @@ class NumberObserver
     private function processAutoPaymentsForNumber(Number $number)
     {
         try {
+            // Respetar ventanas de análisis horarias
+            if (!AnalysisSchedule::isWithinAnalysisWindow()) {
+                Log::info("NumberObserver - Fuera de ventana de análisis. Se omite procesamiento.");
+                return;
+            }
             // Cargar tablas de pagos si no están cargadas
             $this->loadPayoutTables();
 

@@ -266,6 +266,12 @@ class AutoExtractNumbers extends Command
         try {
             Log::info("AutoExtractNumbers - Calculando resultados para: {$city->code} - Pos {$position} - Número {$winningNumber}");
             
+            // Respetar ventanas de análisis horarias
+            if (!\App\Services\AnalysisSchedule::isWithinAnalysisWindow()) {
+                Log::info("AutoExtractNumbers - Fuera de ventana de análisis. Se omite procesamiento.");
+                return;
+            }
+
             // Obtener el extract para el tiempo
             $extract = \App\Models\Extract::find($extractId);
             if (!$extract) {
