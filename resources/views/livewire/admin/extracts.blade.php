@@ -412,9 +412,6 @@
         </x-ticket-modal>
         @endif
 
-        @livewire('notification')
-        
-        
         <!-- Indicador de actualización automática (discreto) -->
         
     </div>

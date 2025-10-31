@@ -4,7 +4,6 @@ namespace App\Console\Commands;
 
 use App\Models\City;
 use App\Models\Number;
-use App\Models\SystemNotification;
 use App\Models\User;
 use App\Services\WinningNumbersService;
 use App\Services\RedoblonaService;
@@ -128,35 +127,9 @@ class AutoUpdateLotteryNumbers extends Command
                 $this->info("🔄 Números actualizados: {$totalUpdated}");
                 $this->info("📅 Fecha: {$todayDate}");
                 
-                // Crear notificación de éxito
-                SystemNotification::createNotification(
-                    'success',
-                    '🤖 Búsqueda Automática Completada',
-                    "Se buscaron resultados ganadores y se insertaron {$totalInserted} números nuevos. Sistema funcionando correctamente.",
-                    [
-                        'inserted' => $totalInserted,
-                        'updated' => $totalUpdated,
-                        'date' => $todayDate,
-                        'cities_processed' => count($availableCities)
-                    ]
-                );
-                
                 Log::info("Auto-update completado: {$totalInserted} nuevos, {$totalUpdated} actualizados");
             } else {
                 $this->info("ℹ️  No se encontraron números nuevos para procesar.");
-                
-                // Crear notificación informativa
-                SystemNotification::createNotification(
-                    'info',
-                    '🤖 Búsqueda Automática Realizada',
-                    "Se intentó buscar actualizar números ganadores pero no se encontraron resultados. Esperando al próximo turno para ingresar números.",
-                    [
-                        'inserted' => 0,
-                        'updated' => 0,
-                        'date' => $todayDate,
-                        'cities_processed' => count($availableCities)
-                    ]
-                );
             }
             
             // Mostrar errores si los hay
@@ -323,21 +296,7 @@ class AutoUpdateLotteryNumbers extends Command
                                    ->where('index', 1)
                                    ->first();
                 
-                if ($headNumber) {
-                    // Verificar si ya se notificó esta cabeza para evitar spam
-                    $existingNotification = \App\Models\SystemNotification::where('type', 'success')
-                        ->where('data->type', 'head_number')
-                        ->where('data->city', $cityName)
-                        ->where('data->turn', $turnName)
-                        ->where('data->number', $headNumber->value)
-                        ->where('data->date', $date)
-                        ->where('created_at', '>=', now()->subMinutes(5)) // Solo en los últimos 5 minutos
-                        ->first();
-                    
-                    if (!$existingNotification) {
-                        $this->createHeadNumberNotification($cityName, $turnName, $headNumber->value, $date, 'oficial');
-                    }
-                }
+                // Notificación de número de cabeza eliminada
             }
             
         } catch (\Exception $e) {
@@ -508,42 +467,6 @@ class AutoUpdateLotteryNumbers extends Command
         return $missingNumbers;
     }
     
-    /**
-     * Crea una notificación específica para números ganadores de cabeza
-     */
-    private function createHeadNumberNotification($cityName, $turnName, $number, $date, $action)
-    {
-        try {
-            $actionText = $action === 'oficial' ? 'oficial confirmado' : $action;
-            $emoji = $action === 'oficial' ? '🎯' : '🔄';
-            
-            $title = "{$emoji} Número de Cabeza {$actionText}";
-            $message = $action === 'oficial' 
-                ? "Número oficial de cabeza {$number} confirmado para el turno {$turnName} de la ciudad {$cityName} (20 números completos)"
-                : "Se ha {$actionText} el resultado {$number} en el turno {$turnName} de la ciudad {$cityName}";
-            
-            SystemNotification::createNotification(
-                'success',
-                $title,
-                $message,
-                [
-                    'type' => 'head_number',
-                    'city' => $cityName,
-                    'turn' => $turnName,
-                    'number' => $number,
-                    'date' => $date,
-                    'action' => $action,
-                    'position' => 1,
-                    'is_official' => $action === 'oficial'
-                ]
-            );
-            
-            Log::info("Notificación de cabeza creada: {$cityName} - {$turnName} - {$number} ({$action})");
-            
-        } catch (\Exception $e) {
-            Log::error("Error creando notificación de cabeza: " . $e->getMessage());
-        }
-    }
 
     /**
      * Calcula resultados inmediatamente después de insertar un número ganador

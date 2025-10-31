@@ -18,8 +18,7 @@
 
         <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
-
-        <!-- Styles -->
+        
         @livewireStyles
     </head>
     <body>
@@ -27,7 +26,6 @@
             {{ $slot }}
         </div>
 
-        @livewire('notification')
         @stack('modals')
 
         @livewireScripts

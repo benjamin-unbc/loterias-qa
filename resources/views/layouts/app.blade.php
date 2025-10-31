@@ -17,9 +17,9 @@
         crossorigin="anonymous" referrerpolicy="no-referrer" />
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
-
-    @livewireStyles {{-- Correcto para Livewire v2 --}}
-    @stack('styles') {{-- Para tus estilos personalizados de componentes --}}
+    
+    @livewireStyles
+    @stack('styles')
 </head>
 
 <body class="font-sans antialiased bg-[#1b1f22]">
@@ -39,13 +39,9 @@
         </main>
     </div>
 
-    @livewire('notification')
-    @livewire('system-notifications')
     @stack('modals')
 
-    @livewireScripts {{-- Correcto para Livewire v2 --}}
-    
-    {{-- AÑADIR ESTA LÍNEA JUSTO DESPUÉS DE @livewireScripts --}}
+    @livewireScripts
     @stack('scripts') 
 </body>
 

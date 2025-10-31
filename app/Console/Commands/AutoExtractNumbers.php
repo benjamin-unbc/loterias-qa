@@ -531,27 +531,9 @@ class AutoExtractNumbers extends Command
     private function notifyWinner($play, $totalPrize, $winningNumber, $position)
     {
         try {
-            // Crear notificación del sistema
-            \App\Models\SystemNotification::create([
-                'title' => '🎉 ¡GANADOR ENCONTRADO!',
-                'message' => "Ticket: {$play->ticket} - Lotería: {$play->lottery} - Número: {$play->number} - Premio: $" . number_format($totalPrize, 2),
-                'type' => 'winner',
-                'data' => json_encode([
-                    'ticket' => $play->ticket,
-                    'lottery' => $play->lottery,
-                    'number' => $play->number,
-                    'position' => $play->position,
-                    'winning_number' => $winningNumber,
-                    'winning_position' => $position,
-                    'prize' => $totalPrize,
-                    'user_id' => $play->user_id
-                ]),
-                'is_read' => false,
-                'created_at' => now(),
-                'updated_at' => now()
-            ]);
-            
-            Log::info("🎉 GANADOR NOTIFICADO: Ticket {$play->ticket} - Premio: $" . number_format($totalPrize, 2));
+            // Notificación del sistema eliminada
+            // Solo registrar en log
+            Log::info("🎉 ¡GANADOR ENCONTRADO! Ticket: {$play->ticket} - Lotería: {$play->lottery} - Número: {$play->number} - Premio: $" . number_format($totalPrize, 2));
             
         } catch (\Exception $e) {
             Log::error("Error notificando ganador: " . $e->getMessage());

@@ -557,166 +557,214 @@
     @push('scripts')
         <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
         <script>
-            document.addEventListener("keydown", function(event) {
-                const inputs = {
-                    number: document.getElementById("number"),
-                    position: document.getElementById("position"),
-                    import: document.getElementById("import"),
-                    numberR: document.getElementById("numberR"),
-                    positionR: document.getElementById("positionR")
-                };
-                const activeElement = document.activeElement;
-                const key = event.key;
-                console.log("keydown detected", key, activeElement ? activeElement.id : null);
-
-                const alpineShortcutKeys = ['PageDown', '+', '='];
-                if (alpineShortcutKeys.includes(key) && (key !== '=' || event.shiftKey)) {
+            // Esperar a que Livewire esté completamente cargado
+            let initAttempts = 0;
+            const maxAttempts = 50; // Máximo 5 segundos (50 * 100ms)
+            
+            function initPlaysManagerScripts() {
+                if (typeof window.Livewire === 'undefined') {
+                    initAttempts++;
+                    if (initAttempts < maxAttempts) {
+                        setTimeout(initPlaysManagerScripts, 100);
+                    } else {
+                        console.error('Livewire no se pudo cargar después de múltiples intentos. Verifica la configuración.');
+                    }
                     return;
                 }
+                
+                initAttempts = 0; // Resetear contador cuando Livewire esté disponible
 
-                if (key === "Enter" && activeElement && activeElement.type === 'checkbox') {
-                    // Verificar si el checkbox está en la tabla de selección de loterías
-                    const table = document.querySelector('table');
-                    if (table && table.contains(activeElement)) {
-                        event.preventDefault();
-                        console.log("Checkbox Enter detected, moving to number field");
-                        // Pequeño delay para permitir que Livewire procese el cambio
-                        setTimeout(() => {
-                            if(inputs.number) { 
-                                inputs.number.focus(); 
-                                inputs.number.select(); 
-                                console.log("Focused on number field");
-                            }
-                        }, 150);
+                document.addEventListener("keydown", function(event) {
+                    const inputs = {
+                        number: document.getElementById("number"),
+                        position: document.getElementById("position"),
+                        import: document.getElementById("import"),
+                        numberR: document.getElementById("numberR"),
+                        positionR: document.getElementById("positionR")
+                    };
+                    const activeElement = document.activeElement;
+                    const key = event.key;
+                    console.log("keydown detected", key, activeElement ? activeElement.id : null);
+
+                    const alpineShortcutKeys = ['PageDown', '+', '='];
+                    if (alpineShortcutKeys.includes(key) && (key !== '=' || event.shiftKey)) {
                         return;
                     }
-                }
 
-                if (!Object.values(inputs).includes(activeElement)) return;
-
-                if (key === "ArrowUp") {
-                    event.preventDefault();
-                    if(inputs.position) { inputs.position.focus(); inputs.position.select(); }
-                    return;
-                }
-
-                if (key === "Enter") {
-                    event.preventDefault();
-                    if (activeElement === inputs.number) {
-                        if (inputs.number.value.trim() === "") return;
-                        if(inputs.import) { inputs.import.focus(); inputs.import.select(); }
-                    } else if (activeElement === inputs.position) {
-                        if(inputs.import) { inputs.import.focus(); inputs.import.select(); }
-                    } else if (activeElement === inputs.import) {
-                        if(inputs.numberR) { inputs.numberR.focus(); inputs.numberR.select(); }
-                    } else if (activeElement === inputs.numberR) {
-                        if(inputs.positionR) { inputs.positionR.focus(); inputs.positionR.select(); }
-                    } else if (activeElement === inputs.positionR) {
-                        // Buscar el wire:id más cercano al input number (root del componente)
-                        let root = inputs.number;
-                        while (root && !root.hasAttribute('wire:id')) {
-                            root = root.parentElement;
+                    if (key === "Enter" && activeElement && activeElement.type === 'checkbox') {
+                        // Verificar si el checkbox está en la tabla de selección de loterías
+                        const table = document.querySelector('table');
+                        if (table && table.contains(activeElement)) {
+                            event.preventDefault();
+                            console.log("Checkbox Enter detected, moving to number field");
+                            // Pequeño delay para permitir que Livewire procese el cambio
+                            setTimeout(() => {
+                                if(inputs.number) { 
+                                    inputs.number.focus(); 
+                                    inputs.number.select(); 
+                                    console.log("Focused on number field");
+                                }
+                            }, 150);
+                            return;
                         }
-                        if (root && root.hasAttribute('wire:id')) {
-                            const inst = window.Livewire.find(root.getAttribute('wire:id'));
-                            if (inst) {
-                                inst.call('saveRow');
-                            } else {
-                                alert('No se encontró el componente Livewire PlaysManager.');
+                    }
+
+                    if (!Object.values(inputs).includes(activeElement)) return;
+
+                    if (key === "ArrowUp") {
+                        event.preventDefault();
+                        if(inputs.position) { inputs.position.focus(); inputs.position.select(); }
+                        return;
+                    }
+
+                    if (key === "Enter") {
+                        event.preventDefault();
+                        if (activeElement === inputs.number) {
+                            if (inputs.number.value.trim() === "") return;
+                            if(inputs.import) { inputs.import.focus(); inputs.import.select(); }
+                        } else if (activeElement === inputs.position) {
+                            if(inputs.import) { inputs.import.focus(); inputs.import.select(); }
+                        } else if (activeElement === inputs.import) {
+                            if(inputs.numberR) { inputs.numberR.focus(); inputs.numberR.select(); }
+                        } else if (activeElement === inputs.numberR) {
+                            if(inputs.positionR) { inputs.positionR.focus(); inputs.positionR.select(); }
+                        } else if (activeElement === inputs.positionR) {
+                            // Buscar el wire:id más cercano al input number (root del componente)
+                            let root = inputs.number;
+                            while (root && !root.hasAttribute('wire:id')) {
+                                root = root.parentElement;
                             }
-                        } else {
-                            alert('No se encontró el root wire:id para PlaysManager.');
+                            if (root && root.hasAttribute('wire:id')) {
+                                const inst = window.Livewire.find(root.getAttribute('wire:id'));
+                                if (inst) {
+                                    inst.call('saveRow');
+                                } else {
+                                    alert('No se encontró el componente Livewire PlaysManager.');
+                                }
+                            } else {
+                                alert('No se encontró el root wire:id para PlaysManager.');
+                            }
                         }
                     }
-                }
-            });
+                });
 
-            Livewire.on('focus-on-input', (event) => {
-                setTimeout(() => {
-                    const numberInput = document.getElementById("number");
-                    if (numberInput) {
-                        numberInput.focus();
-                        numberInput.select();
-                    }
-                }, 100);
-            });
+                Livewire.on('focus-on-input', (event) => {
+                    setTimeout(() => {
+                        const numberInput = document.getElementById("number");
+                        if (numberInput) {
+                            numberInput.focus();
+                            numberInput.select();
+                        }
+                    }, 100);
+                });
 
-            // Scroll automático a la última jugada agregada
-            Livewire.on('scroll-to-last-play', (event) => {
-                setTimeout(() => {
-                    const playId = event.playId;
-                    const playRow = document.getElementById(`row-${playId}`);
-                    const playsContainer = document.getElementById('playsContainer');
-                    
-                    if (playRow && playsContainer) {
-                        // Hacer scroll suave hasta la fila de la jugada
-                        playRow.scrollIntoView({ 
-                            behavior: 'smooth', 
-                            block: 'end',
-                            inline: 'nearest'
-                        });
+                // Scroll automático a la última jugada agregada
+                Livewire.on('scroll-to-last-play', (event) => {
+                    setTimeout(() => {
+                        const playId = event.playId;
+                        const playRow = document.getElementById(`row-${playId}`);
+                        const playsContainer = document.getElementById('playsContainer');
                         
-                        // Resaltar brevemente la fila para indicar que es nueva
-                        playRow.style.backgroundColor = '#4ade80';
-                        setTimeout(() => {
-                            playRow.style.backgroundColor = '';
-                        }, 1000);
-                    } else if (playsContainer) {
-                        // Fallback: scroll al final del contenedor
-                        playsContainer.scrollTop = playsContainer.scrollHeight;
-                    }
-                }, 150);
-            });
+                        if (playRow && playsContainer) {
+                            // Hacer scroll suave hasta la fila de la jugada
+                            playRow.scrollIntoView({ 
+                                behavior: 'smooth', 
+                                block: 'end',
+                                inline: 'nearest'
+                            });
+                            
+                            // Resaltar brevemente la fila para indicar que es nueva
+                            playRow.style.backgroundColor = '#4ade80';
+                            setTimeout(() => {
+                                playRow.style.backgroundColor = '';
+                            }, 1000);
+                        } else if (playsContainer) {
+                            // Fallback: scroll al final del contenedor
+                            playsContainer.scrollTop = playsContainer.scrollHeight;
+                        }
+                    }, 150);
+                });
+            }
+
+            // Inicializar cuando Livewire esté listo
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    document.addEventListener('livewire:init', initPlaysManagerScripts);
+                    setTimeout(initPlaysManagerScripts, 500);
+                });
+            } else {
+                document.addEventListener('livewire:init', initPlaysManagerScripts);
+                setTimeout(initPlaysManagerScripts, 500);
+            }
 
             function printTicket() {
-        html2canvas(document.getElementById('ticketContainer'), { scale: 2 }).then(canvas => {
-            const imgData = canvas.toDataURL('image/png');
-            let iframe = document.createElement('iframe');
-            iframe.style.position = "fixed";
-            iframe.style.right = "0";
-            iframe.style.bottom = "0";
-            iframe.style.width = "0";
-            iframe.style.height = "0";
-            iframe.style.border = "0";
-            document.body.appendChild(iframe);
-            
-            const doc = iframe.contentWindow.document;
-            doc.open();
-            doc.write(`
-              <html>
-                <head>
-                  <title>Imprimir Ticket</title>
-                  <style>
-                    @page { size: Letter; margin: 0mm; }
-                    html, body { margin: 0; padding: 0; }
-                    body { background: #fff; }
-                    img { width: 100%; height: auto; }
-                  </style>
-                </head>
-                <body>
-                  <img src="${imgData}" alt="Ticket" onload="window.focus(); window.print();">
-                </body>
-              </html>
-            `);
-            doc.close();
-            
-            setTimeout(() => {
-                document.body.removeChild(iframe);
-            }, 1000);
-        });
-    }
-
+                const ticketContainer = document.getElementById('ticketContainer');
+                if (!ticketContainer) {
+                    console.error('No se encontró el contenedor del ticket');
+                    return;
+                }
+                
+                html2canvas(ticketContainer, { scale: 2 }).then(canvas => {
+                    const imgData = canvas.toDataURL('image/png');
+                    let iframe = document.createElement('iframe');
+                    iframe.style.position = "fixed";
+                    iframe.style.right = "0";
+                    iframe.style.bottom = "0";
+                    iframe.style.width = "0";
+                    iframe.style.height = "0";
+                    iframe.style.border = "0";
+                    document.body.appendChild(iframe);
+                    
+                    const doc = iframe.contentWindow.document;
+                    doc.open();
+                    doc.write(`
+                        <html>
+                            <head>
+                                <title>Imprimir Ticket</title>
+                                <style>
+                                    @page { size: Letter; margin: 0mm; }
+                                    html, body { margin: 0; padding: 0; }
+                                    body { background: #fff; }
+                                    img { width: 100%; height: auto; }
+                                </style>
+                            </head>
+                            <body>
+                                <img src="${imgData}" alt="Ticket" onload="window.focus(); window.print();">
+                            </body>
+                        </html>
+                    `);
+                    doc.close();
+                    
+                    setTimeout(() => {
+                        if (document.body.contains(iframe)) {
+                            document.body.removeChild(iframe);
+                        }
+                    }, 1000);
+                }).catch(error => {
+                    console.error('Error al generar imagen para imprimir:', error);
+                });
+            }
 
             function guardarTicket() {
                 const ticket = document.getElementById('ticketContainer');
-                if (!ticket) return;
+                if (!ticket) {
+                    console.error('No se encontró el contenedor del ticket');
+                    return;
+                }
+                
                 html2canvas(ticket, { scale: 2 }).then(function(canvas) {
                     const link = document.createElement('a');
                     link.download = 'ticket.png';
                     link.href = canvas.toDataURL('image/png');
                     link.click();
+                }).catch(error => {
+                    console.error('Error al generar imagen para guardar:', error);
                 });
             }
+            
+            // Hacer las funciones disponibles globalmente
+            window.printTicket = printTicket;
+            window.guardarTicket = guardarTicket;
         </script>
     @endpush
     @push('styles')

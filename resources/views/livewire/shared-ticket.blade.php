@@ -147,8 +147,20 @@
     });
 
     document.addEventListener('DOMContentLoaded', function () {
-        Livewire.on('open-share-link', (url) => {
-            window.open(url, '_blank');
-        });
+        // Esperar a que Livewire esté completamente cargado
+        function initLivewireEvents() {
+            if (typeof window.Livewire === 'undefined') {
+                setTimeout(initLivewireEvents, 100);
+                return;
+            }
+            
+            Livewire.on('open-share-link', (url) => {
+                window.open(url, '_blank');
+            });
+        }
+        
+        // Inicializar cuando Livewire esté listo
+        document.addEventListener('livewire:init', initLivewireEvents);
+        setTimeout(initLivewireEvents, 500);
     });
 </script>
