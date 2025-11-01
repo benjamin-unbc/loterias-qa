@@ -15,6 +15,7 @@ use App\Models\PrizesModel;
 use App\Models\QuinielaModel;
 use App\Models\Result; // Ensure this is the correct model for the results table
 use App\Services\LotteryCompletenessService;
+use App\Services\ResultManager;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
@@ -137,15 +138,53 @@ class LotteryResultProcessor
                     continue;
                 }
 
+                // Inicializar variables para el acierto principal
+                $actualWinningPosition = null;
+                $winningNumberAtPosition = null;
+                
+                // Inicializar variables para redoblona
+                $actualWinningPositionR = null;
+                $winningNumberAtPositionR = null;
+
                 // --- Main Play (Quiniela, Prizes, Figures) ---
-                if (!empty($playedNumberClean) && $apu->position !== null && isset($winningNumbersForLottery[$apu->position])) {
-                    $winningNumberAtPosition = $winningNumbersForLottery[$apu->position];
+                if (!empty($playedNumberClean) && $apu->position !== null) {
+                    // Determinar rango de búsqueda según posición apostada
+                    $searchPositions = [];
+                    if ($apu->position == 1) {
+                        // Quiniela: solo posición 1
+                        $searchPositions = [1];
+                    } elseif ($apu->position >= 2 && $apu->position <= 5) {
+                        // Tabla 2-5
+                        $searchPositions = range(2, 5);
+                    } elseif ($apu->position >= 6 && $apu->position <= 10) {
+                        // Tabla 6-10
+                        $searchPositions = range(6, 10);
+                    } elseif ($apu->position >= 11 && $apu->position <= 20) {
+                        // Tabla 11-20
+                        $searchPositions = range(11, 20);
+                    }
+                    
                     $numDigitsPlayed = strlen($playedNumberClean);
-                    $winningNumberLastDigits = substr($winningNumberAtPosition, -$numDigitsPlayed);
-
-                    if ($playedNumberClean === $winningNumberLastDigits) {
-                        $ticketType = $this->getTicketType($apu->number); // This function needs to be part of this class or a helper
-
+                    $actualWinningPosition = null;
+                    $winningNumberAtPosition = null;
+                    
+                    // Buscar el número en todas las posiciones del rango
+                    foreach ($searchPositions as $pos) {
+                        if (!isset($winningNumbersForLottery[$pos])) continue;
+                        
+                        $winningNum = str_pad((string)$winningNumbersForLottery[$pos], 4, '0', STR_PAD_LEFT);
+                        $winningNumberLastDigits = substr($winningNum, -$numDigitsPlayed);
+                        
+                        if ($playedNumberClean === $winningNumberLastDigits) {
+                            $actualWinningPosition = $pos;
+                            $winningNumberAtPosition = $winningNum;
+                            break;
+                        }
+                    }
+                    
+                    if ($actualWinningPosition && $winningNumberAtPosition) {
+                        $ticketType = $this->getTicketType($apu->number);
+                        
                         $multiplier = 0;
                         if ($ticketType === 'quiniela') {
                             if ($numDigitsPlayed == 4) $multiplier = $quiniela->cobra_4_cifra;
@@ -153,20 +192,21 @@ class LotteryResultProcessor
                             elseif ($numDigitsPlayed == 2) $multiplier = $quiniela->cobra_2_cifra;
                             elseif ($numDigitsPlayed == 1) $multiplier = $quiniela->cobra_1_cifra;
                         } elseif ($ticketType === 'prizes') {
-                            if ($apu->position >= 1 && $apu->position <= 5) $multiplier = $prizes->cobra_5;
-                            elseif ($apu->position >= 6 && $apu->position <= 10) $multiplier = $prizes->cobra_10;
-                            elseif ($apu->position >= 11 && $apu->position <= 20) $multiplier = $prizes->cobra_20;
+                            // Calcular premio basado en la posición donde realmente salió
+                            if ($actualWinningPosition <= 5) $multiplier = $prizes->cobra_5;
+                            elseif ($actualWinningPosition <= 10) $multiplier = $prizes->cobra_10;
+                            else $multiplier = $prizes->cobra_20;
                         } elseif ($ticketType === 'figureOne') {
-                            if ($apu->position >= 1 && $apu->position <= 5) $multiplier = $figureOne->cobra_5;
-                            elseif ($apu->position >= 6 && $apu->position <= 10) $multiplier = $figureOne->cobra_10;
-                            elseif ($apu->position >= 11 && $apu->position <= 20) $multiplier = $figureOne->cobra_20;
+                            if ($actualWinningPosition <= 5) $multiplier = $figureOne->cobra_5;
+                            elseif ($actualWinningPosition <= 10) $multiplier = $figureOne->cobra_10;
+                            else $multiplier = $figureOne->cobra_20;
                         } elseif ($ticketType === 'figureTwo') {
-                            if ($apu->position >= 1 && $apu->position <= 5) $multiplier = $figureTwo->cobra_5;
-                            elseif ($apu->position >= 6 && $apu->position <= 10) $multiplier = $figureTwo->cobra_10;
-                            elseif ($apu->position >= 11 && $apu->position <= 20) $multiplier = $figureTwo->cobra_20;
+                            if ($actualWinningPosition <= 5) $multiplier = $figureTwo->cobra_5;
+                            elseif ($actualWinningPosition <= 10) $multiplier = $figureTwo->cobra_10;
+                            else $multiplier = $figureTwo->cobra_20;
                         }
                         $aciertValue = (float)$apu->import * (float)$multiplier;
-                        Log::info("LotteryResultProcessor - Acierto principal calculado: {$aciertValue} para APU ID: {$apu->id}");
+                        Log::info("LotteryResultProcessor - Acierto principal: {$playedNumberClean} en posición apostada {$apu->position}, salió en posición {$actualWinningPosition}, premio: {$aciertValue}");
                     }
                 }
 
@@ -201,27 +241,35 @@ class LotteryResultProcessor
 
                 // Save result if any acierto is found
                 if ($aciertValue > 0 || $aciertValueR > 0) {
-                    $matchDetail = [
+                    $resultData = [
                         'ticket'      => $apu->ticket,
-                        'lottery'     => $apu->lottery,
+                        'lottery'     => $lotterySystemCode, // ✅ Usar código del sistema, no el código UI
                         'number'      => $apu->number,
-                        'position'    => $apu->position,
-                        'numR'        => $apu->numberR,
-                        'posR'        => $apu->positionR,
-                        'XA'          => 'X', // Assuming 'X' or adjust based on logic
+                        'position'    => $apu->position, // Posición apostada
+                        'numR'        => $apu->numberR ?? null,
+                        'posR'        => $apu->positionR ?? null,
+                        'XA'          => 'X',
                         'import'      => (float) $apu->import,
                         'aciert'      => $aciertValue + $aciertValueR, // Sum both aciertos
                         'date'        => $dateToCalculate,
                         'time'        => $apu->timeApu,
                         'user_id'     => $apu->user_id,
-                        // Add other fields from Result model if necessary, e.g., numero_g, posicion_g, num_g_r, pos_g_r
-                        'numero_g'    => $winningNumbersForLottery[$apu->position] ?? null, // Winning number for main play
-                        'posicion_g'  => $apu->position,
-                        'num_g_r'     => $winningNumbersForLottery[$apu->positionR] ?? null, // Winning number for redoblona
-                        'pos_g_r'     => $apu->positionR,
+                        'numero_g'    => $winningNumberAtPosition ?? null, // Número ganador real
+                        'posicion_g'  => $actualWinningPosition ?? null, // Posición donde realmente salió
+                        'num_g_r'     => null, // TODO: Para redoblona
+                        'pos_g_r'     => null, // TODO: Para redoblona
+                        'created_at'  => now(),
+                        'updated_at'  => now(),
                     ];
-                    Result::create($matchDetail);
-                    $matches[] = $matchDetail;
+                    
+                    // ✅ Usar ResultManager para inserción segura
+                    $result = ResultManager::createResultSafely($resultData);
+                    if ($result) {
+                        $matches[] = $resultData;
+                        Log::info("LotteryResultProcessor - Resultado insertado: Ticket {$apu->ticket} - Lotería {$lotterySystemCode} - Premio: " . ($aciertValue + $aciertValueR));
+                    } else {
+                        Log::warning("LotteryResultProcessor - No se pudo insertar resultado: Ticket {$apu->ticket} - Lotería {$lotterySystemCode}");
+                    }
                 }
             }
         }
