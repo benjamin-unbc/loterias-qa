@@ -262,11 +262,17 @@ class LotteryResultProcessor
     // Helper method to map UI lottery code to system code
     private function getSystemLotteryCode(string $apuLotteryUiCode): ?string
     {
-        // This map needs to be consistent with the $codes array in this class
-        // and the City codes in the database.
+        // Si es un código UI (existe como clave en el array), mapearlo
         if (array_key_exists($apuLotteryUiCode, $this->codes)) {
             return $this->codes[$apuLotteryUiCode];
         }
+        
+        // Si no está en el mapeo, verificar si ya es un código del sistema (existe como código de ciudad en la BD)
+        $city = City::where('code', $apuLotteryUiCode)->first();
+        if ($city) {
+            return $apuLotteryUiCode;
+        }
+        
         return null;
     }
 }
