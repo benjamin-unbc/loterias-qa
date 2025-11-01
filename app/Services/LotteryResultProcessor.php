@@ -211,36 +211,75 @@ class LotteryResultProcessor
                 }
 
                 // --- Redoblona (if applicable) ---
-                if (!empty($apu->numberR) && $apu->positionR !== null && isset($winningNumbersForLottery[$apu->positionR])) {
+                if (!empty($apu->numberR) && $apu->positionR !== null) {
                     $playedNumberRClean = $this->removeAsterisks($apu->numberR);
-                    $winningNumberAtPositionR = $winningNumbersForLottery[$apu->positionR];
                     $numDigitsPlayedR = strlen($playedNumberRClean);
-                    $winningNumberLastDigitsR = substr($winningNumberAtPositionR, -$numDigitsPlayedR);
-
-                    if ($playedNumberRClean === $winningNumberLastDigitsR) {
+                    
+                    // Determinar rango de búsqueda para redoblona según posición apostada
+                    $searchPositionsR = [];
+                    if ($apu->positionR == 1) {
+                        $searchPositionsR = [1];
+                    } elseif ($apu->positionR >= 2 && $apu->positionR <= 5) {
+                        $searchPositionsR = range(2, 5);
+                    } elseif ($apu->positionR >= 6 && $apu->positionR <= 10) {
+                        $searchPositionsR = range(6, 10);
+                    } elseif ($apu->positionR >= 11 && $apu->positionR <= 20) {
+                        $searchPositionsR = range(11, 20);
+                    }
+                    
+                    // Buscar el número de redoblona en todas las posiciones del rango
+                    foreach ($searchPositionsR as $posR) {
+                        if (!isset($winningNumbersForLottery[$posR])) continue;
+                        
+                        $winningNumR = str_pad((string)$winningNumbersForLottery[$posR], 4, '0', STR_PAD_LEFT);
+                        $winningNumberLastDigitsR = substr($winningNumR, -$numDigitsPlayedR);
+                        
+                        if ($playedNumberRClean === $winningNumberLastDigitsR) {
+                            $actualWinningPositionR = $posR;
+                            $winningNumberAtPositionR = $winningNumR;
+                            break;
+                        }
+                    }
+                    
+                    if ($actualWinningPositionR && $winningNumberAtPositionR) {
                         $multiplierR = 0;
+                        // Calcular premio basado en las posiciones apostadas y donde realmente salieron
+                        $mainWinningPos = $actualWinningPosition ?? $apu->position; // Usar posición real o apostada si no hay acierto principal
+                        
                         if ($apu->position == 1) {
-                            if ($apu->positionR >= 1 && $apu->positionR <= 5) $multiplierR = $betCollectionRedoblona->payout_1_to_5;
-                            elseif ($apu->positionR >= 6 && $apu->positionR <= 10) $multiplierR = $betCollectionRedoblona->payout_1_to_10;
-                            elseif ($apu->positionR >= 11 && $apu->positionR <= 20) $multiplierR = $betCollectionRedoblona->payout_1_to_20;
+                            if ($actualWinningPositionR <= 5) $multiplierR = $betCollectionRedoblona->payout_1_to_5;
+                            elseif ($actualWinningPositionR <= 10) $multiplierR = $betCollectionRedoblona->payout_1_to_10;
+                            elseif ($actualWinningPositionR <= 20) $multiplierR = $betCollectionRedoblona->payout_1_to_20;
                         } elseif ($apu->position >= 2 && $apu->position <= 5) {
-                            if ($apu->positionR >= 1 && $apu->positionR <= 5) $multiplierR = $betCollection5To20->payout_5_to_5;
-                            elseif ($apu->positionR >= 6 && $apu->positionR <= 10) $multiplierR = $betCollection5To20->payout_5_to_10;
-                            elseif ($apu->positionR >= 11 && $apu->positionR <= 20) $multiplierR = $betCollection5To20->payout_5_to_20;
+                            if ($actualWinningPositionR >= 2 && $actualWinningPositionR <= 5) $multiplierR = $betCollection5To20->payout_5_to_5;
+                            elseif ($actualWinningPositionR >= 6 && $actualWinningPositionR <= 10) $multiplierR = $betCollection5To20->payout_5_to_10;
+                            elseif ($actualWinningPositionR >= 11 && $actualWinningPositionR <= 20) $multiplierR = $betCollection5To20->payout_5_to_20;
                         } elseif ($apu->position >= 6 && $apu->position <= 10) {
-                            if ($apu->positionR >= 6 && $apu->positionR <= 10) $multiplierR = $betCollection10To20->payout_10_to_10;
-                            elseif ($apu->positionR >= 11 && $apu->positionR <= 20) $multiplierR = $betCollection10To20->payout_10_to_20;
+                            if ($actualWinningPositionR >= 6 && $actualWinningPositionR <= 10) $multiplierR = $betCollection10To20->payout_10_to_10;
+                            elseif ($actualWinningPositionR >= 11 && $actualWinningPositionR <= 20) $multiplierR = $betCollection10To20->payout_10_to_20;
                         } elseif ($apu->position >= 11 && $apu->position <= 20) {
-                            if ($apu->positionR >= 6 && $apu->positionR <= 10) $multiplierR = $betCollection10To20->payout_10_to_20; // This seems like a copy-paste error, should be payout_20_to_10 if exists
-                            elseif ($apu->positionR >= 11 && $apu->positionR <= 20) $multiplierR = $betCollection10To20->payout_20_to_20;
+                            if ($actualWinningPositionR >= 11 && $actualWinningPositionR <= 20) $multiplierR = $betCollection10To20->payout_20_to_20;
                         }
                         $aciertValueR = (float)$apu->import * (float)$multiplierR;
-                        Log::info("LotteryResultProcessor - Acierto redoblona calculado: {$aciertValueR} para APU ID: {$apu->id}");
+                        Log::info("LotteryResultProcessor - Acierto redoblona: {$playedNumberRClean} en posición apostada {$apu->positionR}, salió en posición {$actualWinningPositionR}, premio: {$aciertValueR}");
                     }
                 }
 
                 // Save result if any acierto is found
                 if ($aciertValue > 0 || $aciertValueR > 0) {
+                    // Validar que cada tipo de acierto tenga su posición ganadora real
+                    // Si hay acierto principal, debe tener posición ganadora real
+                    if ($aciertValue > 0 && (!$actualWinningPosition || !$winningNumberAtPosition)) {
+                        Log::warning("LotteryResultProcessor - Acierto principal sin posición ganadora real: Ticket {$apu->ticket} - Lotería {$lotterySystemCode} - Número {$apu->number}");
+                        continue;
+                    }
+                    
+                    // Si hay acierto redoblona, debe tener posición ganadora real
+                    if ($aciertValueR > 0 && (!$actualWinningPositionR || !$winningNumberAtPositionR)) {
+                        Log::warning("LotteryResultProcessor - Acierto redoblona sin posición ganadora real: Ticket {$apu->ticket} - Lotería {$lotterySystemCode} - Número R {$apu->numberR}");
+                        continue;
+                    }
+                    
                     $resultData = [
                         'ticket'      => $apu->ticket,
                         'lottery'     => $lotterySystemCode, // ✅ Usar código del sistema, no el código UI
@@ -254,21 +293,22 @@ class LotteryResultProcessor
                         'date'        => $dateToCalculate,
                         'time'        => $apu->timeApu,
                         'user_id'     => $apu->user_id,
-                        'numero_g'    => $winningNumberAtPosition ?? null, // Número ganador real
-                        'posicion_g'  => $actualWinningPosition ?? null, // Posición donde realmente salió
-                        'num_g_r'     => null, // TODO: Para redoblona
-                        'pos_g_r'     => null, // TODO: Para redoblona
+                        'numero_g'    => $winningNumberAtPosition, // ✅ Número ganador real (no null)
+                        'posicion_g'  => $actualWinningPosition, // ✅ Posición donde realmente salió (no null)
+                        'num_g_r'     => $winningNumberAtPositionR ?? null, // Para redoblona
+                        'pos_g_r'     => $actualWinningPositionR ?? null, // Para redoblona
                         'created_at'  => now(),
                         'updated_at'  => now(),
                     ];
                     
                     // ✅ Usar ResultManager para inserción segura
+                    Log::info("LotteryResultProcessor - Intentando insertar: Ticket {$apu->ticket} - Lotería {$lotterySystemCode} - Número {$apu->number} - Posición {$apu->position} - Premio: " . ($aciertValue + $aciertValueR));
                     $result = ResultManager::createResultSafely($resultData);
                     if ($result) {
                         $matches[] = $resultData;
-                        Log::info("LotteryResultProcessor - Resultado insertado: Ticket {$apu->ticket} - Lotería {$lotterySystemCode} - Premio: " . ($aciertValue + $aciertValueR));
+                        Log::info("LotteryResultProcessor - ✅ Resultado insertado exitosamente ID: {$result->id} - Ticket {$apu->ticket} - Lotería {$lotterySystemCode} - Número {$apu->number} - Posición apostada: {$apu->position} - Posición ganadora: {$actualWinningPosition} - Número ganador: {$winningNumberAtPosition} - Premio: " . ($aciertValue + $aciertValueR));
                     } else {
-                        Log::warning("LotteryResultProcessor - No se pudo insertar resultado: Ticket {$apu->ticket} - Lotería {$lotterySystemCode}");
+                        Log::warning("LotteryResultProcessor - ❌ No se pudo insertar resultado (duplicado o error): Ticket {$apu->ticket} - Lotería {$lotterySystemCode} - Número {$apu->number} - Posición {$apu->position} - APU ID: {$apu->id}");
                     }
                 }
             }
