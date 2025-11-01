@@ -57,11 +57,6 @@ class NumberObserver
     private function processAutoPaymentsForNumber(Number $number)
     {
         try {
-            // Respetar ventanas de análisis horarias
-            if (!AnalysisSchedule::isWithinAnalysisWindow()) {
-                Log::info("NumberObserver - Fuera de ventana de análisis. Se omite procesamiento.");
-                return;
-            }
             // Cargar tablas de pagos si no están cargadas
             $this->loadPayoutTables();
 
@@ -76,7 +71,16 @@ class NumberObserver
             Log::info("NumberObserver - Verificando completitud de lotería: {$lotteryCode} para ciudad: {$number->city->code}");
 
             // ✅ NUEVA LÓGICA: Verificar si la lotería tiene sus 20 números completos
-            if (!LotteryCompletenessService::isLotteryComplete($lotteryCode, $number->date)) {
+            // Si la lotería está completa, procesar inmediatamente sin verificar ventana de análisis
+            // Si no está completa, respetar ventana de análisis para evitar procesamiento innecesario
+            $isComplete = LotteryCompletenessService::isLotteryComplete($lotteryCode, $number->date);
+            
+            if (!$isComplete) {
+                // Si no está completa, solo procesar dentro de ventana de análisis
+                if (!AnalysisSchedule::isWithinAnalysisWindow()) {
+                    Log::info("NumberObserver - Lotería {$lotteryCode} aún no está completa y fuera de ventana de análisis. Se omite procesamiento.");
+                    return;
+                }
                 Log::info("NumberObserver - Lotería {$lotteryCode} aún no está completa (no tiene 20 números). Esperando...");
                 return;
             }
@@ -106,7 +110,10 @@ class NumberObserver
 
             foreach ($matchingPlays as $play) {
                 // ✅ MODIFICADO: Verificar si esta jugada específica es ganadora para esta lotería específica
-                if ($this->isWinningPlayForLotteryComplete($play, $completeNumbers, $lotteryCode)) {
+                // Obtener el número ganador y posición ganadora
+                $winningInfo = $this->getWinningNumberAndPosition($play, $completeNumbers, $lotteryCode);
+                
+                if ($winningInfo && $winningInfo['isWinner']) {
                     $prize = $this->calculatePrizeForLotteryComplete($play, $completeNumbers, $lotteryCode);
                     
                     if ($prize > 0) {
@@ -124,6 +131,8 @@ class NumberObserver
                             'aciert' => $prize, // ✅ Solo el premio de esta lotería específica
                             'date' => $number->date,
                             'time' => $number->extract->time,
+                            'numero_g' => $winningInfo['winningNumber'], // ✅ Número ganador real
+                            'posicion_g' => $winningInfo['winningPosition'], // ✅ Posición donde realmente salió
                             'created_at' => now(),
                             'updated_at' => now(),
                         ];
@@ -132,7 +141,7 @@ class NumberObserver
                         if ($result) {
                             $resultsInserted++;
                             $totalPrize += $prize;
-                            Log::info("NumberObserver - Resultado insertado: Ticket {$play->ticket} - Lotería {$lotteryCode} - Premio: {$prize}");
+                            Log::info("NumberObserver - Resultado insertado: Ticket {$play->ticket} - Lotería {$lotteryCode} - Premio: {$prize} - numero_g: {$winningInfo['winningNumber']} - posicion_g: {$winningInfo['winningPosition']}");
                         }
                     }
                 }
@@ -414,12 +423,22 @@ class NumberObserver
      */
     private function isWinningPlayForLotteryComplete($play, $completeNumbers, $lotteryCode)
     {
+        $winningInfo = $this->getWinningNumberAndPosition($play, $completeNumbers, $lotteryCode);
+        return $winningInfo && $winningInfo['isWinner'];
+    }
+
+    /**
+     * ✅ NUEVO: Obtiene el número ganador y la posición ganadora para una jugada
+     * Retorna null si no es ganadora, o un array con isWinner, winningNumber y winningPosition
+     */
+    private function getWinningNumberAndPosition($play, $completeNumbers, $lotteryCode)
+    {
         // Verificar que la jugada contenga esta lotería específica
         $playLotteries = explode(',', $play->lottery);
         $playLotteries = array_map('trim', $playLotteries);
         
         if (!in_array($lotteryCode, $playLotteries)) {
-            return false;
+            return null;
         }
         
         // ✅ CORREGIDO: Determinar rango permitido según posición apostada (REGLAS DE QUINIELA)
@@ -455,11 +474,15 @@ class NumberObserver
             }
             // ✅ Verificar tanto números como posición correcta
             if ($this->isWinningPlay($play, $number->value, $number->index)) {
-                return true;
+                return [
+                    'isWinner' => true,
+                    'winningNumber' => $number->value,
+                    'winningPosition' => $number->index
+                ];
             }
         }
         
-        return false;
+        return null;
     }
 
     /**

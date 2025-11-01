@@ -476,12 +476,6 @@ class AutoUpdateLotteryNumbers extends Command
     {
         try {
             Log::info("AutoUpdateLotteryNumbers - Calculando resultados para: {$city->code} - Pos {$position} - Número {$winningNumber}");
-            
-            // Respetar ventanas de análisis horarias
-            if (!\App\Services\AnalysisSchedule::isWithinAnalysisWindow()) {
-                Log::info("AutoUpdateLotteryNumbers - Fuera de ventana de análisis. Se omite procesamiento.");
-                return;
-            }
 
             // Obtener el extract para el tiempo
             $extract = \App\Models\Extract::find($extractId);
@@ -497,7 +491,16 @@ class AutoUpdateLotteryNumbers extends Command
             Log::info("AutoUpdateLotteryNumbers - Usando código completo de lotería: {$lotteryCode}");
             
             // ✅ NUEVA LÓGICA: Verificar si la lotería tiene sus 20 números completos
-            if (!\App\Services\LotteryCompletenessService::isLotteryComplete($lotteryCode, $date)) {
+            // Si la lotería está completa, procesar inmediatamente sin verificar ventana de análisis
+            // Si no está completa, respetar ventana de análisis para evitar procesamiento innecesario
+            $isComplete = \App\Services\LotteryCompletenessService::isLotteryComplete($lotteryCode, $date);
+            
+            if (!$isComplete) {
+                // Si no está completa, solo procesar dentro de ventana de análisis
+                if (!\App\Services\AnalysisSchedule::isWithinAnalysisWindow()) {
+                    Log::info("AutoUpdateLotteryNumbers - Lotería {$lotteryCode} aún no está completa y fuera de ventana de análisis. NO se insertarán resultados hasta que esté completa.");
+                    return;
+                }
                 Log::info("AutoUpdateLotteryNumbers - Lotería {$lotteryCode} aún no está completa (no tiene 20 números). NO se insertarán resultados hasta que esté completa.");
                 return;
             }
