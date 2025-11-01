@@ -69,14 +69,15 @@ class NumberObserver
 
             Log::info("NumberObserver - Verificando completitud de lotería: {$lotteryCode} para ciudad: {$number->city->code}");
 
-            // Verificar si la lotería tiene sus 20 números completos
+            // ✅ ÚNICO FILTRO: Verificar que la lotería tenga sus 20 números completos
             $isComplete = LotteryCompletenessService::isLotteryComplete($lotteryCode, $number->date);
             
-            if ($isComplete) {
-                Log::info("NumberObserver - ✅ Lotería {$lotteryCode} COMPLETA con 20 números. Iniciando procesamiento...");
-            } else {
-                Log::info("NumberObserver - Lotería {$lotteryCode} aún no está completa (tiene menos de 20 números). Procesando números disponibles...");
+            if (!$isComplete) {
+                Log::info("NumberObserver - Lotería {$lotteryCode} aún no está completa (tiene menos de 20 números). NO se procesarán resultados hasta que tenga los 20 números.");
+                return;
             }
+
+            Log::info("NumberObserver - ✅ Lotería {$lotteryCode} COMPLETA con 20 números. Iniciando procesamiento...");
 
             // Obtener todos los números ganadores de esta lotería completa
             $completeNumbers = LotteryCompletenessService::getCompleteLotteryNumbersCollection($lotteryCode, $number->date);

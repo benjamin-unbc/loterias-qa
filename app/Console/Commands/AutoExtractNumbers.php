@@ -325,22 +325,30 @@ class AutoExtractNumbers extends Command
             
             Log::info("AutoExtractNumbers - Usando código completo de lotería: {$lotteryCode}");
             
-            // Verificar si la lotería tiene sus 20 números completos
+            // ✅ ÚNICO FILTRO: Verificar que la lotería tenga sus 20 números completos
             $isComplete = \App\Services\LotteryCompletenessService::isLotteryComplete($lotteryCode, $date);
             
-            if ($isComplete) {
-                Log::info("AutoExtractNumbers - ✅ Lotería {$lotteryCode} COMPLETA con 20 números. Procediendo con inserción de resultados...");
-            } else {
-                Log::info("AutoExtractNumbers - Lotería {$lotteryCode} aún no está completa (tiene menos de 20 números). Procesando números disponibles...");
+            if (!$isComplete) {
+                Log::info("AutoExtractNumbers - Lotería {$lotteryCode} aún no está completa (tiene menos de 20 números). NO se procesarán resultados hasta que tenga los 20 números.");
+                return;
             }
             
-            // Buscar jugadas candidatas por lotería EXACTA (campo lottery puede tener múltiples códigos separados por coma)
-            // Usamos FIND_IN_SET para coincidencia exacta del código dentro de la lista
+            Log::info("AutoExtractNumbers - ✅ Lotería {$lotteryCode} COMPLETA con 20 números. Procediendo con inserción de resultados...");
+            
+            // ✅ Obtener todos los 20 números completos de la lotería
+            $completeNumbers = \App\Services\LotteryCompletenessService::getCompleteLotteryNumbersCollection($lotteryCode, $date);
+            
+            if (!$completeNumbers || $completeNumbers->count() < 20) {
+                Log::warning("AutoExtractNumbers - No se pudieron obtener los 20 números completos para {$lotteryCode}");
+                return;
+            }
+            
+            // Buscar jugadas que coincidan con esta lotería
             $matchingPlays = \App\Models\ApusModel::whereDate('created_at', $date)
                                                  ->whereRaw('FIND_IN_SET(?, lottery)', [$lotteryCode])
                                                  ->get();
             
-            Log::info("AutoExtractNumbers - Encontradas " . $matchingPlays->count() . " jugadas para posición {$position} y lotería {$lotteryCode}");
+            Log::info("AutoExtractNumbers - Encontradas " . $matchingPlays->count() . " jugadas para lotería {$lotteryCode}");
             
             // Obtener configuraciones de premios
             $quinielaPayouts = \App\Models\QuinielaModel::first();
@@ -355,21 +363,35 @@ class AutoExtractNumbers extends Command
             
             $resultsInserted = 0;
             
-            // Para cada jugada que coincida, calcular acierto
+            // Para cada jugada, buscar en qué posición REAL salió el número apostado
             foreach ($matchingPlays as $play) {
-                // Calcular premio de jugada principal
                 $aciertoValue = 0;
                 $redoblonaValue = 0;
+                $numeroG = null;
+                $posicionG = null;
                 
                 // IMPORTANTE: Si hay redoblona, NO se paga premio principal, solo redoblona
                 if (!empty($play->numberR) && !empty($play->positionR)) {
                     // Solo calcular premio de redoblona (se paga TODO como redoblona)
                     $redoblonaValue = $this->redoblonaService->calculateRedoblonaPrize($play, $date, $lotteryCode);
                 } else {
-                    // Solo calcular premio principal si NO hay redoblona
-                    if ($this->isWinningPlay($play, $winningNumber, $position)) {
-                        $aciertoValue = $this->calculatePrize($play, $winningNumber, $quinielaPayouts);
+                    // ✅ Buscar la posición REAL donde salió el número apostado en los 20 números completos
+                    $winningInfo = $this->findWinningNumberAndPosition($play, $completeNumbers);
+                    
+                    if (!$winningInfo) {
+                        continue; // No es ganadora
                     }
+                    
+                    // ✅ Verificar que la posición REAL donde salió coincida con la posición apostada según las reglas
+                    if (!$this->isPositionCorrect($play->position, $winningInfo['winningPosition'])) {
+                        Log::info("AutoExtractNumbers - Jugada NO ganadora: Ticket {$play->ticket} - Apostó posición {$play->position} pero salió en posición {$winningInfo['winningPosition']}");
+                        continue;
+                    }
+                    
+                    // ✅ Es ganadora: calcular premio principal y guardar número ganador
+                    $aciertoValue = $this->calculatePrize($play, $winningInfo['winningNumber'], $quinielaPayouts);
+                    $numeroG = $winningInfo['winningNumber'];
+                    $posicionG = $winningInfo['winningPosition'];
                 }
                 
                 $totalPrize = $aciertoValue + $redoblonaValue;
@@ -377,7 +399,7 @@ class AutoExtractNumbers extends Command
                 if ($totalPrize > 0) {
                     // Verificar si ya existe este resultado para evitar duplicados
                     $existingResult = \App\Models\Result::where('ticket', $play->ticket)
-                                                       ->where('lottery', $lotteryCode) // ✅ Verificar por la lotería específica donde salió el número
+                                                       ->where('lottery', $lotteryCode)
                                                        ->where('number', $play->number)
                                                        ->where('position', $play->position)
                                                        ->where('date', $date)
@@ -388,15 +410,15 @@ class AutoExtractNumbers extends Command
                         'ticket' => $play->ticket,
                         'lottery' => $lotteryCode,
                         'number' => $play->number,
-                        'position' => $play->position,
+                        'position' => $play->position, // Posición apostada
                         'import' => $play->import,
                         'aciert' => $totalPrize,
                         'date' => $date,
                         'time' => $extract->time,
                         'user_id' => $play->user_id,
                         'XA' => 'X',
-                        'numero_g' => $winningNumber,
-                        'posicion_g' => $position,
+                        'numero_g' => $numeroG, // Número ganador real
+                        'posicion_g' => $posicionG, // Posición real donde salió
                         'numR' => $play->numberR ?? null,
                         'posR' => $play->positionR ?? null,
                         'num_g_r' => null,
@@ -407,15 +429,17 @@ class AutoExtractNumbers extends Command
 
                     if ($result) {
                         $resultsInserted++;
-                        Log::info("AutoExtractNumbers - Resultado insertado: Ticket {$play->ticket} - Premio principal: \${$aciertoValue} - Premio redoblona: \${$redoblonaValue} - Total: \${$totalPrize}");
+                        Log::info("AutoExtractNumbers - ✅ Resultado insertado: Ticket {$play->ticket} - Apostó pos {$play->position}, salió en pos {$posicionG} - Premio: \${$totalPrize}");
                         // Notificar ganador encontrado
-                        $this->notifyWinner($play, $totalPrize, $winningNumber, $position);
+                        if ($numeroG) {
+                            $this->notifyWinner($play, $totalPrize, $numeroG, $posicionG);
+                        }
                     }
                 }
             }
             
             if ($resultsInserted > 0) {
-                Log::info("AutoExtractNumbers - Se insertaron {$resultsInserted} resultados para número ganador {$winningNumber}");
+                Log::info("AutoExtractNumbers - Se insertaron {$resultsInserted} resultados para lotería {$lotteryCode}");
             }
             
         } catch (\Exception $e) {
@@ -424,34 +448,35 @@ class AutoExtractNumbers extends Command
     }
     
     /**
-     * Verifica si una jugada es ganadora
-     * ✅ MODIFICADO: Ahora verifica tanto los números como las posiciones correctas
+     * ✅ Busca en qué posición REAL salió el número apostado dentro de los 20 números completos
+     * Busca en TODOS los 20 números sin importar la posición apostada
      */
-    private function isWinningPlay($play, $winningNumber, $winningPosition = null)
+    private function findWinningNumberAndPosition($play, $completeNumbers)
     {
         $playedNumber = str_replace('*', '', $play->number);
         $playedDigits = strlen($playedNumber);
         
-        if ($playedDigits > 0 && $playedDigits <= 4) {
-            // Normalizar ganador a 4 dígitos y comparar por sufijo
-            $winner4 = str_pad((string)$winningNumber, 4, '0', STR_PAD_LEFT);
-            $winningLastDigits = substr($winner4, -$playedDigits);
-            $numbersMatch = $playedNumber === $winningLastDigits;
-            
-            if (!$numbersMatch) {
-                return false;
-            }
-            
-            // Si no se proporciona la posición ganadora, solo verificar números (comportamiento anterior)
-            if ($winningPosition === null) {
-                return true;
-            }
-            
-            // Verificar que la posición sea correcta según las reglas de quiniela
-            return $this->isPositionCorrect($play->position, $winningPosition);
+        if ($playedDigits <= 0 || $playedDigits > 4) {
+            return null;
         }
         
-        return false;
+        // ✅ Buscar en TODOS los 20 números completos sin filtrar por posición
+        // La verificación de posición se hace después con isPositionCorrect
+        foreach ($completeNumbers as $number) {
+            // Verificar si los números coinciden
+            $winner4 = str_pad((string)$number->value, 4, '0', STR_PAD_LEFT);
+            $winningLastDigits = substr($winner4, -$playedDigits);
+            
+            if ($playedNumber === $winningLastDigits) {
+                return [
+                    'isWinner' => true,
+                    'winningNumber' => $number->value,
+                    'winningPosition' => $number->index // Posición REAL donde salió
+                ];
+            }
+        }
+        
+        return null;
     }
     
     /**
