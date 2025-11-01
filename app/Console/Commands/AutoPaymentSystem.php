@@ -44,15 +44,69 @@ class AutoPaymentSystem extends Command
      */
     public function handle()
     {
-        $interval = (int) $this->option('interval');
+        // ✅ CORRECCIÓN: Verificar si se pasó explícitamente --interval
+        // Si no se pasa, es modo scheduler (ejecutar una vez)
+        // Si se pasa con un valor, es modo interactivo (ejecutar en bucle)
+        $argv = $_SERVER['argv'] ?? [];
+        $hasIntervalParam = false;
+        $interval = 5; // Default
+        
+        foreach ($argv as $arg) {
+            if (strpos($arg, '--interval') !== false) {
+                $hasIntervalParam = true;
+                // Extraer el valor si está en el mismo argumento
+                if (strpos($arg, '=') !== false) {
+                    $parts = explode('=', $arg);
+                    $interval = isset($parts[1]) ? (int)$parts[1] : 5;
+                } else {
+                    // Buscar el siguiente argumento como valor
+                    $index = array_search($arg, $argv);
+                    $interval = isset($argv[$index + 1]) ? (int)$argv[$index + 1] : 5;
+                }
+                break;
+            }
+        }
+        
+        // Si NO se pasó --interval, es modo scheduler (ejecutar una vez)
+        if (!$hasIntervalParam) {
+            // Modo scheduler: ejecutar una sola vez
+            $this->info("🚀 Ejecutando sistema de pagos (modo scheduler)...");
+            $this->info("📅 Fecha actual: " . Carbon::now()->format('Y-m-d H:i:s'));
+            
+            Log::info("AutoPaymentSystem - Ejecutando sistema de pagos (scheduler)");
+
+            // Cargar tablas de pagos una sola vez
+            $this->loadPayoutTables();
+            
+            // Inicializar servicio de redoblona
+            $this->redoblonaService = new RedoblonaService();
+
+            if ($this->isWithinOperatingHours()) {
+                // Respetar ventanas de análisis horarias
+                if (AnalysisSchedule::isWithinAnalysisWindow()) {
+                    $this->processAutoPayments();
+                    $this->info("✅ Procesamiento completado");
+                } else {
+                    $this->line("⏳ Fuera de ventana de análisis. La próxima ventana será en el siguiente horario programado.");
+                    Log::info("AutoPaymentSystem - Fuera de ventana de análisis");
+                }
+            } else {
+                $this->line("😴 Fuera del horario de funcionamiento (10:00-23:59)");
+                Log::info("AutoPaymentSystem - Fuera del horario de funcionamiento");
+            }
+            
+            return 0; // Terminar el comando
+        }
+        
+        // Modo interactivo: ejecutar en bucle
         $this->info("🚀 Iniciando Sistema Automático de Pagos cada {$interval} segundos");
         $this->info("📅 Fecha actual: " . Carbon::now()->format('Y-m-d H:i:s'));
-        $this->info("⏰ Horario de funcionamiento: 10:25 AM - 12:00 AM");
+        $this->info("⏰ Horario de funcionamiento: 10:00 AM - 11:59 PM");
         $this->info("🎯 Detección automática de turnos jugados");
         $this->info("💰 Cálculo automático de pagos");
         $this->info("⏹️  Presiona Ctrl+C para detener");
         
-        Log::info("AutoPaymentSystem - Iniciando sistema automático de pagos cada {$interval} segundos");
+        Log::info("AutoPaymentSystem - Iniciando sistema automático de pagos cada {$interval} segundos (modo interactivo)");
 
         // Cargar tablas de pagos una sola vez
         $this->loadPayoutTables();
