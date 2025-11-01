@@ -34,7 +34,53 @@ class AutoExtractNumbers extends Command
      */
     public function handle()
     {
-        $interval = (int) $this->option('interval');
+        // ✅ CORRECCIÓN: Verificar si se pasó explícitamente --interval
+        // Si no se pasa, es modo scheduler (ejecutar una vez)
+        // Si se pasa con un valor, es modo interactivo (ejecutar en bucle)
+        $argv = $_SERVER['argv'] ?? [];
+        $hasIntervalParam = false;
+        $interval = 10; // Default
+        
+        foreach ($argv as $arg) {
+            if (strpos($arg, '--interval') !== false) {
+                $hasIntervalParam = true;
+                // Extraer el valor si está en el mismo argumento
+                if (strpos($arg, '=') !== false) {
+                    $parts = explode('=', $arg);
+                    $interval = isset($parts[1]) ? (int)$parts[1] : 10;
+                } else {
+                    // Buscar el siguiente argumento como valor
+                    $index = array_search($arg, $argv);
+                    $interval = isset($argv[$index + 1]) ? (int)$argv[$index + 1] : 10;
+                }
+                break;
+            }
+        }
+        
+        // Si NO se pasó --interval, es modo scheduler (ejecutar una vez)
+        if (!$hasIntervalParam) {
+            // Modo scheduler: ejecutar una sola vez
+            $this->info("🔄 Ejecutando extracción única (modo scheduler)...");
+            $this->info("📅 Fecha actual: " . Carbon::now()->format('Y-m-d H:i:s'));
+            
+            // Inicializar servicio de redoblona
+            $this->redoblonaService = new RedoblonaService();
+            
+            Log::info("AutoExtractNumbers - Ejecutando extracción única (scheduler)");
+            
+            // Verificar si estamos en horario de funcionamiento
+            if ($this->isWithinOperatingHours()) {
+                $this->extractNumbers();
+                $this->info("✅ Extracción completada");
+            } else {
+                $this->line("😴 Fuera del horario de funcionamiento. La extracción solo funciona entre 10:30-11:30, 12:00-13:00, 15:00-16:00, 18:00-19:00, 21:00-22:00, 22:00-23:00");
+                Log::info("AutoExtractNumbers - Fuera del horario de funcionamiento");
+            }
+            
+            return 0; // Terminar el comando
+        }
+        
+        // Modo interactivo: ejecutar en bucle
         $this->info("🔄 Iniciando extracción automática cada {$interval} segundos (detección rápida)...");
         $this->info("📅 Fecha actual: " . Carbon::now()->format('Y-m-d H:i:s'));
         $this->info("⏰ Horarios de funcionamiento:");
@@ -49,7 +95,7 @@ class AutoExtractNumbers extends Command
         // Inicializar servicio de redoblona
         $this->redoblonaService = new RedoblonaService();
         
-        Log::info("AutoExtractNumbers - Iniciando extracción automática cada {$interval} segundos");
+        Log::info("AutoExtractNumbers - Iniciando extracción automática cada {$interval} segundos (modo interactivo)");
 
         while (true) {
             try {
