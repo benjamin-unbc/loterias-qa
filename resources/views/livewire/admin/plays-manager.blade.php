@@ -42,14 +42,14 @@
 
             <div class="flex flex-col gap-2 border-2 border-transparent rounded-lg duration-200 {{ $editingRowId ? 'bg-[#343f328f] p-3 border-white/20 border-dashed' : '' }}">
                 <div class="w-full overflow-x-auto flex justify-center">
-                    <div class="min-w-full inline-block align-middle">
-                        <table class="text-center text-xs sm:text-sm bg-[#22272b] rounded-lg min-w-fit">
+                    <div class="inline-block align-middle mx-auto">
+                        <table class="text-center text-xs sm:text-sm bg-[#22272b] rounded-lg mx-auto">
                         <thead>
-                            <tr class="bg-[#1a1a1a]">
-                                <th class="sticky left-0 bg-[#1a1a1a] z-20 p-1 sm:p-2 min-w-[80px] sm:min-w-[90px] shadow-lg">
-                                    <div class="flex items-center justify-center gap-2 sm:gap-4">
+                            <tr class="bg-[#22272b]">
+                                <th class="sticky left-0 bg-[#22272b] z-20 p-1 sm:p-2 min-w-[70px] sm:min-w-[80px] shadow-lg">
+                                    <div class="flex items-center justify-center gap-2 sm:gap-3">
                                         <input type="checkbox" id="all"
-                                            class="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7 bg-[#22272b] cursor-pointer border border-gray-400 rounded text-green-400 focus:ring-green-400"
+                                            class="w-4 h-4 sm:w-5 sm:h-5 bg-[#22272b] cursor-pointer border border-gray-400 rounded text-green-400 focus:ring-green-400"
                                             wire:click="toggleAllCheckboxes($event.target.checked)"
                                             aria-label="Seleccionar todos los horarios">
                                         <label for="all" class="font-medium select-none text-white text-xs sm:text-sm">Todos</label>
@@ -81,7 +81,7 @@
                                             });
                                         @endphp
                                         @foreach ($filteredLotteries as $lottery)
-                                            <th class="text-white px-1 py-1 sm:py-2 min-w-[35px] sm:min-w-[45px] bg-[#1a1a1a] text-xs font-medium">
+                                            <th class="text-white px-1 py-1 sm:py-2 min-w-[30px] sm:min-w-[40px] bg-[#22272b] text-xs sm:text-sm font-medium">
                                                 {{ $lottery['abbreviation'] ?? $lottery['name'] }}
                                             </th>
                                         @endforeach
@@ -91,10 +91,10 @@
                         <tbody>
                             @foreach ($horariosConEstado as $horario)
                                 <tr data-time="{{ $horario['time'] }}" class="hover:bg-[#333333]">
-                                    <td class="sticky left-0 bg-[#22272b] z-20 p-1 sm:p-2 min-w-[80px] sm:min-w-[90px] shadow-lg">
-                                        <div class="flex items-center justify-center gap-2 sm:gap-4">
+                                    <td class="sticky left-0 bg-[#22272b] z-20 p-1 sm:p-2 min-w-[70px] sm:min-w-[80px] shadow-lg">
+                                        <div class="flex items-center justify-center gap-2 sm:gap-3">
                                             <input type="checkbox" id="time-{{ $horario['time'] }}-all"
-                                                class="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7 bg-[#22272b] rounded border border-gray-400 {{ $horario['checkboxClass'] }}"
+                                                class="w-4 h-4 sm:w-5 sm:h-5 bg-[#22272b] rounded border border-gray-400 {{ $horario['checkboxClass'] }}"
                                                 {{ $horario['disabledAttr'] }}
                                                 wire:model="selected.{{ $horario['time'] }}"
                                                 wire:click="toggleRowCheckboxes('{{ $horario['time'] }}', $event.target.checked)"
@@ -139,17 +139,17 @@
                                                     return $item['name'] === $lottery['name'];
                                                 }) + 1 : null;
                                             @endphp
-                                            <td class="p-1">
+                                            <td class="p-1 sm:p-2">
                                                 @if($shouldShow && $lotteryInTime && $colIndex)
                                                     <input type="checkbox"
                                                         id="time-{{ $horario['time'] }}-col-{{ $colIndex }}"
-                                                        class="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7 bg-[#22272b] rounded border border-gray-400 {{ $horario['checkboxClass'] }}"
+                                                        class="w-4 h-4 sm:w-5 sm:h-5 bg-[#22272b] rounded border border-gray-400 {{ $horario['checkboxClass'] }}"
                                                         {{ $horario['disabledAttr'] }}
                                                         wire:model="selected.{{ $horario['time'] }}_col_{{ $colIndex }}"
                                                         wire:click="toggleColumnCheckbox('{{ $horario['time'] }}', {{ $colIndex }}, $event.target.checked)"
                                                         aria-label="Seleccionar {{ $lottery['name'] }} para {{ $horario['time'] }}">
                                                 @else
-                                                    <div class="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7"></div>
+                                                    <div class="w-4 h-4 sm:w-5 sm:h-5"></div>
                                                 @endif
                                             </td>
                                         @endforeach
