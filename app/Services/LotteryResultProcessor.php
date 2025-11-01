@@ -183,7 +183,8 @@ class LotteryResultProcessor
                     }
                     
                     if ($actualWinningPosition && $winningNumberAtPosition) {
-                        $ticketType = $this->getTicketType($apu->number);
+                        // ✅ CORRECCIÓN: Si position == 1, SIEMPRE es quiniela, independientemente de asteriscos
+                        $ticketType = ($apu->position == 1) ? 'quiniela' : $this->getTicketType($apu->number);
                         
                         $multiplier = 0;
                         if ($ticketType === 'quiniela') {
@@ -206,7 +207,7 @@ class LotteryResultProcessor
                             else $multiplier = $figureTwo->cobra_20;
                         }
                         $aciertValue = (float)$apu->import * (float)$multiplier;
-                        Log::info("LotteryResultProcessor - Acierto principal: {$playedNumberClean} en posición apostada {$apu->position}, salió en posición {$actualWinningPosition}, premio: {$aciertValue}");
+                        Log::info("LotteryResultProcessor - Acierto principal: {$playedNumberClean} en posición apostada {$apu->position}, salió en posición {$actualWinningPosition}, tipo: {$ticketType}, premio: {$aciertValue}");
                     }
                 }
 
@@ -280,6 +281,14 @@ class LotteryResultProcessor
                         continue;
                     }
                     
+                    // ✅ Asegurar que numero_g y posicion_g no sean null para el acierto principal
+                    if ($aciertValue > 0) {
+                        if (!$winningNumberAtPosition || !$actualWinningPosition) {
+                            Log::warning("LotteryResultProcessor - numero_g o posicion_g son null para acierto principal: Ticket {$apu->ticket} - Lotería {$lotterySystemCode} - Número {$apu->number} - numero_g: {$winningNumberAtPosition} - posicion_g: {$actualWinningPosition}");
+                            continue;
+                        }
+                    }
+                    
                     $resultData = [
                         'ticket'      => $apu->ticket,
                         'lottery'     => $lotterySystemCode, // ✅ Usar código del sistema, no el código UI
@@ -293,20 +302,24 @@ class LotteryResultProcessor
                         'date'        => $dateToCalculate,
                         'time'        => $apu->timeApu,
                         'user_id'     => $apu->user_id,
-                        'numero_g'    => $winningNumberAtPosition, // ✅ Número ganador real (no null)
-                        'posicion_g'  => $actualWinningPosition, // ✅ Posición donde realmente salió (no null)
+                        'numero_g'    => $winningNumberAtPosition ?? null, // ✅ Número ganador real
+                        'posicion_g'  => $actualWinningPosition ?? null, // ✅ Posición donde realmente salió
                         'num_g_r'     => $winningNumberAtPositionR ?? null, // Para redoblona
                         'pos_g_r'     => $actualWinningPositionR ?? null, // Para redoblona
                         'created_at'  => now(),
                         'updated_at'  => now(),
                     ];
                     
+                    // ✅ Log detallado antes de insertar
+                    Log::info("LotteryResultProcessor - Datos antes de insertar: Ticket {$apu->ticket} - Lotería {$lotterySystemCode} - Número {$apu->number} - Posición apostada: {$apu->position} - Posición ganadora: {$actualWinningPosition} - Número ganador: {$winningNumberAtPosition} - Premio: " . ($aciertValue + $aciertValueR));
+                    
                     // ✅ Usar ResultManager para inserción segura
-                    Log::info("LotteryResultProcessor - Intentando insertar: Ticket {$apu->ticket} - Lotería {$lotterySystemCode} - Número {$apu->number} - Posición {$apu->position} - Premio: " . ($aciertValue + $aciertValueR));
                     $result = ResultManager::createResultSafely($resultData);
                     if ($result) {
                         $matches[] = $resultData;
-                        Log::info("LotteryResultProcessor - ✅ Resultado insertado exitosamente ID: {$result->id} - Ticket {$apu->ticket} - Lotería {$lotterySystemCode} - Número {$apu->number} - Posición apostada: {$apu->position} - Posición ganadora: {$actualWinningPosition} - Número ganador: {$winningNumberAtPosition} - Premio: " . ($aciertValue + $aciertValueR));
+                        // ✅ Verificar que se guardaron correctamente
+                        $savedResult = Result::find($result->id);
+                        Log::info("LotteryResultProcessor - ✅ Resultado insertado exitosamente ID: {$result->id} - Ticket {$apu->ticket} - Lotería {$lotterySystemCode} - numero_g guardado: {$savedResult->numero_g} - posicion_g guardado: {$savedResult->posicion_g} - Premio: " . ($aciertValue + $aciertValueR));
                     } else {
                         Log::warning("LotteryResultProcessor - ❌ No se pudo insertar resultado (duplicado o error): Ticket {$apu->ticket} - Lotería {$lotterySystemCode} - Número {$apu->number} - Posición {$apu->position} - APU ID: {$apu->id}");
                     }
