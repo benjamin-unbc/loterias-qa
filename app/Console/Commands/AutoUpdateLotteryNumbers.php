@@ -490,22 +490,14 @@ class AutoUpdateLotteryNumbers extends Command
             
             Log::info("AutoUpdateLotteryNumbers - Usando código completo de lotería: {$lotteryCode}");
             
-            // ✅ NUEVA LÓGICA: Verificar si la lotería tiene sus 20 números completos
-            // Si la lotería está completa, procesar inmediatamente sin verificar ventana de análisis
-            // Si no está completa, respetar ventana de análisis para evitar procesamiento innecesario
+            // Verificar si la lotería tiene sus 20 números completos
             $isComplete = \App\Services\LotteryCompletenessService::isLotteryComplete($lotteryCode, $date);
             
-            if (!$isComplete) {
-                // Si no está completa, solo procesar dentro de ventana de análisis
-                if (!\App\Services\AnalysisSchedule::isWithinAnalysisWindow()) {
-                    Log::info("AutoUpdateLotteryNumbers - Lotería {$lotteryCode} aún no está completa y fuera de ventana de análisis. NO se insertarán resultados hasta que esté completa.");
-                    return;
-                }
-                Log::info("AutoUpdateLotteryNumbers - Lotería {$lotteryCode} aún no está completa (no tiene 20 números). NO se insertarán resultados hasta que esté completa.");
-                return;
+            if ($isComplete) {
+                Log::info("AutoUpdateLotteryNumbers - ✅ Lotería {$lotteryCode} COMPLETA con 20 números. Procediendo con inserción de resultados...");
+            } else {
+                Log::info("AutoUpdateLotteryNumbers - Lotería {$lotteryCode} aún no está completa (tiene menos de 20 números). Procesando números disponibles...");
             }
-            
-            Log::info("AutoUpdateLotteryNumbers - ✅ Lotería {$lotteryCode} COMPLETA con 20 números. Procediendo con inserción de resultados...");
             
             // Buscar jugadas que coincidan con este número ganador
             // Las jugadas se guardan con códigos como "JUJ1800,PRO1500" etc.

@@ -17,7 +17,6 @@ use App\Models\BetCollection10To20Model;
 use App\Services\WinningNumbersService;
 use App\Services\RedoblonaService;
 use App\Services\LotteryCompletenessService;
-use App\Services\AnalysisSchedule;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -82,14 +81,8 @@ class AutoPaymentSystem extends Command
             $this->redoblonaService = new RedoblonaService();
 
             if ($this->isWithinOperatingHours()) {
-                // Respetar ventanas de análisis horarias
-                if (AnalysisSchedule::isWithinAnalysisWindow()) {
-                    $this->processAutoPayments();
-                    $this->info("✅ Procesamiento completado");
-                } else {
-                    $this->line("⏳ Fuera de ventana de análisis. La próxima ventana será en el siguiente horario programado.");
-                    Log::info("AutoPaymentSystem - Fuera de ventana de análisis");
-                }
+                $this->processAutoPayments();
+                $this->info("✅ Procesamiento completado");
             } else {
                 $this->line("😴 Fuera del horario de funcionamiento (10:00-23:59)");
                 Log::info("AutoPaymentSystem - Fuera del horario de funcionamiento");
@@ -117,12 +110,6 @@ class AutoPaymentSystem extends Command
         while (true) {
             try {
                 if ($this->isWithinOperatingHours()) {
-                    // Respetar ventanas de análisis horarias
-                    if (!AnalysisSchedule::isWithinAnalysisWindow()) {
-                        $this->line("⏳ Fuera de ventana de análisis. Esperando siguiente ventana...");
-                        sleep($interval);
-                        continue;
-                    }
                     $this->processAutoPayments();
                     $this->info("⏰ Esperando {$interval} segundos... (" . Carbon::now()->format('H:i:s') . ")");
                 } else {

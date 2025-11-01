@@ -15,7 +15,6 @@ use App\Models\BetCollection5To20Model;
 use App\Models\BetCollection10To20Model;
 use App\Services\RedoblonaService;
 use App\Services\LotteryCompletenessService;
-use App\Services\AnalysisSchedule;
 use Illuminate\Support\Facades\Log;
 
 class NumberObserver
@@ -70,22 +69,14 @@ class NumberObserver
 
             Log::info("NumberObserver - Verificando completitud de lotería: {$lotteryCode} para ciudad: {$number->city->code}");
 
-            // ✅ NUEVA LÓGICA: Verificar si la lotería tiene sus 20 números completos
-            // Si la lotería está completa, procesar inmediatamente sin verificar ventana de análisis
-            // Si no está completa, respetar ventana de análisis para evitar procesamiento innecesario
+            // Verificar si la lotería tiene sus 20 números completos
             $isComplete = LotteryCompletenessService::isLotteryComplete($lotteryCode, $number->date);
             
-            if (!$isComplete) {
-                // Si no está completa, solo procesar dentro de ventana de análisis
-                if (!AnalysisSchedule::isWithinAnalysisWindow()) {
-                    Log::info("NumberObserver - Lotería {$lotteryCode} aún no está completa y fuera de ventana de análisis. Se omite procesamiento.");
-                    return;
-                }
-                Log::info("NumberObserver - Lotería {$lotteryCode} aún no está completa (no tiene 20 números). Esperando...");
-                return;
+            if ($isComplete) {
+                Log::info("NumberObserver - ✅ Lotería {$lotteryCode} COMPLETA con 20 números. Iniciando procesamiento...");
+            } else {
+                Log::info("NumberObserver - Lotería {$lotteryCode} aún no está completa (tiene menos de 20 números). Procesando números disponibles...");
             }
-
-            Log::info("NumberObserver - ✅ Lotería {$lotteryCode} COMPLETA con 20 números. Iniciando procesamiento...");
 
             // Obtener todos los números ganadores de esta lotería completa
             $completeNumbers = LotteryCompletenessService::getCompleteLotteryNumbersCollection($lotteryCode, $number->date);

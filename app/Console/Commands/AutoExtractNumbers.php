@@ -325,22 +325,14 @@ class AutoExtractNumbers extends Command
             
             Log::info("AutoExtractNumbers - Usando código completo de lotería: {$lotteryCode}");
             
-            // ✅ NUEVA LÓGICA: Verificar si la lotería tiene sus 20 números completos
-            // Si la lotería está completa, procesar inmediatamente sin verificar ventana de análisis
-            // Si no está completa, respetar ventana de análisis para evitar procesamiento innecesario
+            // Verificar si la lotería tiene sus 20 números completos
             $isComplete = \App\Services\LotteryCompletenessService::isLotteryComplete($lotteryCode, $date);
             
-            if (!$isComplete) {
-                // Si no está completa, solo procesar dentro de ventana de análisis
-                if (!\App\Services\AnalysisSchedule::isWithinAnalysisWindow()) {
-                    Log::info("AutoExtractNumbers - Lotería {$lotteryCode} aún no está completa y fuera de ventana de análisis. NO se insertarán resultados hasta que esté completa.");
-                    return;
-                }
-                Log::info("AutoExtractNumbers - Lotería {$lotteryCode} aún no está completa (no tiene 20 números). NO se insertarán resultados hasta que esté completa.");
-                return;
+            if ($isComplete) {
+                Log::info("AutoExtractNumbers - ✅ Lotería {$lotteryCode} COMPLETA con 20 números. Procediendo con inserción de resultados...");
+            } else {
+                Log::info("AutoExtractNumbers - Lotería {$lotteryCode} aún no está completa (tiene menos de 20 números). Procesando números disponibles...");
             }
-            
-            Log::info("AutoExtractNumbers - ✅ Lotería {$lotteryCode} COMPLETA con 20 números. Procediendo con inserción de resultados...");
             
             // Buscar jugadas candidatas por lotería EXACTA (campo lottery puede tener múltiples códigos separados por coma)
             // Usamos FIND_IN_SET para coincidencia exacta del código dentro de la lista
@@ -596,7 +588,6 @@ class AutoExtractNumbers extends Command
     {
         try {
             // ✅ CORRECCIÓN: Si hay loterías completas, procesarlas inmediatamente
-            // No es necesario verificar ventana de análisis si la lotería ya está completa
             Log::info("AutoExtractNumbers - Verificando loterías completas para {$date}");
 
             // Obtener solo las loterías que tengan sus 20 números completos
@@ -639,7 +630,6 @@ class AutoExtractNumbers extends Command
     {
         try {
             // ✅ CORRECCIÓN: Si la lotería está completa, procesar inmediatamente
-            // No es necesario verificar ventana de análisis si la lotería ya está completa
             Log::info("AutoExtractNumbers - Procesando lotería completa: {$lotteryCode} para {$date}");
 
             // Obtener todos los números ganadores de esta lotería completa
