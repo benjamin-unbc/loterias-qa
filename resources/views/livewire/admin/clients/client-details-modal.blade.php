@@ -318,7 +318,8 @@
                                                     <td class="px-6 py-4">
                                                         @php
                                                             // Convertir códigos de lotería a formato legible
-                                                            $lotteryCodes = explode(',', $resultado->lottery);
+                                                            // ✅ Validar que lottery no sea null o vacío antes de explode
+                                                            $lotteryCodes = !empty($resultado->lottery) ? explode(',', $resultado->lottery) : [];
                                                             $displayCodes = [];
                                                             
                                                             $codes = [
@@ -537,7 +538,8 @@
                                                             <div class="text-start text-nowrap">
                                                                 @php
                                                                     // Convertir códigos de lotería a formato legible para liquidaciones
-                                                                    $lotteryCodes = explode(',', $result->lottery);
+                                                                    // ✅ Validar que lottery no sea null o vacío antes de explode
+                                                                    $lotteryCodes = !empty($result->lottery) ? explode(',', $result->lottery) : [];
                                                                     $displayCodes = [];
                                                                     
                                                                     $codes = [
