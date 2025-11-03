@@ -145,6 +145,12 @@ class StoreClient extends Component
 
             $user = \App\Models\User::create($userData);
             $user->assignRole('Cliente');
+            
+            // Limpiar caché de permisos para asegurar que el rol se detecte correctamente
+            app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+            
+            // Refrescar el modelo para asegurar que los roles estén actualizados
+            $user->refresh();
 
             // También crear en la tabla clients para mantener compatibilidad (sin rol)
             Client::create($data);
