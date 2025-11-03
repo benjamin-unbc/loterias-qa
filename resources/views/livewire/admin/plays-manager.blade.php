@@ -248,12 +248,12 @@
                     <div class="flex justify-between gap-2">
                         <div class="w-full flex flex-col gap-0.5">
                             <label for="numberR" class="text-sm font-medium text-white">Número</label>
-                            <input type="number" id="numberR" wire:model.live="numberR" min="0" max="9999"
+                            <input type="number" id="numberR" wire:model.live="numberR" min="0" max="99"
                                 class="block w-full py-1 px-2 text-sm bg-[#22272b] text-white border border-gray-300 rounded-md
                                        focus:ring-yellow-200 focus:border-yellow-200 disabled:bg-gray-100
                                        disabled:text-white disabled:border-gray-200 disabled:cursor-not-allowed"
-                                placeholder="0" maxlength="4" {{ $inputsDisabled ? 'disabled' : '' }} autocomplete="off"
-                                onkeydown="if(['e','E','+','-','.'].includes(event.key)){event.preventDefault();} if(this.value.length>=4 && event.key.match(/[0-9]/) && !['Backspace','Delete','ArrowLeft','ArrowRight','Tab'].includes(event.key)){event.preventDefault();}" />
+                                placeholder="0" maxlength="2" {{ $inputsDisabled ? 'disabled' : '' }} autocomplete="off"
+                                onkeydown="if(['e','E','+','-','.'].includes(event.key)){event.preventDefault();} if(this.value.length>=2 && event.key.match(/[0-9]/) && !['Backspace','Delete','ArrowLeft','ArrowRight','Tab'].includes(event.key)){event.preventDefault();}" />
                             @error('numberR')
                                 <span class="text-red-400 text-xs">{{ $message }}</span>
                             @enderror
@@ -556,6 +556,7 @@
     </div>
     @push('scripts')
         <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
         <script>
             // Esperar a que Livewire esté completamente cargado
             let initAttempts = 0;
@@ -686,16 +687,51 @@
                 });
             }
 
+            // Registrar listener para la alerta de loterías (funciona incluso si Livewire aún no está cargado)
+            function registerLotteryAlertListener() {
+                if (typeof window.Livewire !== 'undefined') {
+                    Livewire.on('show-lottery-alert', () => {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Atención',
+                            html: '<p style="color: #ffffff; font-size: 16px;">Debe seleccionar una o mas loterias para realizar una jugada</p>',
+                            confirmButtonText: 'Entendido',
+                            confirmButtonColor: '#f59e0b',
+                            background: '#1b1f22',
+                            color: '#ffffff',
+                            iconColor: '#f59e0b',
+                            customClass: {
+                                popup: 'swal-custom-popup',
+                                title: 'swal-custom-title',
+                                content: 'swal-custom-content'
+                            },
+                            buttonsStyling: true,
+                            allowOutsideClick: true,
+                            allowEscapeKey: true
+                        });
+                    });
+                } else {
+                    setTimeout(registerLotteryAlertListener, 100);
+                }
+            }
+
             // Inicializar cuando Livewire esté listo
             if (document.readyState === 'loading') {
                 document.addEventListener('DOMContentLoaded', function() {
                     document.addEventListener('livewire:init', initPlaysManagerScripts);
+                    document.addEventListener('livewire:init', registerLotteryAlertListener);
                     setTimeout(initPlaysManagerScripts, 500);
+                    setTimeout(registerLotteryAlertListener, 500);
                 });
             } else {
                 document.addEventListener('livewire:init', initPlaysManagerScripts);
+                document.addEventListener('livewire:init', registerLotteryAlertListener);
                 setTimeout(initPlaysManagerScripts, 500);
+                setTimeout(registerLotteryAlertListener, 500);
             }
+            
+            // Intentar registrar el listener inmediatamente si Livewire ya está disponible
+            registerLotteryAlertListener();
 
             function printTicket() {
                 const ticketContainer = document.getElementById('ticketContainer');
@@ -815,5 +851,62 @@
 #number::-moz-selection {
     background: transparent;
 }
+
+        /* Estilos personalizados para SweetAlert */
+        .swal-custom-popup {
+            background-color: #1b1f22 !important;
+            border: 2px solid #f59e0b !important;
+            border-radius: 12px !important;
+            box-shadow: 0 10px 40px rgba(245, 158, 11, 0.3) !important;
+        }
+
+        .swal-custom-title {
+            color: #ffffff !important;
+            font-size: 24px !important;
+            font-weight: bold !important;
+            margin-bottom: 20px !important;
+        }
+
+        .swal-custom-content {
+            color: #ffffff !important;
+            font-size: 16px !important;
+        }
+
+        .swal2-popup {
+            background: #1b1f22 !important;
+        }
+
+        .swal2-title {
+            color: #ffffff !important;
+        }
+
+        .swal2-html-container {
+            color: #ffffff !important;
+        }
+
+        .swal2-confirm {
+            background-color: #f59e0b !important;
+            border: none !important;
+            border-radius: 8px !important;
+            padding: 12px 30px !important;
+            font-size: 16px !important;
+            font-weight: 600 !important;
+            transition: all 0.3s ease !important;
+        }
+
+        .swal2-confirm:hover {
+            background-color: #d97706 !important;
+            transform: translateY(-2px) !important;
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4) !important;
+        }
+
+        .swal2-icon.swal2-warning {
+            border-color: #f59e0b !important;
+            color: #f59e0b !important;
+        }
+
+        .swal2-icon.swal2-warning .swal2-icon-content {
+            color: #f59e0b !important;
+        }
         </style>
     @endpush

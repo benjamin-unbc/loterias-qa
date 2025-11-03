@@ -1196,7 +1196,7 @@ public function updateRow()
     }
 
     if (empty($this->checkboxCodes) || empty(array_filter($this->checkboxCodes))) {
-        $this->dispatch('notify', message: 'Debe seleccionar al menos una lotería.', type: 'warning');
+        $this->dispatch('show-lottery-alert');
         return;
     }
 
@@ -1316,7 +1316,7 @@ public function addRow()
 
     // Verificar si se ha seleccionado al menos una lotería
     if (empty($this->checkboxCodes) || empty(array_filter($this->checkboxCodes))) {
-        $this->dispatch('notify', message: 'Debe seleccionar al menos una lotería.', type: 'warning');
+        $this->dispatch('show-lottery-alert');
         return;
     }
 
