@@ -127,33 +127,46 @@ class StoreClient extends Component
 
             banner_message("Cliente actualizado exitosamente!", 'success');
         } else {
-            // Crear como usuario normal con el rol "Cliente"
-            $userData = [
-                'first_name' => $data['nombre'],
-                'last_name' => $data['apellido'],
-                'email' => $data['correo'],
-                'password' => $data['password'], // Aseguramos que la contraseña esté hasheada
-                'phone' => '0000000000', // Teléfono por defecto
-                'is_active' => $data['is_active'],
-                'rut' => $this->generateUniqueRut(), // RUT único generado
-            ];
+            // Usar transacción para asegurar consistencia de datos
+            \Illuminate\Support\Facades\DB::transaction(function () use ($data) {
+                // Crear como usuario normal con el rol "Cliente"
+                $userData = [
+                    'first_name' => $data['nombre'],
+                    'last_name' => $data['apellido'],
+                    'email' => $data['correo'],
+                    'password' => $data['password'], // Aseguramos que la contraseña esté hasheada
+                    'phone' => '0000000000', // Teléfono por defecto
+                    'is_active' => $data['is_active'],
+                    'rut' => $this->generateUniqueRut(), // RUT único generado
+                ];
 
-            // Agregar logo de perfil si existe
-            if (isset($data['profile_photo_path'])) {
-                $userData['profile_photo_path'] = $data['profile_photo_path'];
-            }
+                // Agregar logo de perfil si existe
+                if (isset($data['profile_photo_path'])) {
+                    $userData['profile_photo_path'] = $data['profile_photo_path'];
+                }
 
-            $user = \App\Models\User::create($userData);
-            $user->assignRole('Cliente');
-            
-            // Limpiar caché de permisos para asegurar que el rol se detecte correctamente
-            app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
-            
-            // Refrescar el modelo para asegurar que los roles estén actualizados
-            $user->refresh();
+                $user = \App\Models\User::create($userData);
+                
+                // Asignar rol antes de limpiar cache
+                $user->assignRole('Cliente');
+                
+                // Forzar recarga de roles desde la base de datos
+                $user->load('roles');
+                $user->refresh();
+                
+                // Limpiar caché de permisos múltiples veces para asegurar que se detecte
+                app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+                
+                // Limpiar cache específico de roles del usuario
+                \Illuminate\Support\Facades\Cache::forget("spatie.permission.cache.user.{$user->id}");
+                
+                // Limpiar cache de permisos nuevamente después de limpiar cache del usuario
+                app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
-            // También crear en la tabla clients para mantener compatibilidad (sin rol)
-            Client::create($data);
+                // También crear en la tabla clients para mantener compatibilidad (sin rol)
+                // IMPORTANTE: Asegurar que el Client se cree con todos los datos, incluyendo profile_photo_path
+                Client::create($data);
+            });
 
             banner_message("Cliente creado exitosamente!", 'success');
         }
