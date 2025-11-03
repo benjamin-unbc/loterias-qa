@@ -84,42 +84,6 @@ Route::post('/api/check-new-results', function () {
     }
 })->middleware('auth');
 
-// Endpoint para verificar si un correo pertenece a un cliente
-Route::get('/api/check-client/{email}', function ($email) {
-    $user = \App\Models\User::where('email', $email)->first();
-    
-    if ($user) {
-        // Refrescar el modelo para asegurar que los roles estén cargados
-        $user->refresh();
-        
-        // Verificar si tiene el rol "Cliente"
-        if ($user->hasRole('Cliente')) {
-            // Buscar el cliente correspondiente para obtener el nombre de fantasía
-            $client = \App\Models\Client::where('correo', $email)->first();
-            $displayName = $client ? $client->nombre_fantasia : $user->first_name;
-            
-            if ($user->profile_photo_path) {
-                return response()->json([
-                    'is_client' => true,
-                    'has_photo' => true,
-                    'photo_path' => $user->profile_photo_path,
-                    'name' => $displayName
-                ]);
-            } else {
-                return response()->json([
-                    'is_client' => true,
-                    'has_photo' => false,
-                    'name' => $displayName
-                ]);
-            }
-        }
-    }
-    
-    return response()->json([
-        'is_client' => false,
-        'has_photo' => false
-    ]);
-})->name('api.check-client');
 
 // Los clientes ahora usan el login normal y acceden al sistema principal
 // con permisos limitados según su rol "Cliente"
