@@ -244,6 +244,9 @@ class LotteryResultProcessor
                                     $actualWinningPositionR = $posR;
                                     $winningNumberAtPositionR = $winningNumR;
                                     break;
+                                } else {
+                                    // Número encontrado pero en posición incorrecta según las reglas
+                                    Log::info("LotteryResultProcessor - Redoblona número encontrado pero posición inválida: NumR {$playedNumberRClean} apostado en PosR {$apu->positionR} salió en posición {$posR} (NO válido según reglas) para lotería {$lotterySystemCode}");
                                 }
                             }
                         }
@@ -306,6 +309,20 @@ class LotteryResultProcessor
                         }
                     }
                     
+                    // ✅ VALIDACIÓN CRÍTICA: Solo guardar num_g_r y pos_g_r si HAY acierto de redoblona válido
+                    // Si no hay acierto de redoblona ($aciertValueR == 0), no debe guardar num_g_r ni pos_g_r
+                    // incluso si existe numberR y positionR en la jugada
+                    $numGR = null;
+                    $posGR = null;
+                    if ($aciertValueR > 0 && $actualWinningPositionR && $winningNumberAtPositionR) {
+                        // Solo guardar si realmente hay redoblona ganadora con valores válidos
+                        $numGR = $winningNumberAtPositionR;
+                        $posGR = $actualWinningPositionR;
+                    } else if (!empty($apu->numberR) && $apu->positionR !== null) {
+                        // Si hay redoblona apostada pero no ganó, no guardar num_g_r ni pos_g_r
+                        Log::info("LotteryResultProcessor - Redoblona apostada pero NO ganadora: Ticket {$apu->ticket} - Lotería {$lotterySystemCode} - NumR: {$apu->numberR} PosR: {$apu->positionR} - No se guardarán num_g_r ni pos_g_r");
+                    }
+                    
                     $resultData = [
                         'ticket'      => $apu->ticket,
                         'lottery'     => $lotterySystemCode, // ✅ Usar código del sistema, no el código UI
@@ -321,14 +338,21 @@ class LotteryResultProcessor
                         'user_id'     => $apu->user_id,
                         'numero_g'    => $winningNumberAtPosition ?? null, // ✅ Número ganador real
                         'posicion_g'  => $actualWinningPosition ?? null, // ✅ Posición donde realmente salió
-                        'num_g_r'     => $winningNumberAtPositionR ?? null, // Para redoblona
-                        'pos_g_r'     => $actualWinningPositionR ?? null, // Para redoblona
+                        'num_g_r'     => $numGR, // ✅ Solo si hay redoblona ganadora válida
+                        'pos_g_r'     => $posGR, // ✅ Solo si hay redoblona ganadora válida
                         'created_at'  => now(),
                         'updated_at'  => now(),
                     ];
                     
                     // ✅ Log detallado antes de insertar
-                    Log::info("LotteryResultProcessor - Datos antes de insertar: Ticket {$apu->ticket} - Lotería {$lotterySystemCode} - Número {$apu->number} - Posición apostada: {$apu->position} - Posición ganadora: {$actualWinningPosition} - Número ganador: {$winningNumberAtPosition} - Premio: " . ($aciertValue + $aciertValueR));
+                    $logMessage = "LotteryResultProcessor - Datos antes de insertar: Ticket {$apu->ticket} - Lotería {$lotterySystemCode} - Número {$apu->number} - Posición apostada: {$apu->position} - Posición ganadora: {$actualWinningPosition} - Número ganador: {$winningNumberAtPosition}";
+                    if ($numGR && $posGR) {
+                        $logMessage .= " - Redoblona: NumR apostado {$apu->numberR} en PosR {$apu->positionR} → Num_g_r: {$numGR} en Pos_g_r: {$posGR}";
+                    } else if (!empty($apu->numberR) && $apu->positionR !== null) {
+                        $logMessage .= " - Redoblona apostada pero NO ganadora: NumR {$apu->numberR} PosR {$apu->positionR}";
+                    }
+                    $logMessage .= " - Premio: " . ($aciertValue + $aciertValueR);
+                    Log::info($logMessage);
                     
                     // ✅ Usar ResultManager para inserción segura
                     $result = ResultManager::createResultSafely($resultData);
