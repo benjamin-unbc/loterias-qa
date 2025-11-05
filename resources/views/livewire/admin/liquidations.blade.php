@@ -84,7 +84,7 @@
                     </div>
                 </div>
 
-                <div id="liquidationContainer" class="w-[80mm] mx-auto p-2 text-black bg-white relative">
+                <div id="liquidationContainer" class="w-[90mm] mx-auto p-2 text-black bg-white relative">
                     <!-- <img src="{{ asset('assets/images/logo.png') }}" class="w-full opacity-[0.02] absolute top-0 left-0 pointer-events-none" /> -->
 
                     <div class="relative z-10">
@@ -107,27 +107,27 @@
                         <div class="container text-sm mt-2">
                             <div class="flex flex-col items-center w-full">
                                 <div class="grid grid-cols-6 font-bold w-full justify-around">
-                                    <div class="text-start">LOT</div>
-                                    <div class="text-center">NUM</div>
-                                    <div class="text-center">UBI</div>
-                                    <div class="text-center">APO</div>
-                                    <div class="text-end">GANO</div>
+                                    <div class="text-start pl-4">LOT</div>
+                                    <div class="text-center px-4">NUM</div>
+                                    <div class="text-center px-4">UBI</div>
+                                    <div class="text-center px-4">APO</div>
+                                    <div class="text-end pr-4">GANO</div>
                                 </div>
                                 <div class="w-full pb-2 border-b">
                                     @forelse ($results as $result)
                                         <div class="grid grid-cols-6 w-full justify-around text-sm">
-                                            <div class="text-start text-nowrap">
+                                            <div class="text-start text-nowrap pl-4">
                                                 {{ collect(explode(',', $result->lottery))->last() }}
                                                 <span class="font-medium">
                                                     {{ substr($result->time, 0, 2) }}
                                                 </span>
                                             </div>
-                                            <div class="text-center text-nowrap">{{ $result->number }}</div>
-                                            <div class="text-center text-nowrap">{{ $result->position }}</div>
-                                            <div class="text-center text-nowrap">
+                                            <div class="text-center text-nowrap px-4">{{ $result->number }}</div>
+                                            <div class="text-center text-nowrap px-4">{{ $result->position }}</div>
+                                            <div class="text-center text-nowrap px-4">
                                                 {{ number_format($result->import) }}
                                             </div>
-                                            <div class="text-end text-nowrap">
+                                            <div class="text-end text-nowrap pr-4">
                                                 {{ number_format($result->aciert) }}
                                             </div>
                                         </div>
