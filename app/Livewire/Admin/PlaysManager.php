@@ -2337,7 +2337,6 @@ public function addRow()
     
     // 2. Crear una clave de bloqueo única para este usuario y operación
     $lockKey = 'addRowWithDerived_lock_' . auth()->id();
-    $lastDerivedKey = 'lastDerivedCompleted_' . auth()->id();
     
     // 3. Verificar si ya hay una operación en curso (evitar clics rápidos)
     if (\Cache::has($lockKey)) {
@@ -2345,15 +2344,9 @@ public function addRow()
         return;
     }
     
-    // 4. Verificar si se completó la última derivada y bloquear completamente
-    if (\Cache::has($lastDerivedKey)) {
-        // La última derivada ya se completó, bloquear completamente
-        return;
-    }
-    
-    // 5. Marcar como procesando y establecer bloqueo más largo (0.5 segundos)
+    // 5. Marcar como procesando y establecer bloqueo más largo (1 segundo para evitar duplicados)
     $this->isCreatingDerived = true;
-    \Cache::put($lockKey, true, 0.5);
+    \Cache::put($lockKey, true, 1);
     
     try {
         // MEJORA: Obtener la jugada base de manera más específica y segura
@@ -2403,8 +2396,7 @@ public function addRow()
             $nextDerivedIndex = $this->findNextDerivedIndex($derivedNumbersToCreate, $existingDerivedNumbers);
             
             if ($nextDerivedIndex === null) {
-                // Todas las derivadas ya existen, bloquear
-                \Cache::put($lastDerivedKey, true, 10); // Bloquear por 10 segundos
+                // Todas las derivadas ya existen para esta jugada base específica
                 $this->dispatch('notify', message: 'Todas las jugadas derivadas ya fueron creadas para este número base.', type: 'info');
                 return;
             }
@@ -2426,7 +2418,29 @@ public function addRow()
             return;
         }
 
-        // OPTIMIZACIÓN: Eliminadas verificaciones redundantes ya que la consulta principal ya las cubre
+        // MEJORA: Verificación final de duplicados justo antes de crear (evitar race conditions)
+        // Esta verificación adicional previene duplicados cuando se hace muy rápido
+        $duplicateCheck = Play::where('user_id', auth()->id())
+            ->where('number', $newDerivedNumberFormatted)
+            ->where('position', $basePlay->position)
+            ->where('lottery', $basePlay->lottery)
+            ->where('numberR', $basePlay->numberR)
+            ->where('positionR', $basePlay->positionR)
+            ->where('created_at', '>=', $basePlay->created_at)
+            ->where('created_at', '>=', now()->subHours(24))
+            ->first();
+            
+        if ($duplicateCheck) {
+            \Log::warning("Duplicado detectado justo antes de crear (race condition)", [
+                'user_id' => auth()->id(),
+                'new_derived_number' => $newDerivedNumberFormatted,
+                'base_play_id' => $basePlay->id,
+                'existing_play_id' => $duplicateCheck->id
+            ]);
+            \Cache::forget($lockKey);
+            $this->isCreatingDerived = false;
+            return;
+        }
 
         // MEJORA: Crear la nueva jugada derivada con logging detallado
         $newPlayData = [
@@ -2453,10 +2467,9 @@ public function addRow()
         $newPlay = Play::create($newPlayData);
 
         // OPTIMIZACIÓN: Verificación rápida si esta fue la última derivada
+        // No bloqueamos globalmente porque cada jugada base debe tener sus propias derivadas
         if ($nextDerivedIndex === count($derivedNumbersToCreate) - 1) {
-            // Esta fue la última derivada, bloquear por tiempo más largo
-            \Cache::put($lastDerivedKey, true, 15); // Bloquear por 15 segundos
-            \Log::info("Última derivada creada, bloqueando futuras creaciones", [
+            \Log::info("Última derivada creada para esta jugada base", [
                 'user_id' => auth()->id(),
                 'base_play_id' => $basePlay->id,
                 'created_derived_number' => $newDerivedNumberFormatted,
@@ -2511,26 +2524,30 @@ public function addRow()
             }
         }
 
-        // 2. Si hay una jugada base actual válida, verificar que aún existe
-        if ($this->currentBasePlayId) {
+        // 2. Buscar la jugada más reciente de 3-4 dígitos del usuario actual
+        // MEJORA: Priorizar siempre la jugada más reciente para permitir derivadas de nuevas jugadas base
+        $mostRecentPlay = Play::where('user_id', $currentUserId)
+            ->whereRaw('LENGTH(REPLACE(number, "*", "")) IN (3,4)')
+            ->where('created_at', '>=', now()->subHours(24)) // Solo jugadas de las últimas 24 horas
+            ->orderBy('id', 'desc')
+            ->first();
+        
+        // 3. Si hay una jugada base actual válida, verificar si es más reciente que la jugada más reciente
+        if ($this->currentBasePlayId && $mostRecentPlay) {
             $currentBasePlay = Play::where('id', $this->currentBasePlayId)
                 ->where('user_id', $currentUserId)
                 ->whereRaw('LENGTH(REPLACE(number, "*", "")) IN (3,4)')
                 ->first();
                 
-            if ($currentBasePlay) {
+            // Solo usar la jugada base actual si es más reciente o igual que la jugada más reciente
+            if ($currentBasePlay && $currentBasePlay->id >= $mostRecentPlay->id) {
                 \Log::info("Usando jugada base actual", ['play_id' => $currentBasePlay->id]);
                 return $currentBasePlay;
             }
         }
-
-        // 3. Buscar la jugada más reciente de 3-4 dígitos del usuario actual
-        // MEJORA: Agregar validación de tiempo para evitar jugadas muy antiguas
-        $basePlay = Play::where('user_id', $currentUserId)
-            ->whereRaw('LENGTH(REPLACE(number, "*", "")) IN (3,4)')
-            ->where('created_at', '>=', now()->subHours(24)) // Solo jugadas de las últimas 24 horas
-            ->orderBy('id', 'desc')
-            ->first();
+        
+        // 4. Usar la jugada más reciente encontrada
+        $basePlay = $mostRecentPlay;
 
         if ($basePlay) {
             \Log::info("Usando jugada más reciente como base", [
@@ -2603,16 +2620,23 @@ public function addRow()
 
     /**
      * MEJORA: Obtiene las derivadas que ya existen en la base de datos (OPTIMIZADO)
+     * Busca derivadas que fueron creadas DESPUÉS de la jugada base específica
+     * para que cada jugada base tenga sus propias derivadas independientes
      */
     private function getExistingDerivedNumbers($basePlay, $derivedNumbersToCreate): array
     {
         // OPTIMIZACIÓN: Una sola consulta en lugar de múltiples consultas
+        // Buscar derivadas que:
+        // 1. Coincidan con el número y otros campos de la jugada base
+        // 2. Fueron creadas DESPUÉS de la jugada base (para que cada jugada base tenga sus propias derivadas)
+        // 3. Estén dentro de las últimas 24 horas
         $existingPlays = Play::where('user_id', auth()->id())
             ->whereIn('number', $derivedNumbersToCreate)
             ->where('position', $basePlay->position)
             ->where('lottery', $basePlay->lottery)
             ->where('numberR', $basePlay->numberR)
             ->where('positionR', $basePlay->positionR)
+            ->where('created_at', '>=', $basePlay->created_at) // Solo derivadas creadas después de la jugada base
             ->where('created_at', '>=', now()->subHours(24))
             ->pluck('number')
             ->toArray();
@@ -2622,6 +2646,7 @@ public function addRow()
             \Log::info("Derivadas existentes encontradas", [
                 'user_id' => auth()->id(),
                 'base_play_id' => $basePlay->id,
+                'base_created_at' => $basePlay->created_at,
                 'existing_derived_numbers' => $existingPlays,
                 'total_derived_possible' => count($derivedNumbersToCreate)
             ]);
