@@ -63,7 +63,7 @@ class Liquidations extends Component
     {
         // Consulta global de resultados (sin filtro de usuario)
         $baseQuery = Result::query()->whereDate('date', $this->date);
-        $results = (clone $baseQuery)->paginate($this->cant);
+        $results = (clone $baseQuery)->orderBy('created_at', 'desc')->get();
         $totalAciert = (float) (clone $baseQuery)->sum('aciert');
         
         // Consulta global de apuestas (sin filtro de usuario)
@@ -126,7 +126,7 @@ class Liquidations extends Component
     {
         // Consulta de resultados filtrada por cliente
         $baseQuery = Result::query()->whereDate('date', $this->date)->where('user_id', $user->id);
-        $results = (clone $baseQuery)->paginate($this->cant);
+        $results = (clone $baseQuery)->orderBy('created_at', 'desc')->get();
         $totalAciert = (float) (clone $baseQuery)->sum('aciert');
         
         // Consulta de apuestas filtrada por cliente
