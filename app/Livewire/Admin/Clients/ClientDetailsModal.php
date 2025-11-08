@@ -269,6 +269,8 @@ class ClientDetailsModal extends Component
 
         // ✅ MODIFICADO: Mostrar resultados separados por lotería (sin agrupar)
         $results = $query->orderBy('created_at', 'desc')->get();
+        
+        return $results;
     }
 
     public function getLiquidacionDataProperty()
