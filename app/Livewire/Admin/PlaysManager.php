@@ -2406,20 +2406,19 @@ public function addRow()
             return;
         }
 
-        // MEJORA: Verificación final de duplicados justo antes de crear (evitar race conditions)
-        // Esta verificación adicional previene duplicados cuando se hace muy rápido
-        $duplicateCheck = Play::where('user_id', auth()->id())
-            ->where('number', $newDerivedNumberFormatted)
-            ->where('position', $basePlay->position)
-            ->where('lottery', $basePlay->lottery)
-            ->where('numberR', $basePlay->numberR)
-            ->where('positionR', $basePlay->positionR)
-            ->where('created_at', '>=', $basePlay->created_at)
-            ->where('created_at', '>=', now()->subHours(24))
-            ->first();
+        // ✅ OPTIMIZADO: Verificación final de duplicados usando $this->rows en memoria (mucho más rápido)
+        // Esta verificación previene duplicados comparando con las jugadas ya cargadas en memoria
+        $duplicateCheck = $this->rows->first(function($play) use ($newDerivedNumberFormatted, $basePlay) {
+            return $play->number === $newDerivedNumberFormatted
+                && $play->position === $basePlay->position
+                && $play->lottery === $basePlay->lottery
+                && $play->numberR === $basePlay->numberR
+                && $play->positionR === $basePlay->positionR
+                && $play->id >= $basePlay->id; // Solo derivadas creadas después de la jugada base
+        });
             
         if ($duplicateCheck) {
-            \Log::warning("Duplicado detectado justo antes de crear (race condition)", [
+            \Log::warning("Duplicado detectado justo antes de crear (validación en memoria)", [
                 'user_id' => auth()->id(),
                 'new_derived_number' => $newDerivedNumberFormatted,
                 'base_play_id' => $basePlay->id,
@@ -2613,25 +2612,25 @@ public function addRow()
      */
     private function getExistingDerivedNumbers($basePlay, $derivedNumbersToCreate): array
     {
-        // OPTIMIZACIÓN: Una sola consulta en lugar de múltiples consultas
+        // ✅ OPTIMIZADO: Usar $this->rows en memoria en lugar de consultar BD (mucho más rápido)
         // Buscar derivadas que:
         // 1. Coincidan con el número y otros campos de la jugada base
         // 2. Fueron creadas DESPUÉS de la jugada base (para que cada jugada base tenga sus propias derivadas)
-        // 3. Estén dentro de las últimas 24 horas
-        $existingPlays = Play::where('user_id', auth()->id())
-            ->whereIn('number', $derivedNumbersToCreate)
-            ->where('position', $basePlay->position)
-            ->where('lottery', $basePlay->lottery)
-            ->where('numberR', $basePlay->numberR)
-            ->where('positionR', $basePlay->positionR)
-            ->where('created_at', '>=', $basePlay->created_at) // Solo derivadas creadas después de la jugada base
-            ->where('created_at', '>=', now()->subHours(24))
+        $existingPlays = $this->rows
+            ->filter(function($play) use ($derivedNumbersToCreate, $basePlay) {
+                return in_array($play->number, $derivedNumbersToCreate)
+                    && $play->position === $basePlay->position
+                    && $play->lottery === $basePlay->lottery
+                    && $play->numberR === $basePlay->numberR
+                    && $play->positionR === $basePlay->positionR
+                    && $play->id >= $basePlay->id; // Solo derivadas creadas después de la jugada base
+            })
             ->pluck('number')
             ->toArray();
         
         // Solo loggear si hay derivadas existentes (reducir logs)
         if (!empty($existingPlays)) {
-            \Log::info("Derivadas existentes encontradas", [
+            \Log::info("Derivadas existentes encontradas (validación en memoria)", [
                 'user_id' => auth()->id(),
                 'base_play_id' => $basePlay->id,
                 'base_created_at' => $basePlay->created_at,
