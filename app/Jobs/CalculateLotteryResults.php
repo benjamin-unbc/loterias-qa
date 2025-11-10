@@ -145,6 +145,31 @@ class CalculateLotteryResults implements ShouldQueue
     }
 
     /**
+     * ✅ NUEVO: Obtiene el rango de posiciones según la posición apostada
+     * Posición 1 → solo posición 1
+     * Posición 5 → rango 2-5
+     * Posición 10 → rango 6-10
+     * Posición 20 → rango 11-20
+     * 
+     * @param int $position Posición apostada
+     * @return array Array con 'min' y 'max' del rango
+     */
+    private function getPositionRange(int $position): array
+    {
+        if ($position == 1) {
+            return ['min' => 1, 'max' => 1];
+        } elseif ($position >= 2 && $position <= 5) {
+            return ['min' => 2, 'max' => 5];
+        } elseif ($position >= 6 && $position <= 10) {
+            return ['min' => 6, 'max' => 10];
+        } elseif ($position >= 11 && $position <= 20) {
+            return ['min' => 11, 'max' => 20];
+        }
+        
+        return ['min' => $position, 'max' => $position];
+    }
+
+    /**
      * ✅ NUEVO: Procesa una lotería completa (con sus 20 números)
      */
     private function processCompleteLottery($lotteryCode, $quinielaPayouts, $prizesPayouts, $figureOnePayouts, $figureTwoPayouts, $redoblona1toX, $redoblona5to20, $redoblona10to20)
@@ -190,40 +215,83 @@ class CalculateLotteryResults implements ShouldQueue
 
                 // Lógica para Redoblona
                 if (!empty($play->numberR) && !empty($play->positionR)) {
-                    $pos1 = min((int)$play->position, (int)$play->positionR);
-                    $pos2 = max((int)$play->position, (int)$play->positionR);
+                    // ✅ CORREGIDO: Buscar en rangos según posición apostada
+                    // Posición 1 → solo posición 1
+                    // Posición 5 → rango 2-5
+                    // Posición 10 → rango 6-10
+                    // Posición 20 → rango 11-20
                     
-                    $num1 = ($play->position < $play->positionR) ? $play->number : $play->numberR;
-                    $num2 = ($play->position < $play->positionR) ? $play->numberR : $play->number;
-
-                    // Redoblonas son siempre 2 cifras
-                    $num1 = str_pad(str_replace('*', '', $num1), 2, '0', STR_PAD_LEFT);
-                    $num2 = str_pad(str_replace('*', '', $num2), 2, '0', STR_PAD_LEFT);
-
-                    // Buscar los números ganadores en las posiciones correspondientes
-                    $winner1 = $completeNumbers->where('index', $pos1)->first();
-                    $winner2 = $completeNumbers->where('index', $pos2)->first();
-
-                    if ($winner1 && $winner2) {
-                        if (substr($winner1->value, -2) == $num1 && substr($winner2->value, -2) == $num2) {
-                            $prizeMultiplier = 0;
-                            if ($pos1 <= 1) {
-                                if ($pos2 <= 5) $prizeMultiplier = $redoblona1toX->payout_1_to_5 ?? 0;
-                                elseif ($pos2 <= 10) $prizeMultiplier = $redoblona1toX->payout_1_to_10 ?? 0;
-                                elseif ($pos2 <= 20) $prizeMultiplier = $redoblona1toX->payout_1_to_20 ?? 0;
-                            } elseif ($pos1 <= 5) {
-                                if ($pos2 <= 5) $prizeMultiplier = $redoblona5to20->payout_5_to_5 ?? 0;
-                                elseif ($pos2 <= 10) $prizeMultiplier = $redoblona5to20->payout_5_to_10 ?? 0;
-                                elseif ($pos2 <= 20) $prizeMultiplier = $redoblona5to20->payout_5_to_20 ?? 0;
-                            } elseif ($pos1 <= 10) {
-                                if ($pos2 <= 10) $prizeMultiplier = $redoblona10to20->payout_10_to_10 ?? 0;
-                                elseif ($pos2 <= 20) $prizeMultiplier = $redoblona10to20->payout_10_to_20 ?? 0;
-                            } elseif ($pos1 <= 20) {
-                                if ($pos2 <= 20) $prizeMultiplier = $redoblona10to20->payout_20_to_20 ?? 0;
+                    // Obtener rangos para el número principal y la redoblona
+                    $mainRange = $this->getPositionRange((int)$play->position);
+                    $redoblonaRange = $this->getPositionRange((int)$play->positionR);
+                    
+                    // Limpiar y formatear números (redoblonas son siempre 2 cifras)
+                    $mainNumber = str_pad(str_replace('*', '', $play->number), 2, '0', STR_PAD_LEFT);
+                    $redoblonaNumber = str_pad(str_replace('*', '', $play->numberR), 2, '0', STR_PAD_LEFT);
+                    
+                    // Buscar el número principal en su rango
+                    $mainWinner = null;
+                    foreach ($completeNumbers as $number) {
+                        if ($number->index >= $mainRange['min'] && $number->index <= $mainRange['max']) {
+                            $numberSuffix = substr(str_pad((string)$number->value, 4, '0', STR_PAD_LEFT), -2);
+                            if ($numberSuffix == $mainNumber) {
+                                $mainWinner = $number;
+                                break;
                             }
-                            
+                        }
+                    }
+                    
+                    // Buscar la redoblona en su rango
+                    $redoblonaWinner = null;
+                    foreach ($completeNumbers as $number) {
+                        if ($number->index >= $redoblonaRange['min'] && $number->index <= $redoblonaRange['max']) {
+                            $numberSuffix = substr(str_pad((string)$number->value, 4, '0', STR_PAD_LEFT), -2);
+                            if ($numberSuffix == $redoblonaNumber) {
+                                $redoblonaWinner = $number;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Si ambos números son ganadores en sus respectivos rangos, calcular premio
+                    if ($mainWinner && $redoblonaWinner) {
+                        $prizeMultiplier = 0;
+                        $mainPos = $mainWinner->index;
+                        $redoblonaPos = $redoblonaWinner->index;
+                        
+                        // Determinar multiplicador según las posiciones donde realmente salieron
+                        if ($mainPos == 1) {
+                            if ($redoblonaPos >= 2 && $redoblonaPos <= 5) {
+                                $prizeMultiplier = $redoblona1toX->payout_1_to_5 ?? 0;
+                            } elseif ($redoblonaPos >= 6 && $redoblonaPos <= 10) {
+                                $prizeMultiplier = $redoblona1toX->payout_1_to_10 ?? 0;
+                            } elseif ($redoblonaPos >= 11 && $redoblonaPos <= 20) {
+                                $prizeMultiplier = $redoblona1toX->payout_1_to_20 ?? 0;
+                            }
+                        } elseif ($mainPos >= 2 && $mainPos <= 5) {
+                            if ($redoblonaPos >= 2 && $redoblonaPos <= 5) {
+                                $prizeMultiplier = $redoblona5to20->payout_5_to_5 ?? 0;
+                            } elseif ($redoblonaPos >= 6 && $redoblonaPos <= 10) {
+                                $prizeMultiplier = $redoblona5to20->payout_5_to_10 ?? 0;
+                            } elseif ($redoblonaPos >= 11 && $redoblonaPos <= 20) {
+                                $prizeMultiplier = $redoblona5to20->payout_5_to_20 ?? 0;
+                            }
+                        } elseif ($mainPos >= 6 && $mainPos <= 10) {
+                            if ($redoblonaPos >= 6 && $redoblonaPos <= 10) {
+                                $prizeMultiplier = $redoblona10to20->payout_10_to_10 ?? 0;
+                            } elseif ($redoblonaPos >= 11 && $redoblonaPos <= 20) {
+                                $prizeMultiplier = $redoblona10to20->payout_10_to_20 ?? 0;
+                            }
+                        } elseif ($mainPos >= 11 && $mainPos <= 20) {
+                            if ($redoblonaPos >= 11 && $redoblonaPos <= 20) {
+                                $prizeMultiplier = $redoblona10to20->payout_20_to_20 ?? 0;
+                            }
+                        }
+                        
+                        if ($prizeMultiplier > 0) {
                             $aciertoValue = (float) $play->import * (float) $prizeMultiplier;
-                            $winningNumberData = $winner1; // Usar el primer ganador como referencia para el tiempo
+                            $winningNumberData = $mainWinner; // Usar el número principal como referencia para el tiempo
+                            Log::info("Redoblona ganadora: Principal {$play->number} en posición {$mainPos}, Redoblona {$play->numberR} en posición {$redoblonaPos}, Multiplicador: {$prizeMultiplier}");
                         }
                     }
                 }
