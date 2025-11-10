@@ -65,6 +65,10 @@ class PlaysManager extends Component
     // ✅ OPTIMIZACIÓN: Cachear configuración global para evitar consultas repetidas
     public $cachedGlobalConfig = []; // Configuración global cacheada
     public $uiCodeToCityNameMapping = []; // Mapeo pre-calculado de UI codes a city names
+    
+    // ✅ OPTIMIZACIÓN: Cachear horarios con estado para evitar recálculos en cada render
+    private $cachedHorariosConEstado = null;
+    private $lastHorariosCacheTime = null;
 
 
 
@@ -1415,15 +1419,19 @@ public function addRow()
 
         // Marcar que se necesita recalcular el total
         $this->needsTotalRecalculation = true;
+        
+        // ✅ OPTIMIZADO: Invalidar cache de horarios para que se actualice en el próximo render
+        $this->cachedHorariosConEstado = null;
+        $this->lastHorariosCacheTime = null;
 
-        // Hacer scroll hacia la última jugada agregada
-        $this->dispatch('scroll-to-last-play', ['playId' => $newPlay->id]);
-
-        // Notificar que la jugada fue agregada exitosamente
-        $this->dispatch('notify', message: 'Jugada agregada.', type: 'success');
-
-        // Focar el siguiente input de número
-        $this->dispatch('focusInput', ['selector' => '#number']);
+        // ✅ OPTIMIZADO: Combinar dispatches en uno solo para reducir re-renders
+        // Hacer scroll, notificar y enfocar en un solo dispatch
+        $this->dispatch('play-added', [
+            'playId' => $newPlay->id,
+            'message' => 'Jugada agregada.',
+            'type' => 'success',
+            'selector' => '#number'
+        ]);
 
         // MEJORA: Reactivar las bajadas si se creó una nueva jugada base (3 o 4 dígitos)
         $cleanNumber = str_replace('*', '', $validatedData['number']);
@@ -2799,8 +2807,17 @@ public function addRow()
     public function render()
 
     {
-
-        $horariosConEstado = $this->getHorariosConEstado();
+        // ✅ OPTIMIZADO: Cachear horarios con estado para evitar recálculos innecesarios
+        // Solo recalcular si han pasado más de 1 segundo desde la última vez
+        $currentTime = microtime(true);
+        if ($this->cachedHorariosConEstado === null || 
+            $this->lastHorariosCacheTime === null || 
+            ($currentTime - $this->lastHorariosCacheTime) > 1) {
+            $this->cachedHorariosConEstado = $this->getHorariosConEstado();
+            $this->lastHorariosCacheTime = $currentTime;
+        }
+        
+        $horariosConEstado = $this->cachedHorariosConEstado;
 
         $mainPlay = null;
 

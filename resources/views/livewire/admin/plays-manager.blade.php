@@ -659,7 +659,45 @@
                     }, 100);
                 });
 
-                // Scroll automático a la última jugada agregada
+                // ✅ OPTIMIZADO: Evento combinado para reducir re-renders y mejorar rendimiento
+                Livewire.on('play-added', (event) => {
+                    const { playId, message, type, selector } = event[0] || event;
+                    
+                    // Scroll a la jugada agregada (sin delay para respuesta instantánea)
+                    const playRow = document.getElementById(`row-${playId}`);
+                    const playsContainer = document.getElementById('playsContainer');
+                    
+                    if (playRow && playsContainer) {
+                        // Scroll inmediato sin animación para mejor rendimiento
+                        playRow.scrollIntoView({ 
+                            behavior: 'auto', 
+                            block: 'end',
+                            inline: 'nearest'
+                        });
+                        
+                        // Resaltar brevemente la fila
+                        playRow.style.backgroundColor = '#4ade80';
+                        setTimeout(() => {
+                            playRow.style.backgroundColor = '';
+                        }, 500);
+                    } else if (playsContainer) {
+                        playsContainer.scrollTop = playsContainer.scrollHeight;
+                    }
+                    
+                    // Enfocar el input de número inmediatamente
+                    const numberInput = document.querySelector(selector || '#number');
+                    if (numberInput) {
+                        numberInput.focus();
+                        numberInput.select();
+                    }
+                    
+                    // Notificación (si existe el sistema de notificaciones)
+                    if (typeof window.showNotification === 'function') {
+                        window.showNotification(message, type);
+                    }
+                });
+
+                // Mantener el listener anterior por compatibilidad
                 Livewire.on('scroll-to-last-play', (event) => {
                     setTimeout(() => {
                         const playId = event.playId;
@@ -667,23 +705,20 @@
                         const playsContainer = document.getElementById('playsContainer');
                         
                         if (playRow && playsContainer) {
-                            // Hacer scroll suave hasta la fila de la jugada
                             playRow.scrollIntoView({ 
-                                behavior: 'smooth', 
+                                behavior: 'auto', 
                                 block: 'end',
                                 inline: 'nearest'
                             });
                             
-                            // Resaltar brevemente la fila para indicar que es nueva
                             playRow.style.backgroundColor = '#4ade80';
                             setTimeout(() => {
                                 playRow.style.backgroundColor = '';
-                            }, 1000);
+                            }, 500);
                         } else if (playsContainer) {
-                            // Fallback: scroll al final del contenedor
                             playsContainer.scrollTop = playsContainer.scrollHeight;
                         }
-                    }, 150);
+                    }, 50);
                 });
             }
 
