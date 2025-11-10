@@ -13,15 +13,20 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule): void
     {
         // Solo durante horarios de lotería (10:00-23:59)
+        // ✅ OPTIMIZADO: Ejecutar en segundo plano para no bloquear peticiones HTTP
         $schedule->command('playssent:update-status')
                  ->everyMinute()
                  ->between('10:00', '23:59')
-                 ->withoutOverlapping();
+                 ->withoutOverlapping()
+                 ->runInBackground();
                  
+        // ✅ OPTIMIZADO: Ejecutar en segundo plano y reducir frecuencia a cada 2 minutos
+        // El procesamiento de resultados no necesita ejecutarse cada minuto
         $schedule->command('fetch:plays-sent')
-                 ->everyMinute()
+                 ->everyTwoMinutes()
                  ->between('10:00', '23:59')
-                 ->withoutOverlapping();
+                 ->withoutOverlapping()
+                 ->runInBackground();
         
         // Actualización automática cada 2 minutos (no cada 30 segundos)
         $schedule->command('lottery:auto-update')
@@ -31,10 +36,12 @@ class Kernel extends ConsoleKernel
                  ->runInBackground();
                  
         // Sistema de pagos cada 5 minutos
+        // ✅ OPTIMIZADO: Ejecutar en segundo plano
         $schedule->command('lottery:auto-payment')
                  ->everyFiveMinutes()
                  ->between('10:00', '23:59')
-                 ->withoutOverlapping();
+                 ->withoutOverlapping()
+                 ->runInBackground();
                  
         // ✅ NUEVO: Extracción automática de números cada hora con validación
         $schedule->command('lottery:auto-extract')

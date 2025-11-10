@@ -41,28 +41,41 @@ class UpdatePlaysSentStatus extends Command
         $this->info("Hora actual: " . $now->toDateTimeString());
         $this->info("Fecha actual: " . $today->toDateString());
 
+        // ✅ OPTIMIZADO: Usar actualización masiva en lugar de iterar registro por registro
+        // Esto reduce significativamente el tiempo de ejecución y bloqueos de BD
         $records = PlaysSentModel::whereDate('date', $today)
             ->where('statusPlay', 'A')
             ->get();
 
         if ($records->isEmpty()) {
             $this->info("No se encontraron registros con status 'A' para hoy.");
+            return 0;
         }
+
+        $updatedCount = 0;
+        $ticketIdsToUpdate = [];
 
         foreach ($records as $record) {
             $timePlay = $record->timePlay;
+            if (empty($timePlay)) {
+                continue;
+            }
+            
             $recordTime = Carbon::parse($timePlay, $timezone)
                 ->setDate($today->year, $today->month, $today->day);
 
-            $this->info("Procesando ticket {$record->ticket} con timePlay {$timePlay} (recordTime: " . $recordTime->toDateTimeString() . ")");
-
             if ($now->greaterThan($recordTime)) {
-                $record->statusPlay = 'I';
-                $record->save();
-                $this->info("Ticket {$record->ticket} actualizado a status 'I'.");
-            } else {
-                $this->info("Ticket {$record->ticket} no se actualiza porque timePlay (" . $recordTime->toDateTimeString() . ") aún no ha pasado.");
+                $ticketIdsToUpdate[] = $record->id;
             }
+        }
+
+        // ✅ Actualización masiva en una sola consulta
+        if (!empty($ticketIdsToUpdate)) {
+            $updatedCount = PlaysSentModel::whereIn('id', $ticketIdsToUpdate)
+                ->update(['statusPlay' => 'I']);
+            $this->info("✅ Actualizados {$updatedCount} tickets a status 'I'.");
+        } else {
+            $this->info("No hay tickets que necesiten actualización.");
         }
 
         $this->info("=== Fin de la actualización ===");
