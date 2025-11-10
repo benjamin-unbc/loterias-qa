@@ -1368,47 +1368,9 @@ public function addRow()
             'isChecked' => $this->isChecked ?? false,
         ];
 
-        // **Protección robusta contra duplicados** (manuales y automáticos)
-        
-        // 1. Generar clave única para esta jugada específica
-        $playHash = md5(auth()->id() . $this->formatNumber($validatedData['number']) . 
-                       ($validatedData['position'] ?? 1) . $currentLotteryString . 
-                       $validatedData['numberR'] . $validatedData['positionR']);
-        
-        // 2. Verificar si ya existe un bloqueo activo para esta jugada
-        $lockKey = 'play_creation_' . $playHash;
-        if (\Cache::has($lockKey)) {
-            $this->dispatch('notify', message: 'Jugada en proceso. Espere un momento...', type: 'info');
-            return;
-        }
-        
-        // 3. Crear bloqueo temporal mínimo (0.1 segundos) para evitar duplicados
-        \Cache::put($lockKey, true, 0.1);
-        
-        try {
-            // 4. Verificar duplicados en base de datos (últimos 1 segundo)
-            $recentPlay = Play::where('user_id', auth()->id())
-                ->where('number', $this->formatNumber($validatedData['number']))
-                ->where('position', $validatedData['position'] ?? 1)
-                ->where('lottery', $currentLotteryString)
-                ->where('numberR', $validatedData['numberR'])
-                ->where('positionR', $validatedData['positionR'])
-                ->where('created_at', '>=', now()->subSeconds(1))
-                ->first();
-
-            if ($recentPlay) {
-                \Cache::forget($lockKey); // Liberar bloqueo
-                $this->dispatch('notify', message: 'Jugada duplicada detectada. Espere unos segundos.', type: 'warning');
-                return;
-            }
-
-            // 5. Crear la nueva jugada
-            $newPlay = Play::create($playDataToCreate);
-            
-        } finally {
-            // 6. Liberar bloqueo siempre (incluso si hay error)
-            \Cache::forget($lockKey);
-        }
+        // ✅ OPTIMIZADO: Eliminados bloqueos de tiempo y verificaciones de duplicados con límites temporales
+        // Crear la nueva jugada directamente
+        $newPlay = Play::create($playDataToCreate);
 
         // Agregar la jugada recién creada a la lista de jugadas
         $this->rows->push($newPlay);
@@ -2172,8 +2134,15 @@ public function addRow()
                 // Sistema nuevo: ID-XXXX (ej: 23-0001, 23-0002)
                 $ticket = $this->generateNewUserTicket($currentUser->id);
             } else {
+                // ✅ OPTIMIZADO: Usar consulta más eficiente - obtener solo el último ticket sin CAST
                 // Sistema actual: XXXX (ej: 00001, 00002)
-                $nextTicketNumber = DB::select("SELECT COALESCE(MAX(CAST(ticket AS UNSIGNED)), 0) + 1 as next_ticket FROM plays_sent")[0]->next_ticket;
+                $lastTicket = PlaysSentModel::orderBy('id', 'desc')->value('ticket');
+                if ($lastTicket) {
+                    // Convertir a número y sumar 1
+                    $nextTicketNumber = (int)$lastTicket + 1;
+                } else {
+                    $nextTicketNumber = 1;
+                }
                 $ticket = str_pad($nextTicketNumber, 5, '0', STR_PAD_LEFT);
             }
 
@@ -2338,15 +2307,9 @@ public function addRow()
     // 2. Crear una clave de bloqueo única para este usuario y operación
     $lockKey = 'addRowWithDerived_lock_' . auth()->id();
     
-    // 3. Verificar si ya hay una operación en curso (evitar clics rápidos)
-    if (\Cache::has($lockKey)) {
-        // En lugar de mostrar mensaje, simplemente ignorar el clic (más rápido)
-        return;
-    }
-    
-    // 5. Marcar como procesando y establecer bloqueo más largo (1 segundo para evitar duplicados)
+    // ✅ OPTIMIZADO: Eliminado bloqueo de tiempo
+    // Marcar como procesando
     $this->isCreatingDerived = true;
-    \Cache::put($lockKey, true, 1);
     
     try {
         // MEJORA: Obtener la jugada base de manera más específica y segura
