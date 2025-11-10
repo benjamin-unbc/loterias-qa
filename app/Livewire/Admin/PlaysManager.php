@@ -62,6 +62,9 @@ class PlaysManager extends Component
     public $uiCodeMapping = []; // Mapeo de códigos UI a códigos de BD
     public $citySchedules = []; // Horarios por ciudad (para lógica por defecto)
     
+    // ✅ OPTIMIZACIÓN: Cachear configuración global para evitar consultas repetidas
+    public $cachedGlobalConfig = []; // Configuración global cacheada
+    public $uiCodeToCityNameMapping = []; // Mapeo pre-calculado de UI codes a city names
 
 
 
@@ -344,6 +347,9 @@ class PlaysManager extends Component
         // Cargar todas las loterías y horarios desde la base de datos
         $this->loadAllLotteriesAndSchedules();
 
+        // ✅ OPTIMIZACIÓN: Cargar configuración global una sola vez al montar
+        $this->loadGlobalConfiguration();
+
         $this->checkboxCodes = [];
         
         // Inicializar rows como colección vacía
@@ -485,6 +491,35 @@ class PlaysManager extends Component
                 foreach ($this->lotteryGroups[$time] as $index => $lottery) {
                     $this->selected["{$time}_col_" . ($index + 1)] = false;
                 }
+            }
+        }
+    }
+
+    /**
+     * ✅ OPTIMIZACIÓN: Carga la configuración global una sola vez al montar
+     * Evita consultas repetidas a la base de datos en cada apuesta
+     */
+    protected function loadGlobalConfiguration()
+    {
+        // Cargar configuración global una sola vez
+        $this->cachedGlobalConfig = GlobalQuinielasConfiguration::all()
+            ->keyBy('city_name')
+            ->map(function($config) {
+                return $config->selected_schedules;
+            })
+            ->toArray();
+        
+        // ✅ OPTIMIZACIÓN: Crear mapeo pre-calculado de UI codes a city names y horarios
+        // Esto evita bucles anidados en cada validación
+        $this->uiCodeToCityNameMapping = [];
+        foreach ($this->lotteryGroups as $time => $lotteries) {
+            foreach ($lotteries as $lottery) {
+                $uiCode = $lottery['ui_code'];
+                $cityName = $lottery['name'];
+                $this->uiCodeToCityNameMapping[$uiCode] = [
+                    'city_name' => $cityName,
+                    'time' => $time
+                ];
             }
         }
     }
@@ -1323,26 +1358,20 @@ public function addRow()
     try {
         $importeAGuardar = $validatedData['import'];
         
-        // Filtrar solo códigos válidos según la configuración de Quinielas
+        // ✅ OPTIMIZACIÓN: Usar configuración cacheada y mapeo pre-calculado
+        // Evita consultas a BD y bucles anidados en cada apuesta
         $validCodes = [];
-        $globalConfig = GlobalQuinielasConfiguration::all()
-            ->keyBy('city_name')
-            ->map(function($config) {
-                return $config->selected_schedules;
-            });
-            
         foreach ($this->checkboxCodes as $code) {
-            // Verificar si este código corresponde a una lotería configurada
-            foreach ($this->lotteryGroups as $time => $lotteries) {
-                foreach ($lotteries as $lottery) {
-                    if ($lottery['ui_code'] === $code) {
-                        $cityName = $lottery['name'];
-                        $selectedSchedules = $globalConfig[$cityName] ?? [];
-                        if (in_array($time, $selectedSchedules)) {
-                            $validCodes[] = $code;
-                        }
-                        break 2; // Salir de ambos loops
-                    }
+            // Usar mapeo pre-calculado para acceso O(1) en lugar de bucles anidados
+            if (isset($this->uiCodeToCityNameMapping[$code])) {
+                $mapping = $this->uiCodeToCityNameMapping[$code];
+                $cityName = $mapping['city_name'];
+                $time = $mapping['time'];
+                
+                // Verificar si esta lotería está configurada para este horario
+                $selectedSchedules = $this->cachedGlobalConfig[$cityName] ?? [];
+                if (in_array($time, $selectedSchedules)) {
+                    $validCodes[] = $code;
                 }
             }
         }
@@ -1505,8 +1534,8 @@ public function addRow()
 
         $currentTime = $this->getCurrentTimeInMilliseconds();
 
-        // Protección más estricta: mínimo 1 segundo entre Enter válidos
-        if ($this->enterCount === 0 || !$this->lastEnterTime || ($currentTime - $this->lastEnterTime > 1000)) {
+        // ✅ OPTIMIZADO: Reducido de 1000ms a 300ms para mejor respuesta
+        if ($this->enterCount === 0 || !$this->lastEnterTime || ($currentTime - $this->lastEnterTime > 300)) {
 
             $this->enterCount = 1;
 
@@ -1547,12 +1576,8 @@ public function addRow()
     public function getHorariosConEstado()
 
     {
-        // Obtener configuración global de quinielas
-        $globalConfig = GlobalQuinielasConfiguration::all()
-            ->keyBy('city_name')
-            ->map(function($config) {
-                return $config->selected_schedules;
-            });
+        // ✅ OPTIMIZACIÓN: Usar configuración cacheada en lugar de consultar BD
+        $globalConfig = collect($this->cachedGlobalConfig);
         
         // Si no hay configuración global guardada, usar configuración por defecto
         if ($globalConfig->isEmpty()) {
@@ -1624,12 +1649,8 @@ public function addRow()
     public function toggleAllCheckboxes($checked)
 
     {
-        // Obtener configuración global de quinielas
-        $globalConfig = GlobalQuinielasConfiguration::all()
-            ->keyBy('city_name')
-            ->map(function($config) {
-                return $config->selected_schedules;
-            });
+        // ✅ OPTIMIZACIÓN: Usar configuración cacheada en lugar de consultar BD
+        $globalConfig = $this->cachedGlobalConfig;
 
         $codesToUpdate = [];
 
@@ -1734,12 +1755,8 @@ public function addRow()
 
         if ($this->isDisabled($time)) return;
 
-        // Obtener configuración global de quinielas
-        $globalConfig = GlobalQuinielasConfiguration::all()
-            ->keyBy('city_name')
-            ->map(function($config) {
-                return $config->selected_schedules;
-            });
+        // ✅ OPTIMIZACIÓN: Usar configuración cacheada en lugar de consultar BD
+        $globalConfig = $this->cachedGlobalConfig;
 
         $currentCodesInRow = [];
 

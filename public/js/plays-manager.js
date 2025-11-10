@@ -3,8 +3,8 @@ document.addEventListener('DOMContentLoaded', function() {
     let enterThrottled = false;
     let enterTimeout;
     let lastEnterTime = 0;
-    const THROTTLE_DELAY = 1500; // Aumentado a 1.5 segundos
-    const MIN_ENTER_INTERVAL = 800; // Mínimo 800ms entre Enter válidos
+    const THROTTLE_DELAY = 500; // ✅ OPTIMIZADO: Reducido de 1500ms a 500ms
+    const MIN_ENTER_INTERVAL = 300; // ✅ OPTIMIZADO: Reducido de 800ms a 300ms
 
     // Protección global para todos los inputs del formulario
     const formInputs = ['number', 'position', 'import', 'numberR', 'positionR'];
