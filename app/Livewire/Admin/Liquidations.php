@@ -63,7 +63,10 @@ class Liquidations extends Component
     {
         // Consulta global de resultados (sin filtro de usuario)
         $baseQuery = Result::query()->whereDate('date', $this->date);
-        $results = (clone $baseQuery)->orderBy('created_at', 'desc')->get();
+        $results = (clone $baseQuery)->get();
+        
+        // ✅ Ordenar por turno (de más temprano a más tarde)
+        $results = $this->sortResultsByTurn($results);
         $totalAciert = (float) (clone $baseQuery)->sum('aciert');
         
         // Consulta global de apuestas (sin filtro de usuario)
@@ -126,7 +129,10 @@ class Liquidations extends Component
     {
         // Consulta de resultados filtrada por cliente
         $baseQuery = Result::query()->whereDate('date', $this->date)->where('user_id', $user->id);
-        $results = (clone $baseQuery)->orderBy('created_at', 'desc')->get();
+        $results = (clone $baseQuery)->get();
+        
+        // ✅ Ordenar por turno (de más temprano a más tarde)
+        $results = $this->sortResultsByTurn($results);
         $totalAciert = (float) (clone $baseQuery)->sum('aciert');
         
         // Consulta de apuestas filtrada por cliente
@@ -220,6 +226,40 @@ class Liquidations extends Component
             'total_aciert' => $prevTotalAciert,
             'total_gana_pase' => $prevTotalGanaPase,
         ];
+    }
+
+    /**
+     * ✅ NUEVO: Ordena los resultados por turno (de más temprano a más tarde)
+     * Extrae el turno del código de lotería (últimos 4 dígitos) o del campo time
+     * 
+     * @param \Illuminate\Database\Eloquent\Collection $results
+     * @return \Illuminate\Database\Eloquent\Collection
+     */
+    protected function sortResultsByTurn($results)
+    {
+        return $results->sortBy(function ($result) {
+            // Extraer el turno del código de lotería (ej: NAC1800 -> 1800)
+            // El campo lottery puede contener múltiples loterías separadas por comas
+            $lotteryCode = trim(explode(',', $result->lottery)[0]); // Tomar la primera lotería
+            $turn = null;
+            
+            // Intentar extraer el turno del código de lotería (últimos 4 dígitos)
+            if (preg_match('/(\d{4})$/', $lotteryCode, $matches)) {
+                $turn = (int)$matches[1];
+            } else {
+                // Si no se puede extraer del código, usar el campo time
+                // El campo time puede estar en formato HH:MM:SS o HH:MM
+                if ($result->time) {
+                    $timeParts = explode(':', $result->time);
+                    if (count($timeParts) >= 2) {
+                        $turn = (int)($timeParts[0] . $timeParts[1]);
+                    }
+                }
+            }
+            
+            // Si no se pudo determinar el turno, usar un valor alto para ponerlo al final
+            return $turn ?? 9999;
+        })->values();
     }
 
     /**

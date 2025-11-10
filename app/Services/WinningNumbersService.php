@@ -288,8 +288,13 @@ class WinningNumbersService
                     $position = trim($positionCell->textContent);
                     $number = trim($numberCell->textContent);
                     
-                    // Verificar que la posición sea un número y el valor sea un número de 4 dígitos
-                    if (preg_match('/^\d+\.?$/', $position) && preg_match('/^\d{4}$/', $number) && $number !== '----') {
+                    // Verificar que la posición sea un número y el valor sea un número de 4 o 5 dígitos
+                    // Si tiene 5 dígitos, tomar los últimos 4
+                    if (preg_match('/^\d+\.?$/', $position) && preg_match('/^\d{4,5}$/', $number) && $number !== '----') {
+                        // Si tiene 5 dígitos, tomar los últimos 4
+                        if (strlen($number) === 5) {
+                            $number = substr($number, -4);
+                        }
                         $positionNumber = intval($position);
                         $positionedNumbers[$positionNumber] = $number;
                     }
@@ -620,8 +625,13 @@ class WinningNumbersService
                 foreach ($cells as $cell) {
                     $text = trim($cell->textContent);
                     
-                    // Verificar si es un número de lotería (3 o 4 dígitos)
-                    if (preg_match('/^\d{3,4}$/', $text)) {
+                    // Verificar si es un número de lotería (3, 4 o 5 dígitos)
+                    // Si tiene 5 dígitos, tomar los últimos 4
+                    if (preg_match('/^\d{3,5}$/', $text)) {
+                        // Si tiene 5 dígitos, tomar los últimos 4
+                        if (strlen($text) === 5) {
+                            $text = substr($text, -4);
+                        }
                         // Si tiene 3 dígitos, agregar 0 al inicio (números que comienzan con 0)
                         if (strlen($text) === 3) {
                             $text = '0' . $text;
@@ -650,7 +660,13 @@ class WinningNumbersService
                 foreach ($elements as $element) {
                     $text = trim($element->textContent);
                     
-                    if (preg_match('/^\d{3,4}$/', $text)) {
+                    // Verificar si es un número de lotería (3, 4 o 5 dígitos)
+                    // Si tiene 5 dígitos, tomar los últimos 4
+                    if (preg_match('/^\d{3,5}$/', $text)) {
+                        // Si tiene 5 dígitos, tomar los últimos 4
+                        if (strlen($text) === 5) {
+                            $text = substr($text, -4);
+                        }
                         // Si tiene 3 dígitos, agregar 0 al inicio (números que comienzan con 0)
                         if (strlen($text) === 3) {
                             $text = '0' . $text;

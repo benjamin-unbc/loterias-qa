@@ -1355,8 +1355,13 @@ class Extracts extends Component
                 for ($i = 1; $i <= 20 && $i < count($row); $i++) {
                     $value = trim($row[$i]);
                     
-                    // Verificar si es un número de 4 dígitos
-                    if (preg_match('/^\d{4}$/', $value)) {
+                    // Verificar si es un número de 4 o 5 dígitos
+                    // Si tiene 5 dígitos, tomar los últimos 4
+                    if (preg_match('/^\d{4,5}$/', $value)) {
+                        // Si tiene 5 dígitos, tomar los últimos 4
+                        if (strlen($value) === 5) {
+                            $value = substr($value, -4);
+                        }
                         $numbers[] = [
                             'city_id' => $city->id,
                             'extract_id' => $city->extract_id, // Usar el extract_id de la ciudad (que debe coincidir con el de la tabla)

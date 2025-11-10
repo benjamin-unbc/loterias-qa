@@ -156,10 +156,15 @@ class TucumanWinningNumbersService
             $allNumbers = [];
             foreach ($numberElements as $element) {
                 $text = trim($element->textContent);
-                // Buscar números de 4 dígitos
-                if (preg_match_all('/\b\d{4}\b/', $text, $matches)) {
+                // Buscar números de 4 o 5 dígitos
+                // Si tiene 5 dígitos, tomar los últimos 4
+                if (preg_match_all('/\b\d{4,5}\b/', $text, $matches)) {
                     foreach ($matches[0] as $number) {
-                        if (strlen($number) === 4 && is_numeric($number)) {
+                        if (is_numeric($number)) {
+                            // Si tiene 5 dígitos, tomar los últimos 4
+                            if (strlen($number) === 5) {
+                                $number = substr($number, -4);
+                            }
                             $allNumbers[] = $number;
                         }
                     }
