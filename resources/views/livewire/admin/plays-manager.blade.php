@@ -663,33 +663,57 @@
                 Livewire.on('play-added', (event) => {
                     const { playId, message, type, selector } = event[0] || event;
                     
-                    // Scroll a la jugada agregada (sin delay para respuesta instantánea)
-                    const playRow = document.getElementById(`row-${playId}`);
-                    const playsContainer = document.getElementById('playsContainer');
-                    
-                    if (playRow && playsContainer) {
-                        // Scroll inmediato sin animación para mejor rendimiento
-                        playRow.scrollIntoView({ 
-                            behavior: 'auto', 
-                            block: 'end',
-                            inline: 'nearest'
-                        });
+                    // Función para hacer scroll después de que Livewire actualice el DOM
+                    const scrollToPlay = () => {
+                        const playRow = document.getElementById(`row-${playId}`);
+                        const playsContainer = document.getElementById('playsContainer');
                         
-                        // Resaltar brevemente la fila
-                        playRow.style.backgroundColor = '#4ade80';
-                        setTimeout(() => {
-                            playRow.style.backgroundColor = '';
-                        }, 500);
-                    } else if (playsContainer) {
-                        playsContainer.scrollTop = playsContainer.scrollHeight;
-                    }
+                        if (playRow && playsContainer) {
+                            // Scroll inmediato sin animación para mejor rendimiento
+                            playRow.scrollIntoView({ 
+                                behavior: 'auto', 
+                                block: 'end',
+                                inline: 'nearest'
+                            });
+                            return true;
+                        } else if (playsContainer) {
+                            // Fallback: scroll al final del contenedor
+                            playsContainer.scrollTop = playsContainer.scrollHeight;
+                            return false;
+                        }
+                        return false;
+                    };
                     
-                    // Enfocar el input de número inmediatamente
-                    const numberInput = document.querySelector(selector || '#number');
-                    if (numberInput) {
-                        numberInput.focus();
-                        numberInput.select();
-                    }
+                    // Escuchar el evento de Livewire cuando el DOM se actualiza
+                    const handleScroll = () => {
+                        // Intentar hacer scroll después de que Livewire actualice el DOM
+                        requestAnimationFrame(() => {
+                            if (!scrollToPlay()) {
+                                // Si aún no está, esperar un poco más
+                                setTimeout(() => {
+                                    if (!scrollToPlay()) {
+                                        // Último intento después de más tiempo
+                                        setTimeout(() => scrollToPlay(), 200);
+                                    }
+                                }, 100);
+                            }
+                        });
+                    };
+                    
+                    // Escuchar cuando Livewire termine de actualizar el DOM
+                    document.addEventListener('livewire:updated', handleScroll, { once: true });
+                    
+                    // También intentar inmediatamente (por si el DOM ya está actualizado)
+                    handleScroll();
+                    
+                    // Enfocar el input de número después de un pequeño delay
+                    setTimeout(() => {
+                        const numberInput = document.querySelector(selector || '#number');
+                        if (numberInput) {
+                            numberInput.focus();
+                            numberInput.select();
+                        }
+                    }, 50);
                     
                     // Notificación (si existe el sistema de notificaciones)
                     if (typeof window.showNotification === 'function') {
@@ -699,8 +723,10 @@
 
                 // Mantener el listener anterior por compatibilidad
                 Livewire.on('scroll-to-last-play', (event) => {
-                    setTimeout(() => {
-                        const playId = event.playId;
+                    const playId = event.playId;
+                    
+                    // Función para hacer scroll
+                    const scrollToPlay = () => {
                         const playRow = document.getElementById(`row-${playId}`);
                         const playsContainer = document.getElementById('playsContainer');
                         
@@ -710,13 +736,23 @@
                                 block: 'end',
                                 inline: 'nearest'
                             });
-                            
-                            playRow.style.backgroundColor = '#4ade80';
-                            setTimeout(() => {
-                                playRow.style.backgroundColor = '';
-                            }, 500);
+                            return true;
                         } else if (playsContainer) {
                             playsContainer.scrollTop = playsContainer.scrollHeight;
+                            return false;
+                        }
+                        return false;
+                    };
+                    
+                    // Intentar hacer scroll después de un pequeño delay
+                    setTimeout(() => {
+                        if (!scrollToPlay()) {
+                            // Si no se encontró, esperar un poco más
+                            requestAnimationFrame(() => {
+                                if (!scrollToPlay()) {
+                                    setTimeout(() => scrollToPlay(), 100);
+                                }
+                            });
                         }
                     }, 50);
                 });
