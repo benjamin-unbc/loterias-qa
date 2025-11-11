@@ -5,6 +5,7 @@ namespace App\Livewire\Admin;
 use App\Models\PlaysSentModel;
 use App\Models\ApusModel;
 use App\Models\Ticket;
+use App\Models\City;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -265,16 +266,87 @@ private function processApusData($rawApus)
     public function disablePlay()
     {
         $ticket = $this->disabledTicketId;
-        $currentTime = Carbon::now()->format('H:i');
+        $currentTime = Carbon::now();
 
-        $hasPastApu = ApusModel::where('ticket', $ticket)
+        // Obtener todas las apuestas del ticket con sus códigos de lotería
+        $apusDelTicket = ApusModel::where('ticket', $ticket)
             ->where('user_id', Auth::user()->id)
-            ->where('timeApu', '<', $currentTime)
-            ->exists();
+            ->select('lottery')
+            ->distinct()
+            ->get();
 
-        if ($hasPastApu) {
+        // Si no hay apuestas, no se puede anular
+        if ($apusDelTicket->isEmpty()) {
             $this->showConfirmationModal = false;
-            $this->dispatch('notify', message: 'No se puede cancelar la jugada: ya hay al menos una apuesta con hora anterior a la actual.', type: 'error');
+            $this->dispatch('notify', message: 'No se puede cancelar la jugada: no se encontraron apuestas.', type: 'error');
+            return;
+        }
+
+        // Extraer todos los códigos de lotería únicos del ticket
+        $codigosLoterias = collect();
+        foreach ($apusDelTicket as $apu) {
+            $lottery = $apu->lottery;
+            if (empty($lottery)) {
+                continue;
+            }
+            
+            // El campo lottery puede contener múltiples códigos separados por comas
+            // Extraer todos los códigos válidos
+            if (preg_match_all('/[A-Za-z]+\d{4}/', $lottery, $matches)) {
+                foreach ($matches[0] as $codigo) {
+                    $codigosLoterias->push(trim($codigo));
+                }
+            }
+        }
+
+        // Eliminar duplicados
+        $codigosLoterias = $codigosLoterias->unique()->values();
+
+        // Si no hay códigos de lotería válidos, no se puede anular
+        if ($codigosLoterias->isEmpty()) {
+            $this->showConfirmationModal = false;
+            $this->dispatch('notify', message: 'No se puede cancelar la jugada: no se encontraron códigos de lotería válidos.', type: 'error');
+            return;
+        }
+
+        // Obtener los horarios del sistema desde la tabla cities
+        $horariosSistema = collect();
+        foreach ($codigosLoterias as $codigoLoteria) {
+            // Buscar la ciudad por código de lotería
+            $city = City::where('code', $codigoLoteria)->first();
+            
+            if ($city && !empty($city->time)) {
+                $horariosSistema->push($city->time);
+            }
+        }
+
+        // Si no hay horarios del sistema, no se puede anular
+        if ($horariosSistema->isEmpty()) {
+            $this->showConfirmationModal = false;
+            $this->dispatch('notify', message: 'No se puede cancelar la jugada: no se encontraron horarios del sistema.', type: 'error');
+            return;
+        }
+
+        // Ordenar horarios y obtener el primer horario (el más temprano)
+        $horariosOrdenados = $horariosSistema->unique()->sort()->values();
+        $primerHorarioString = $horariosOrdenados->first();
+
+        // Convertir el primer horario a Carbon para comparación precisa
+        try {
+            $primerHorario = Carbon::createFromFormat('H:i', $primerHorarioString);
+            $horaActual = Carbon::createFromFormat('H:i', $currentTime->format('H:i'));
+
+            // Verificar si el primer horario ya pasó o está en curso
+            if ($primerHorario <= $horaActual) {
+                $this->showConfirmationModal = false;
+                // Disparar evento para mostrar SweetAlert
+                $this->dispatch('show-cancel-alert', message: 'La jugada contiene loterías que ya comenzaron. No se puede anular el ticket.', horario: $primerHorarioString);
+                return;
+            }
+        } catch (\Exception $e) {
+            Log::error('Error al comparar horarios en disablePlay: ' . $e->getMessage());
+            $this->showConfirmationModal = false;
+            $this->dispatch('notify', message: 'Error al validar el horario de la jugada.', type: 'error');
             return;
         }
 

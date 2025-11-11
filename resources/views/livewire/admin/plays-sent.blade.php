@@ -456,7 +456,119 @@
     });
     </script>
 
+    @push('scripts')
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        // Función para mostrar la alerta de cancelación
+        function showCancelAlert(data) {
+            const message = data?.message || 'La jugada contiene loterías que ya comenzaron. No se puede anular el ticket.';
+            const horario = data?.horario || '';
+            
+            Swal.fire({
+                icon: 'warning',
+                title: 'No se puede anular la jugada',
+                html: `
+                    <p style="color: #ffffff; font-size: 16px; margin-bottom: 10px;">
+                        ${message}
+                    </p>
+                    ${horario ? `<p style="color: #f59e0b; font-size: 14px; font-weight: bold;">
+                        Primer horario: ${horario}
+                    </p>` : ''}
+                    <p style="color: #9ca3af; font-size: 14px; margin-top: 10px;">
+                        Una vez que comienza el primer horario de lotería del ticket, no se puede anular, incluso si hay otras loterías pendientes.
+                    </p>
+                `,
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#f59e0b',
+                background: '#1b1f22',
+                color: '#ffffff',
+                iconColor: '#f59e0b',
+                customClass: {
+                    popup: 'swal-custom-popup',
+                    title: 'swal-custom-title',
+                    htmlContainer: 'swal-custom-content'
+                },
+                buttonsStyling: true,
+                allowOutsideClick: true,
+                allowEscapeKey: true
+            });
+        }
+
+        // Esperar a que Livewire esté completamente cargado
+        document.addEventListener('livewire:init', function() {
+            // Listener para mostrar alerta cuando no se puede anular el ticket
+            Livewire.on('show-cancel-alert', (data) => {
+                showCancelAlert(data);
+            });
+        });
+
+        // Fallback si Livewire ya está cargado
+        if (typeof Livewire !== 'undefined') {
+            Livewire.on('show-cancel-alert', (data) => {
+                showCancelAlert(data);
+            });
+        }
+    </script>
+    @endpush
+
     <style>
+    /* Estilos personalizados para SweetAlert */
+    .swal-custom-popup {
+        background-color: #1b1f22 !important;
+        border: 2px solid #f59e0b !important;
+        border-radius: 12px !important;
+        box-shadow: 0 10px 40px rgba(245, 158, 11, 0.3) !important;
+    }
+
+    .swal-custom-title {
+        color: #ffffff !important;
+        font-size: 24px !important;
+        font-weight: bold !important;
+        margin-bottom: 20px !important;
+    }
+
+    .swal-custom-content {
+        color: #ffffff !important;
+        font-size: 16px !important;
+    }
+
+    .swal2-popup {
+        background: #1b1f22 !important;
+    }
+
+    .swal2-title {
+        color: #ffffff !important;
+    }
+
+    .swal2-html-container {
+        color: #ffffff !important;
+    }
+
+    .swal2-confirm {
+        background-color: #f59e0b !important;
+        border: none !important;
+        border-radius: 8px !important;
+        padding: 12px 30px !important;
+        font-size: 16px !important;
+        font-weight: 600 !important;
+        transition: all 0.3s ease !important;
+    }
+
+    .swal2-confirm:hover {
+        background-color: #d97706 !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4) !important;
+    }
+
+    .swal2-icon.swal2-warning {
+        border-color: #f59e0b !important;
+        color: #f59e0b !important;
+    }
+
+    .swal2-icon.swal2-warning .swal2-icon-content {
+        color: #f59e0b !important;
+    }
+
     @media print {
         .pagina-carta, .pagina-carta * {
             visibility: visible !important;
