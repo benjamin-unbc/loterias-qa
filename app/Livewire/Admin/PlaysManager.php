@@ -1436,30 +1436,40 @@ public function addRow()
         // MEJORA: Reactivar las bajadas si se creó una nueva jugada base (3 o 4 dígitos)
         $cleanNumber = str_replace('*', '', $validatedData['number']);
         if (strlen($cleanNumber) >= 3 && ctype_digit($cleanNumber)) {
-            $lastDerivedKey = 'lastDerivedCompleted_' . auth()->id();
-            \Cache::forget($lastDerivedKey); // Reactivar las bajadas
+            // ✅ OPTIMIZADO: Solo limpiar cache si realmente es necesario (evitar escrituras innecesarias a disco)
+            // Usar try-catch para evitar errores si el cache no está disponible
+            try {
+                $lastDerivedKey = 'lastDerivedCompleted_' . auth()->id();
+                \Cache::forget($lastDerivedKey); // Reactivar las bajadas
+                
+                $lockKey = 'addRowWithDerived_lock_' . auth()->id();
+                \Cache::forget($lockKey);
+            } catch (\Exception $e) {
+                // Silenciar errores de cache para no afectar el rendimiento
+            }
+            
             $this->currentBasePlayId = $newPlay->id; // Actualizar ID de base
             $this->currentDerivedCount = 0; // Resetear contador
             
-            // MEJORA: Limpiar también el cache de bloqueo de derivadas
-            $lockKey = 'addRowWithDerived_lock_' . auth()->id();
-            \Cache::forget($lockKey);
-            
-            // Logging para debugging
-            \Log::info("Nueva jugada base creada para derivación", [
-                'user_id' => auth()->id(),
-                'play_id' => $newPlay->id,
-                'number' => $newPlay->number,
-                'clean_number' => $cleanNumber,
-                'previous_base_play_id' => $this->currentBasePlayId
-            ]);
+            // ✅ OPTIMIZADO: Eliminado logging innecesario en producción (reduce escrituras a disco)
+            // Solo loguear en desarrollo si es necesario para debugging
+            if (config('app.debug')) {
+                \Log::info("Nueva jugada base creada para derivación", [
+                    'user_id' => auth()->id(),
+                    'play_id' => $newPlay->id,
+                    'number' => $newPlay->number,
+                ]);
+            }
         }
 
         // Limpiar el ID de la jugada si estamos en modo edición
         if ($this->editingRowId) $this->editingRowId = null;
     } catch (\Exception $e) {
         // En caso de error, notificar el fallo
-        \Log::error('Error al agregar jugada: ' . $e->getMessage());
+        // ✅ OPTIMIZADO: Solo loguear errores críticos en producción
+        if (config('app.debug')) {
+            \Log::error('Error al agregar jugada: ' . $e->getMessage());
+        }
         $this->dispatch('notify', message: 'Error al agregar.', type: 'error');
     }
 }
