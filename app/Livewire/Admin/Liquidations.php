@@ -70,7 +70,12 @@ class Liquidations extends Component
         $totalAciert = (float) (clone $baseQuery)->sum('aciert');
         
         // Consulta global de apuestas (sin filtro de usuario)
-        $apusQuery = \App\Models\ApusModel::query()->whereDate('created_at', $this->date);
+        // ✅ Excluir jugadas anuladas (status != 'I' en plays_sent)
+        $apusQuery = \App\Models\ApusModel::query()
+            ->whereDate('created_at', $this->date)
+            ->whereHas('playsSent', function($query) {
+                $query->where('status', '!=', 'I');
+            });
         $previaTotalApus   = (float) (clone $apusQuery)->where('timeApu', '10:15')->sum('import');
         $mananaTotalApus   = (float) (clone $apusQuery)->where('timeApu', '12:00')->sum('import');
         $matutinaTotalApus = (float) (clone $apusQuery)->where('timeApu', '15:00')->sum('import');
@@ -136,7 +141,13 @@ class Liquidations extends Component
         $totalAciert = (float) (clone $baseQuery)->sum('aciert');
         
         // Consulta de apuestas filtrada por cliente
-        $apusQuery = \App\Models\ApusModel::query()->whereDate('created_at', $this->date)->where('user_id', $user->id);
+        // ✅ Excluir jugadas anuladas (status != 'I' en plays_sent)
+        $apusQuery = \App\Models\ApusModel::query()
+            ->whereDate('created_at', $this->date)
+            ->where('user_id', $user->id)
+            ->whereHas('playsSent', function($query) {
+                $query->where('status', '!=', 'I');
+            });
         $previaTotalApus   = (float) (clone $apusQuery)->where('timeApu', '10:15')->sum('import');
         $mananaTotalApus   = (float) (clone $apusQuery)->where('timeApu', '12:00')->sum('import');
         $matutinaTotalApus = (float) (clone $apusQuery)->where('timeApu', '15:00')->sum('import');
@@ -202,7 +213,13 @@ class Liquidations extends Component
         $prevResultsQuery = Result::query()->whereDate('date', $previousDate)->where('user_id', $userId);
         $prevTotalAciert = (float) $prevResultsQuery->sum('aciert');
         
-        $prevApusQuery = \App\Models\ApusModel::query()->whereDate('created_at', $previousDate)->where('user_id', $userId);
+        // ✅ Excluir jugadas anuladas (status != 'I' en plays_sent)
+        $prevApusQuery = \App\Models\ApusModel::query()
+            ->whereDate('created_at', $previousDate)
+            ->where('user_id', $userId)
+            ->whereHas('playsSent', function($query) {
+                $query->where('status', '!=', 'I');
+            });
         $prevTotalApus = (float) $prevApusQuery->sum('import');
         
         if ($prevTotalApus == 0) {

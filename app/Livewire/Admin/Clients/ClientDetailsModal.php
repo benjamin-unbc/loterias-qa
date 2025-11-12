@@ -305,8 +305,12 @@ class ClientDetailsModal extends Component
         $totalAciert = (float) $allResults->sum('aciert');
 
         // Consulta de apuestas filtrada por cliente
+        // ✅ Excluir jugadas anuladas (status != 'I' en plays_sent)
         $apusQuery = \App\Models\ApusModel::whereDate('created_at', $this->liquidacionesDate)
-                                         ->where('user_id', $userId);
+                                         ->where('user_id', $userId)
+                                         ->whereHas('playsSent', function($query) {
+                                             $query->where('status', '!=', 'I');
+                                         });
         $allApus = $apusQuery->get();
         
         // Mostrar todas las apuestas sin filtrar (igual que el módulo original)
@@ -367,7 +371,12 @@ class ClientDetailsModal extends Component
         $prevResultsQuery = Result::whereDate('date', $previousDate)->where('user_id', $userId);
         $prevTotalAciert = (float) $prevResultsQuery->sum('aciert');
         
-        $prevApusQuery = \App\Models\ApusModel::whereDate('created_at', $previousDate)->where('user_id', $userId);
+        // ✅ Excluir jugadas anuladas (status != 'I' en plays_sent)
+        $prevApusQuery = \App\Models\ApusModel::whereDate('created_at', $previousDate)
+                                             ->where('user_id', $userId)
+                                             ->whereHas('playsSent', function($query) {
+                                                 $query->where('status', '!=', 'I');
+                                             });
         $prevTotalApus = (float) $prevApusQuery->sum('import');
         
         if ($prevTotalApus == 0) {
