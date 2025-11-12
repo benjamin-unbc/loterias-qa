@@ -118,9 +118,7 @@ class PlaysManager extends Component
 
 
 
-    public $enterCount = 0;
-
-    public $lastEnterTime;
+    // ✅ OPTIMIZADO: Eliminadas variables de throttling (enterCount, lastEnterTime)
 
 
 
@@ -1564,42 +1562,23 @@ public function addRow()
 
     // 3. Reemplaza tu función handleEnter() existente con esta versión más simple y efectiva:
 
+    // ✅ OPTIMIZADO: Eliminado throttling - solo verificar isSaving para evitar duplicados
     public function handleEnter()
-
     {
-
+        // Solo verificar si ya está guardando (protección contra duplicados)
         if ($this->isSaving) {
-
             return;
         }
 
-        $currentTime = $this->getCurrentTimeInMilliseconds();
-
-        // ✅ OPTIMIZADO: Reducido de 1000ms a 300ms para mejor respuesta
-        if ($this->enterCount === 0 || !$this->lastEnterTime || ($currentTime - $this->lastEnterTime > 300)) {
-
-            $this->enterCount = 1;
-
-            $this->lastEnterTime = $currentTime;
-
-            $this->saveRow();
-
-            return;
-        }
-
-        // Si se detecta spam, no hacer nada (silenciosamente ignorar)
+        // Llamar directamente a saveRow sin delays artificiales
+        $this->saveRow();
     }
 
 
 
 
 
-    private function getCurrentTimeInMilliseconds(): int
-
-    {
-
-        return round(microtime(true) * 1000);
-    }
+    // ✅ OPTIMIZADO: Eliminado método getCurrentTimeInMilliseconds (ya no se usa)
 
 
 
