@@ -1447,7 +1447,7 @@ public function addRow()
             'message' => 'Jugada agregada.',
             'type' => 'success',
             'selector' => '#number'
-        ])->to('self'); // Enviar solo a este componente
+        ]); // El evento se envía automáticamente al componente actual
 
         // MEJORA: Reactivar las bajadas si se creó una nueva jugada base (3 o 4 dígitos)
         $cleanNumber = str_replace('*', '', $validatedData['number']);
