@@ -712,6 +712,21 @@
                     }
                 });
 
+                // ✅ OPTIMIZADO: Evento combinado play-saved-complete (reemplaza play-saved y focus-on-input)
+                Livewire.on('play-saved-complete', (event) => {
+                    const data = event[0] || event;
+                    const { focusSelector, message } = data;
+                    
+                    // Enfocar el input después de guardar
+                    setTimeout(() => {
+                        const input = document.querySelector(focusSelector || '#number');
+                        if (input) {
+                            input.focus();
+                            input.select();
+                        }
+                    }, 100);
+                });
+
                 // Mantener el listener anterior por compatibilidad
                 Livewire.on('scroll-to-last-play', (event) => {
                     const playId = event.playId;
