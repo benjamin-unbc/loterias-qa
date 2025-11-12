@@ -199,6 +199,13 @@ class QuinielasManager extends Component
         $this->appliedCitySchedules = $this->selectedCitySchedules;
         $this->hasUnsavedChanges = false;
         
+        // Invalidar el cache de configuración global para todos los usuarios
+        // Esto asegura que los cambios se reflejen inmediatamente en el Gestor de Jugadas
+        $users = \App\Models\User::pluck('id');
+        foreach ($users as $userId) {
+            \Cache::forget('global_quinielas_config_' . $userId);
+        }
+        
         // Mostrar notificación de éxito
         $this->dispatch('notify', message: 'Configuración global de quinielas guardada correctamente. Los cambios se aplicarán para todos los usuarios en el Gestor de Jugadas.', type: 'success');
         
