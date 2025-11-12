@@ -118,9 +118,6 @@
                                         <div class="grid grid-cols-6 w-full justify-around text-sm">
                                             <div class="text-start text-nowrap pl-4">
                                                 {{ collect(explode(',', $result->lottery))->last() }}
-                                                <span class="font-medium">
-                                                    {{ substr($result->time, 0, 2) }}
-                                                </span>
                                             </div>
                                             <div class="text-center text-nowrap px-4">{{ $result->number }}</div>
                                             <div class="text-center text-nowrap px-4">{{ $result->position }}</div>
