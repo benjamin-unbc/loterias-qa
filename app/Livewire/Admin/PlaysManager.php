@@ -1419,17 +1419,19 @@ public function addRow()
         // Crear la nueva jugada directamente
         $newPlay = Play::create($playDataToCreate);
 
-        // Agregar la jugada recién creada a la lista de jugadas
+        // ✅ OPTIMIZADO: Agregar jugada y limpiar formulario de forma más eficiente
         $this->rows->push($newPlay);
-
-        // Mantener el último valor de importe para que aparezca en el campo
         $this->lastImportValue = $importeAGuardar;
-
-        // Limpiar el formulario de entrada
-        $this->resetFormAdd();
-
-        // Mantener el importe en el campo de entrada
-        $this->import = $this->lastImportValue;
+        
+        // ✅ OPTIMIZADO: Limpiar solo los campos necesarios sin resetFormAdd completo
+        // Esto evita llamadas innecesarias a resetValidation
+        $this->number = '';
+        $this->position = null;
+        $this->numberR = null;
+        $this->positionR = null;
+        $this->isChecked = false;
+        $this->editingRowId = null;
+        $this->import = $this->lastImportValue; // Mantener importe
 
         // Marcar que se necesita recalcular el total
         $this->needsTotalRecalculation = true;
@@ -1438,15 +1440,14 @@ public function addRow()
         // No invalidar inmediatamente, solo marcar para invalidar en el próximo render si se necesita
         // Esto evita cálculos innecesarios
         
-        // ✅ OPTIMIZADO: Un solo dispatch combinado para reducir re-renders de Livewire
-        // Combina notificación, scroll y focus en una sola operación
+        // ✅ OPTIMIZADO: Dispatch sin bloquear - Livewire procesará después del return
+        // Esto permite que el método termine más rápido
         $this->dispatch('play-added-success', [
             'playId' => $newPlay->id,
             'message' => 'Jugada agregada.',
             'type' => 'success',
-            'selector' => '#number',
-            'invalidateHorarios' => false // Invalidar solo cuando sea necesario
-        ]);
+            'selector' => '#number'
+        ])->to('self'); // Enviar solo a este componente
 
         // MEJORA: Reactivar las bajadas si se creó una nueva jugada base (3 o 4 dígitos)
         $cleanNumber = str_replace('*', '', $validatedData['number']);
