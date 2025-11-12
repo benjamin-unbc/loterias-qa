@@ -163,10 +163,6 @@
 
                                 <div class="flex flex-col pt-3 gap-1 border-b pb-2 w-full text-sm">
                                     <div class="flex justify-between">
-                                        <h4 class="font-medium">JUGADAS:</h4>
-                                        <p>{{ number_format($totalApus, 2) }}</p>
-                                    </div>
-                                    <div class="flex justify-between">
                                         <h4 class="font-medium">TOTAL PASE:</h4>
                                         <p>{{ number_format($totalApus, 2) }}</p>
                                     </div>
@@ -181,10 +177,6 @@
                                 </div>
 
                                 <div class="flex flex-col pt-3 gap-1 border-b pb-2 w-full text-sm">
-                                    <div class="flex justify-between">
-                                        <h4 class="font-medium">DEJA PASE:</h4>
-                                        <p>{{ number_format($totalGanaPase, 2) }}</p>
-                                    </div>
                                     <div class="flex justify-between">
                                         <h4 class="font-medium">TOTAL DEJA:</h4>
                                         <p>{{ number_format($totalGanaPase, 2) }}</p>
