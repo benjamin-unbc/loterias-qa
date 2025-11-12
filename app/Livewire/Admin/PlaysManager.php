@@ -66,6 +66,10 @@ class PlaysManager extends Component
     public $cachedGlobalConfig = []; // Configuración global cacheada
     public $uiCodeToCityNameMapping = []; // Mapeo pre-calculado de UI codes a city names
     
+    // ✅ OPTIMIZACIÓN CRÍTICA: Mapeo pre-calculado de códigos válidos (similar a código antiguo)
+    // Esto evita validaciones en cada addRow() - se calcula una sola vez en mount()
+    public $validCodesMap = []; // Mapeo directo: código => true/false (si es válido)
+    
     // ✅ OPTIMIZACIÓN: Cachear horarios con estado para evitar recálculos en cada render
     private $cachedHorariosConEstado = null;
     private $lastHorariosCacheTime = null;
@@ -531,6 +535,8 @@ class PlaysManager extends Component
         // ✅ OPTIMIZADO: Crear mapeo pre-calculado de UI codes a city names y horarios
         // Esto evita bucles anidados en cada validación
         $this->uiCodeToCityNameMapping = [];
+        $this->validCodesMap = []; // Inicializar mapeo de códigos válidos
+        
         foreach ($this->lotteryGroups as $time => $lotteries) {
             foreach ($lotteries as $lottery) {
                 $uiCode = $lottery['ui_code'];
@@ -539,6 +545,11 @@ class PlaysManager extends Component
                     'city_name' => $cityName,
                     'time' => $time
                 ];
+                
+                // ✅ OPTIMIZACIÓN CRÍTICA: Pre-calcular si el código es válido (similar a código antiguo)
+                // Esto evita validaciones en cada addRow() - se calcula una sola vez
+                $selectedSchedules = $this->cachedGlobalConfig[$cityName] ?? [];
+                $this->validCodesMap[$uiCode] = in_array($time, $selectedSchedules, true);
             }
         }
     }
@@ -1377,17 +1388,12 @@ public function addRow()
     try {
         $importeAGuardar = $validatedData['import'];
         
-        // ✅ OPTIMIZADO: Validación más eficiente usando array_filter y array_map
-        // Evita múltiples accesos a arrays y reduce operaciones innecesarias
+        // ✅ OPTIMIZACIÓN CRÍTICA: Usar mapeo pre-calculado (similar a código antiguo)
+        // En lugar de validar en cada addRow(), usa el mapeo pre-calculado en mount()
+        // Esto es tan rápido como el código antiguo que usa arrays hardcodeados
         $validCodes = array_filter($this->checkboxCodes, function($code) {
-            if (!isset($this->uiCodeToCityNameMapping[$code])) {
-                return false;
-            }
-            $mapping = $this->uiCodeToCityNameMapping[$code];
-            $cityName = $mapping['city_name'];
-            $time = $mapping['time'];
-            $selectedSchedules = $this->cachedGlobalConfig[$cityName] ?? [];
-            return in_array($time, $selectedSchedules, true); // strict comparison más rápido
+            // Acceso O(1) directo al mapeo pre-calculado - sin validaciones complejas
+            return isset($this->validCodesMap[$code]) && $this->validCodesMap[$code] === true;
         });
         
         $currentLotteryString = implode(',', array_unique($validCodes, SORT_STRING));
