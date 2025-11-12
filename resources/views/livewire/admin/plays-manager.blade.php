@@ -649,19 +649,10 @@
                     }
                 });
 
-                Livewire.on('focus-on-input', (event) => {
-                    setTimeout(() => {
-                        const numberInput = document.getElementById("number");
-                        if (numberInput) {
-                            numberInput.focus();
-                            numberInput.select();
-                        }
-                    }, 100);
-                });
-
-                // ✅ OPTIMIZADO: Evento combinado para reducir re-renders y mejorar rendimiento
-                Livewire.on('play-added', (event) => {
-                    const { playId, message, type, selector } = event[0] || event;
+                // ✅ OPTIMIZADO: Evento combinado play-added-success (reemplaza play-added y focus-on-input)
+                Livewire.on('play-added-success', (event) => {
+                    const data = event[0] || event;
+                    const { playId, message, type, selector } = data;
                     
                     // Función para hacer scroll después de que Livewire actualice el DOM
                     const scrollToPlay = () => {

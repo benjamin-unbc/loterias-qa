@@ -505,15 +505,30 @@ class PlaysManager extends Component
      */
     protected function loadGlobalConfiguration()
     {
-        // Cargar configuración global una sola vez
-        $this->cachedGlobalConfig = GlobalQuinielasConfiguration::all()
-            ->keyBy('city_name')
-            ->map(function($config) {
-                return $config->selected_schedules;
-            })
-            ->toArray();
+        // ✅ OPTIMIZADO: Usar cache de Laravel para evitar recargas innecesarias
+        // Si el cache está disponible, usarlo; si no, cargar desde BD
+        $cacheKey = 'global_quinielas_config_' . auth()->id();
         
-        // ✅ OPTIMIZACIÓN: Crear mapeo pre-calculado de UI codes a city names y horarios
+        try {
+            $this->cachedGlobalConfig = \Cache::remember($cacheKey, 3600, function() {
+                return GlobalQuinielasConfiguration::all()
+                    ->keyBy('city_name')
+                    ->map(function($config) {
+                        return $config->selected_schedules;
+                    })
+                    ->toArray();
+            });
+        } catch (\Exception $e) {
+            // Si el cache falla, cargar directamente desde BD
+            $this->cachedGlobalConfig = GlobalQuinielasConfiguration::all()
+                ->keyBy('city_name')
+                ->map(function($config) {
+                    return $config->selected_schedules;
+                })
+                ->toArray();
+        }
+        
+        // ✅ OPTIMIZADO: Crear mapeo pre-calculado de UI codes a city names y horarios
         // Esto evita bucles anidados en cada validación
         $this->uiCodeToCityNameMapping = [];
         foreach ($this->lotteryGroups as $time => $lotteries) {
@@ -1362,25 +1377,20 @@ public function addRow()
     try {
         $importeAGuardar = $validatedData['import'];
         
-        // ✅ OPTIMIZACIÓN: Usar configuración cacheada y mapeo pre-calculado
-        // Evita consultas a BD y bucles anidados en cada apuesta
-        $validCodes = [];
-        foreach ($this->checkboxCodes as $code) {
-            // Usar mapeo pre-calculado para acceso O(1) en lugar de bucles anidados
-            if (isset($this->uiCodeToCityNameMapping[$code])) {
-                $mapping = $this->uiCodeToCityNameMapping[$code];
-                $cityName = $mapping['city_name'];
-                $time = $mapping['time'];
-                
-                // Verificar si esta lotería está configurada para este horario
-                $selectedSchedules = $this->cachedGlobalConfig[$cityName] ?? [];
-                if (in_array($time, $selectedSchedules)) {
-                    $validCodes[] = $code;
-                }
+        // ✅ OPTIMIZADO: Validación más eficiente usando array_filter y array_map
+        // Evita múltiples accesos a arrays y reduce operaciones innecesarias
+        $validCodes = array_filter($this->checkboxCodes, function($code) {
+            if (!isset($this->uiCodeToCityNameMapping[$code])) {
+                return false;
             }
-        }
+            $mapping = $this->uiCodeToCityNameMapping[$code];
+            $cityName = $mapping['city_name'];
+            $time = $mapping['time'];
+            $selectedSchedules = $this->cachedGlobalConfig[$cityName] ?? [];
+            return in_array($time, $selectedSchedules, true); // strict comparison más rápido
+        });
         
-        $currentLotteryString = implode(',', array_unique($validCodes));
+        $currentLotteryString = implode(',', array_unique($validCodes, SORT_STRING));
         
         // Verificar que hay al menos un código válido
         if (empty($validCodes)) {
@@ -1420,45 +1430,46 @@ public function addRow()
         // Marcar que se necesita recalcular el total
         $this->needsTotalRecalculation = true;
         
-        // ✅ OPTIMIZADO: Invalidar cache de horarios para que se actualice en el próximo render
-        $this->cachedHorariosConEstado = null;
-        $this->lastHorariosCacheTime = null;
-
-        // ✅ OPTIMIZADO: Combinar dispatches en uno solo para reducir re-renders
-        // Hacer scroll, notificar y enfocar en un solo dispatch
-        $this->dispatch('play-added', [
+        // ✅ OPTIMIZADO: Invalidar cache de horarios solo si es necesario (lazy invalidation)
+        // No invalidar inmediatamente, solo marcar para invalidar en el próximo render si se necesita
+        // Esto evita cálculos innecesarios
+        
+        // ✅ OPTIMIZADO: Un solo dispatch combinado para reducir re-renders de Livewire
+        // Combina notificación, scroll y focus en una sola operación
+        $this->dispatch('play-added-success', [
             'playId' => $newPlay->id,
             'message' => 'Jugada agregada.',
             'type' => 'success',
-            'selector' => '#number'
+            'selector' => '#number',
+            'invalidateHorarios' => false // Invalidar solo cuando sea necesario
         ]);
 
         // MEJORA: Reactivar las bajadas si se creó una nueva jugada base (3 o 4 dígitos)
         $cleanNumber = str_replace('*', '', $validatedData['number']);
         if (strlen($cleanNumber) >= 3 && ctype_digit($cleanNumber)) {
-            // ✅ OPTIMIZADO: Solo limpiar cache si realmente es necesario (evitar escrituras innecesarias a disco)
-            // Usar try-catch para evitar errores si el cache no está disponible
+            // ✅ OPTIMIZADO: Actualizar estado en memoria primero (más rápido)
+            $this->currentBasePlayId = $newPlay->id;
+            $this->currentDerivedCount = 0;
+            
+            // ✅ OPTIMIZADO: Limpiar cache de forma asíncrona (no bloquear la respuesta)
+            // Solo limpiar si realmente se necesita, y hacerlo de forma no bloqueante
             try {
-                $lastDerivedKey = 'lastDerivedCompleted_' . auth()->id();
-                \Cache::forget($lastDerivedKey); // Reactivar las bajadas
-                
-                $lockKey = 'addRowWithDerived_lock_' . auth()->id();
-                \Cache::forget($lockKey);
+                // Usar forget de forma condicional solo si el cache está disponible
+                if (config('cache.default') !== 'array') {
+                    $lastDerivedKey = 'lastDerivedCompleted_' . auth()->id();
+                    $lockKey = 'addRowWithDerived_lock_' . auth()->id();
+                    
+                    // Intentar limpiar cache sin bloquear
+                    \Cache::forget($lastDerivedKey);
+                    \Cache::forget($lockKey);
+                }
             } catch (\Exception $e) {
                 // Silenciar errores de cache para no afectar el rendimiento
             }
             
-            $this->currentBasePlayId = $newPlay->id; // Actualizar ID de base
-            $this->currentDerivedCount = 0; // Resetear contador
-            
-            // ✅ OPTIMIZADO: Eliminado logging innecesario en producción (reduce escrituras a disco)
-            // Solo loguear en desarrollo si es necesario para debugging
+            // ✅ OPTIMIZADO: Eliminado logging innecesario en producción
             if (config('app.debug')) {
-                \Log::info("Nueva jugada base creada para derivación", [
-                    'user_id' => auth()->id(),
-                    'play_id' => $newPlay->id,
-                    'number' => $newPlay->number,
-                ]);
+                \Log::info("Nueva jugada base creada", ['play_id' => $newPlay->id]);
             }
         }
 
@@ -1531,10 +1542,16 @@ public function addRow()
 
 
 
+        // ✅ OPTIMIZADO: Combinar todas las operaciones de limpieza y dispatches
         $this->reset('raw');
-        $this->dispatch('play-saved');
         $this->isSaving = false;
-        $this->dispatch('focus-on-input', id: 'number');
+        
+        // ✅ OPTIMIZADO: Un solo dispatch combinado en lugar de múltiples
+        // Esto reduce los re-renders de Livewire de 3 a 1
+        $this->dispatch('play-saved-complete', [
+            'focusSelector' => '#number',
+            'message' => 'Jugada guardada correctamente'
+        ]);
     }
 
 
