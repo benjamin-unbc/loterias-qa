@@ -276,6 +276,52 @@ class Liquidations extends Component
             'total_gana_pase' => $prevTotalGanaPase,
         ];
     }
+    
+    /**
+     * Obtiene el ajuste de pagos para una fecha específica y cliente
+     * Retorna el monto que se debe aplicar al udDeja del día siguiente
+     */
+    protected function getPaymentsForDate(int $userId, string $date): float
+    {
+        try {
+            // Obtener el cliente asociado al usuario
+            $user = \App\Models\User::find($userId);
+            if (!$user) {
+                return 0.0;
+            }
+            
+            $client = \App\Models\Client::where('correo', $user->email)->first();
+            if (!$client) {
+                return 0.0;
+            }
+            
+            $payments = ClientPayment::where('client_id', $client->id)
+                ->whereDate('payment_date', $date)
+                ->get();
+            
+            if ($payments->isEmpty()) {
+                return 0.0;
+            }
+            
+            // Calcular el ajuste total
+            // Si es pago al cliente (paid_to_client), se resta del udDeja (retorna negativo)
+            // Si es pago del cliente (received_from_client), se suma al udDeja (retorna positivo, reduce deuda negativa)
+            $adjustment = 0;
+            foreach ($payments as $payment) {
+                if ($payment->type === 'paid_to_client') {
+                    $adjustment -= $payment->amount; // Se resta del udDeja
+                } else {
+                    $adjustment += $payment->amount; // Se suma al udDeja (reduce deuda negativa)
+                }
+            }
+            
+            return (float) $adjustment;
+        } catch (\Exception $e) {
+            // Si hay algún error, retornar 0
+            \Log::warning('Error al obtener pagos para fecha en Liquidations: ' . $e->getMessage());
+            return 0.0;
+        }
+    }
 
     /**
      * ✅ NUEVO: Ordena los resultados por turno (de más temprano a más tarde)
