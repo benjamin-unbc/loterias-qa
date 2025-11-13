@@ -55,14 +55,23 @@ class ClientDetailsModal extends Component
         $this->liquidacionesDate = now()->subDay()->toDateString(); // Ayer por defecto
     }
 
-    public function openClientDetails($data = null)
+    public function openClientDetails(...$args)
     {
         try {
-            // Si viene como array desde el evento
-            if (is_array($data)) {
-                $clientId = $data['clientId'] ?? $data['client_id'] ?? null;
-            } else {
-                $clientId = $data;
+            // Obtener clientId de los argumentos
+            $clientId = null;
+            
+            if (isset($args[0])) {
+                $firstArg = $args[0];
+                
+                // Si es un array, obtener el primer elemento o buscar por clave
+                if (is_array($firstArg)) {
+                    $clientId = $firstArg['clientId'] ?? $firstArg['client_id'] ?? $firstArg[0] ?? null;
+                } 
+                // Si es un número directo
+                elseif (is_numeric($firstArg)) {
+                    $clientId = $firstArg;
+                }
             }
             
             if (!$clientId) {
