@@ -45,7 +45,7 @@ class ClientDetailsModal extends Component
     public $showTicketModal = false;
     public $selectedTicket = null;
 
-    protected $listeners = ['openClientDetails' => 'openModal'];
+    protected $listeners = ['openClientDetails'];
 
     public function mount()
     {
@@ -55,21 +55,27 @@ class ClientDetailsModal extends Component
         $this->liquidacionesDate = now()->subDay()->toDateString(); // Ayer por defecto
     }
 
-    public function openModal($clientId = null)
+    public function openClientDetails($data = null)
     {
-        // Si viene como array desde el evento
-        if (is_array($clientId) && isset($clientId['clientId'])) {
-            $clientId = $clientId['clientId'];
+        try {
+            // Si viene como array desde el evento
+            if (is_array($data)) {
+                $clientId = $data['clientId'] ?? $data['client_id'] ?? null;
+            } else {
+                $clientId = $data;
+            }
+            
+            if (!$clientId) {
+                return;
+            }
+            
+            $this->client = Client::findOrFail($clientId);
+            $this->showModal = true;
+            $this->activeTab = 'jugadas';
+            $this->resetPage();
+        } catch (\Exception $e) {
+            \Log::error('Error en openClientDetails: ' . $e->getMessage());
         }
-        
-        if (!$clientId) {
-            return;
-        }
-        
-        $this->client = Client::findOrFail($clientId);
-        $this->showModal = true;
-        $this->activeTab = 'jugadas';
-        $this->resetPage();
     }
 
     public function closeModal()
