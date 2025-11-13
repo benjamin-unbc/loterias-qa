@@ -66,10 +66,37 @@
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     @foreach($citySchedules as $cityName => $schedules)
+                        @php
+                            // Mapeo de nombres de ciudades a sus abreviaciones
+                            $cityAbbreviations = [
+                                'CIUDAD' => 'NAC',
+                                'CHACO' => 'CHA',
+                                'PROVINCIA' => 'PRO',
+                                'MENDOZA' => 'MZA',
+                                'CORRIENTES' => 'CTE',
+                                'SANTA FE' => 'SFE',
+                                'CORDOBA' => 'COR',
+                                'ENTRE RIOS' => 'RIO',
+                                'MONTEVIDEO' => 'ORO',
+                                'NEUQUEN' => 'NQN',
+                                'MISIONES' => 'MIS',
+                                'JUJUY' => 'JUJ',
+                                'SALTA' => 'SAL',
+                                'RIO NEGRO' => 'RNG',
+                                'TUCUMAN' => 'TUC',
+                                'SANTIAGO DEL ESTERO' => 'SDE',
+                            ];
+                            $abbreviation = $cityAbbreviations[strtoupper($cityName)] ?? '';
+                        @endphp
                         <div class="bg-[#1a1a1a] rounded-lg p-3 border border-gray-500">
                             <!-- Header de la ciudad -->
                             <div class="flex items-center gap-2 mb-3">
-                                <h4 class="text-white font-medium text-sm">{{ $cityName }}</h4>
+                                <h4 class="text-white font-medium text-sm">
+                                    {{ $cityName }}
+                                    @if($abbreviation)
+                                        <span class="text-yellow-400 font-semibold ml-1">({{ $abbreviation }})</span>
+                                    @endif
+                                </h4>
                                 <button wire:click="toggleCitySchedules('{{ $cityName }}')" 
                                         class="text-blue-400 hover:text-blue-300 text-xs underline">
                                     {{ count($selectedCitySchedules[$cityName] ?? []) === count($schedules ?? []) ? 'Ninguno' : 'Todos' }}
@@ -250,9 +277,35 @@
                                     @php
                                         $totalSelected += count($schedules ?? []);
                                         $citiesWithSelection++;
+                                        // Mapeo de nombres de ciudades a sus abreviaciones
+                                        $cityAbbreviations = [
+                                            'CIUDAD' => 'NAC',
+                                            'CHACO' => 'CHA',
+                                            'PROVINCIA' => 'PRO',
+                                            'MENDOZA' => 'MZA',
+                                            'CORRIENTES' => 'CTE',
+                                            'SANTA FE' => 'SFE',
+                                            'CORDOBA' => 'COR',
+                                            'ENTRE RIOS' => 'RIO',
+                                            'MONTEVIDEO' => 'ORO',
+                                            'NEUQUEN' => 'NQN',
+                                            'MISIONES' => 'MIS',
+                                            'JUJUY' => 'JUJ',
+                                            'SALTA' => 'SAL',
+                                            'RIO NEGRO' => 'RNG',
+                                            'TUCUMAN' => 'TUC',
+                                            'SANTIAGO DEL ESTERO' => 'SDE',
+                                        ];
+                                        $abbreviation = $cityAbbreviations[strtoupper($cityName)] ?? '';
                                     @endphp
                                     <div class="mb-2">
-                                        <span class="text-blue-400 font-medium">{{ $cityName }}:</span>
+                                        <span class="text-blue-400 font-medium">
+                                            {{ $cityName }}
+                                            @if($abbreviation)
+                                                <span class="text-yellow-400 font-semibold">({{ $abbreviation }})</span>
+                                            @endif
+                                            :
+                                        </span>
                                         <div class="ml-2 mt-1">
                                             @php
                                                 $citySchedules = $this->citySchedules[$cityName] ?? [];
