@@ -103,7 +103,7 @@
                         </td>
                         <td class="px-6 py-4 text-left flex space-x-2 text-lg">
                             @can('ver clientes')
-                            <button wire:click="$dispatch('openClientDetails', { clientId: {{ $client->id }} })"
+                            <button wire:click="$dispatch('openClientDetails', ['clientId' => {{ $client->id }}])"
                                 class="font-medium text-white hover:text-yellow-200 transition-colors duration-200"
                                 title="Ver detalles del cliente">
                                 <i class="fa-solid fa-eye"></i>

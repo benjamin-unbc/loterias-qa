@@ -55,8 +55,17 @@ class ClientDetailsModal extends Component
         $this->liquidacionesDate = now()->subDay()->toDateString(); // Ayer por defecto
     }
 
-    public function openModal($clientId)
+    public function openModal($clientId = null)
     {
+        // Si viene como array desde el evento
+        if (is_array($clientId) && isset($clientId['clientId'])) {
+            $clientId = $clientId['clientId'];
+        }
+        
+        if (!$clientId) {
+            return;
+        }
+        
         $this->client = Client::findOrFail($clientId);
         $this->showModal = true;
         $this->activeTab = 'jugadas';
