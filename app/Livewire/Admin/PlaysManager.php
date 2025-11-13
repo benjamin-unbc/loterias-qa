@@ -66,6 +66,9 @@ class PlaysManager extends Component
     public $cachedGlobalConfig = []; // Configuración global cacheada
     public $uiCodeToCityNameMapping = []; // Mapeo pre-calculado de UI codes a city names
     
+    // ✅ OPTIMIZACIÓN CRÍTICA: Pre-calcular loterías filtradas para evitar consulta en cada render
+    public $filteredLotteries = []; // Loterías ya filtradas según configuración global
+    
     // ✅ OPTIMIZACIÓN CRÍTICA: Mapeo pre-calculado de códigos válidos (similar a código antiguo)
     // Esto evita validaciones en cada addRow() - se calcula una sola vez en mount()
     public $validCodesMap = []; // Mapeo directo: código => true/false (si es válido)
@@ -534,6 +537,18 @@ class PlaysManager extends Component
         // Esto evita bucles anidados en cada validación
         $this->uiCodeToCityNameMapping = [];
         $this->validCodesMap = []; // Inicializar mapeo de códigos válidos
+        
+        // ✅ OPTIMIZACIÓN CRÍTICA: Pre-calcular loterías filtradas para evitar consulta en cada render
+        $allLotteries = collect($this->lotteryGroups)->flatten(1)->unique('name');
+        $desiredOrder = ['CIUDAD', 'CHACO', 'PROVINCIA', 'MENDOZA', 'CORRIENTES', 'SANTA FE', 'CORDOBA', 'ENTRE RIOS', 'MONTEVIDEO'];
+        
+        $this->filteredLotteries = $allLotteries->filter(function($lottery) {
+            $selectedSchedules = $this->cachedGlobalConfig[$lottery['name']] ?? [];
+            return !empty($selectedSchedules);
+        })->sortBy(function($lottery) use ($desiredOrder) {
+            $pos = array_search($lottery['name'], $desiredOrder);
+            return $pos === false ? 999 : $pos;
+        })->values()->toArray();
         
         foreach ($this->lotteryGroups as $time => $lotteries) {
             foreach ($lotteries as $lottery) {
@@ -2859,6 +2874,10 @@ public function addRow()
             'total' => $total, // Pasar el total calculado
             
             'lotteryGroups' => $this->lotteryGroups, // Pasar los grupos de loterías
+            
+            'filteredLotteries' => $this->filteredLotteries, // ✅ OPTIMIZADO: Pasar loterías ya filtradas
+            
+            'savedPreferences' => $this->cachedGlobalConfig, // ✅ OPTIMIZADO: Pasar configuración cacheada en lugar de consultar BD
 
         ]);
     }

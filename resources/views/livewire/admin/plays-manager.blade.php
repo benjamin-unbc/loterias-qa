@@ -56,31 +56,7 @@
                                     <label for="all"
                                         class="font-medium select-none text-white text-xs">Todos</label>
                                 </th>
-                                    @if(isset($lotteryGroups) && !empty($lotteryGroups))
-                                        @php
-                                            // Obtener todas las loterías únicas para los headers
-                                            $allLotteries = collect($lotteryGroups)->flatten(1)->unique('name');
-                                            
-                                            // Obtener configuración global de quinielas
-                                            $savedPreferences = \App\Models\GlobalQuinielasConfiguration::all()
-                                                ->keyBy('city_name')
-                                                ->map(function($config) {
-                                                    return $config->selected_schedules;
-                                                });
-                                            
-                                            // Filtrar loterías según las preferencias guardadas
-                                            $filteredLotteries = $allLotteries->filter(function($lottery) use ($savedPreferences) {
-                                                $selectedSchedules = $savedPreferences[$lottery['name']] ?? [];
-                                                return !empty($selectedSchedules);
-                                            });
-                                            
-                                            // Ordenar según el orden específico: NAC, CHA, PRO, MZA, CTE, SFE, COR, RIO, ORO
-                                            $desiredOrder = ['CIUDAD', 'CHACO', 'PROVINCIA', 'MENDOZA', 'CORRIENTES', 'SANTA FE', 'CORDOBA', 'ENTRE RIOS', 'MONTEVIDEO'];
-                                            $filteredLotteries = $filteredLotteries->sortBy(function($lottery) use ($desiredOrder) {
-                                                $pos = array_search($lottery['name'], $desiredOrder);
-                                                return $pos === false ? 999 : $pos;
-                                            });
-                                        @endphp
+                                    @if(isset($filteredLotteries) && !empty($filteredLotteries))
                                         @foreach ($filteredLotteries as $lottery)
                                             <th class="text-[10px] text-white px-1 py-1">{{ $lottery['abbreviation'] ?? $lottery['name'] }}
                                             </th>
