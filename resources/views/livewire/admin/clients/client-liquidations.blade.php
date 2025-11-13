@@ -120,10 +120,6 @@
                                             <span class="font-medium text-green-400">${{ number_format($dayData['totalAciert'], 2, ',', '.') }}</span>
                                         </div>
                                         <div class="flex justify-between text-white">
-                                            <span class="text-gray-400">Deja Pase:</span>
-                                            <span class="font-medium">${{ number_format($dayData['totalGanaPase'], 2, ',', '.') }}</span>
-                                        </div>
-                                        <div class="flex justify-between text-white">
                                             <span class="text-gray-400">UD Deja:</span>
                                             <span class="font-medium">${{ number_format($dayData['udDeja'], 2, ',', '.') }}</span>
                                         </div>
@@ -332,10 +328,6 @@
                                             <!-- Cálculos principales -->
                                             <div class="flex flex-col pt-3 gap-1 border-b pb-2 w-full text-sm">
                                                 <div class="flex justify-between">
-                                                    <h4 class="font-medium">JUGADAS:</h4>
-                                                    <p>{{ number_format($liquidationData['totalApus'], 2) }}</p>
-                                                </div>
-                                                <div class="flex justify-between">
                                                     <h4 class="font-medium">TOTAL PASE:</h4>
                                                     <p>{{ number_format($liquidationData['totalApus'], 2) }}</p>
                                                 </div>
@@ -346,14 +338,6 @@
                                                 <div class="flex justify-between">
                                                     <h4 class="font-medium">TOT.ACIERT:</h4>
                                                     <p>{{ number_format($liquidationData['totalAciert'], 2) }}</p>
-                                                </div>
-                                            </div>
-
-                                            <!-- Deja pase -->
-                                            <div class="flex flex-col pt-3 gap-1 border-b pb-2 w-full text-sm">
-                                                <div class="flex justify-between">
-                                                    <h4 class="font-medium">DEJA PASE:</h4>
-                                                    <p>{{ number_format($liquidationData['totalGanaPase'], 2) }}</p>
                                                 </div>
                                             </div>
 

@@ -640,10 +640,6 @@
                                                 <!-- Cálculos principales -->
                                                 <div class="flex flex-col pt-3 gap-1 border-b pb-2 w-full text-sm">
                                                     <div class="flex justify-between">
-                                                        <h4 class="font-medium">JUGADAS:</h4>
-                                                        <p>{{ number_format($liquidacionData['totalApus'], 2) }}</p>
-                                                    </div>
-                                                    <div class="flex justify-between">
                                                         <h4 class="font-medium">TOTAL PASE:</h4>
                                                         <p>{{ number_format($liquidacionData['totalApus'], 2) }}</p>
                                                     </div>
@@ -654,14 +650,6 @@
                                                     <div class="flex justify-between">
                                                         <h4 class="font-medium">TOT.ACIERT:</h4>
                                                         <p>{{ number_format($liquidacionData['totalAciert'], 2) }}</p>
-                                                    </div>
-                                                </div>
-
-                                                <!-- Deja pase -->
-                                                <div class="flex flex-col pt-3 gap-1 border-b pb-2 w-full text-sm">
-                                                    <div class="flex justify-between">
-                                                        <h4 class="font-medium">DEJA PASE:</h4>
-                                                        <p>{{ number_format($liquidacionData['totalGanaPase'], 2) }}</p>
                                                     </div>
                                                 </div>
 
