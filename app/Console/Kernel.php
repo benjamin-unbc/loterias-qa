@@ -28,9 +28,9 @@ class Kernel extends ConsoleKernel
                  ->withoutOverlapping()
                  ->runInBackground();
         
-        // Actualización automática cada 2 minutos (no cada 30 segundos)
+        // Actualización automática cada 5 minutos (optimizado para mejor rendimiento)
         $schedule->command('lottery:auto-update')
-                 ->everyTwoMinutes()
+                 ->everyFiveMinutes()
                  ->between('10:00', '23:59')
                  ->withoutOverlapping()
                  ->runInBackground();
