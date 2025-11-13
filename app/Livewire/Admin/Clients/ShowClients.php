@@ -20,11 +20,29 @@ class ShowClients extends Component
     #[Layout('layouts.app')]
     public function render()
     {
-        $clients = Client::search($this->search)->paginate($this->cant);
+        try {
+            $clients = Client::search($this->search)->paginate($this->cant);
 
-        return view('livewire.admin.clients.show-clients', [
-            'clients' => $clients
-        ]);
+            return view('livewire.admin.clients.show-clients', [
+                'clients' => $clients
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error en ShowClients: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+            
+            return view('livewire.admin.clients.show-clients', [
+                'clients' => collect(),
+                'error' => $e->getMessage(),
+                'errorDetails' => config('app.debug') ? [
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'trace' => $e->getTraceAsString()
+                ] : null
+            ]);
+        }
     }
 
     /**

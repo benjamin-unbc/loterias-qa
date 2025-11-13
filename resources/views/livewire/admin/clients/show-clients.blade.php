@@ -1,5 +1,28 @@
 <div id="paginated-clients">
     <div class="bg-[#1b1f22] w-full h-full min-h-screen p-4 flex flex-col gap-3">
+        @if(isset($error))
+        <div class="bg-red-500/20 border border-red-500 rounded-lg p-4 mb-4">
+            <div class="flex items-center gap-2 mb-2">
+                <i class="fa-solid fa-triangle-exclamation text-red-400 text-xl"></i>
+                <h3 class="text-red-400 font-semibold text-lg">Error al cargar clientes</h3>
+            </div>
+            <p class="text-white mb-2"><strong>Mensaje:</strong> {{ $error }}</p>
+            @if(isset($errorDetails) && $errorDetails)
+            <div class="mt-3">
+                <details class="text-white">
+                    <summary class="cursor-pointer text-yellow-400 hover:text-yellow-300 mb-2">Ver detalles técnicos</summary>
+                    <div class="bg-[#1b1f22] p-3 rounded mt-2 text-sm overflow-auto max-h-96">
+                        <p class="mb-2"><strong>Archivo:</strong> {{ $errorDetails['file'] }}</p>
+                        <p class="mb-2"><strong>Línea:</strong> {{ $errorDetails['line'] }}</p>
+                        <p class="mb-2"><strong>Stack Trace:</strong></p>
+                        <pre class="text-xs bg-[#22272b] p-2 rounded overflow-auto">{{ $errorDetails['trace'] }}</pre>
+                    </div>
+                </details>
+            </div>
+            @endif
+        </div>
+        @endif
+        
         <div class="flex justify-between items-center pb-2">
             <div class="flex flex-col">
                 <h2 class="font-semibold text-xl text-white">{{ __('Lista Clientes') }}</h2>
@@ -103,7 +126,7 @@
                         </td>
                         <td class="px-6 py-4 text-left flex space-x-2 text-lg">
                             @can('ver clientes')
-                            <button wire:click="$dispatch('openClientDetails', ['clientId' => {{ $client->id }}])"
+                            <button wire:click="$dispatch('openClientDetails', { clientId: {{ $client->id }} })"
                                 class="font-medium text-white hover:text-yellow-200 transition-colors duration-200"
                                 title="Ver detalles del cliente">
                                 <i class="fa-solid fa-eye"></i>
