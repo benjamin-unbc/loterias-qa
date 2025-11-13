@@ -26,33 +26,12 @@
                             Semana
                         </th>
                         <th scope="col" class="px-6 py-3">
-                            Total Pase
-                        </th>
-                        <th scope="col" class="px-6 py-3">
-                            Comisión
-                        </th>
-                        <th scope="col" class="px-6 py-3">
-                            Total Aciertos
-                        </th>
-                        <th scope="col" class="px-6 py-3">
-                            Deja Pase
-                        </th>
-                        <th scope="col" class="px-6 py-3">
-                            UD Deja
-                        </th>
-                        <th scope="col" class="px-6 py-3">
-                            Arrastre
-                        </th>
-                        <th scope="col" class="px-6 py-3">
                             Acciones
                         </th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse($weeks as $week)
-                        @php
-                            $weekTotals = $this->computeWeekTotals($week['dates']);
-                        @endphp
                         <tr class="border-gray-600 bg-[#22272b] border-b text-white">
                             <td class="px-6 py-4">
                                 <div class="flex flex-col">
@@ -61,24 +40,6 @@
                                         ({{ count($week['dates']) }} día{{ count($week['dates']) > 1 ? 's' : '' }} con liquidación)
                                     </span>
                                 </div>
-                            </td>
-                            <td class="px-6 py-4">
-                                ${{ number_format($weekTotals['totalApus'], 2, ',', '.') }}
-                            </td>
-                            <td class="px-6 py-4">
-                                ${{ number_format($weekTotals['totalComision'], 2, ',', '.') }}
-                            </td>
-                            <td class="px-6 py-4">
-                                ${{ number_format($weekTotals['totalAciert'], 2, ',', '.') }}
-                            </td>
-                            <td class="px-6 py-4">
-                                ${{ number_format($weekTotals['totalGanaPase'], 2, ',', '.') }}
-                            </td>
-                            <td class="px-6 py-4">
-                                ${{ number_format($weekTotals['totalUdDeja'], 2, ',', '.') }}
-                            </td>
-                            <td class="px-6 py-4">
-                                ${{ number_format($weekTotals['totalArrastre'], 2, ',', '.') }}
                             </td>
                             <td class="px-6 py-4">
                                 <button wire:click="openWeekModal('{{ $week['monday'] }}')"
@@ -90,7 +51,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="px-6 py-8 text-center text-gray-400">
+                            <td colspan="2" class="px-6 py-8 text-center text-gray-400">
                                 No hay liquidaciones disponibles
                             </td>
                         </tr>
