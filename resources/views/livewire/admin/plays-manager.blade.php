@@ -43,18 +43,18 @@
             <div class="flex flex-col gap-2 border-2 border-transparent rounded-lg duration-200 {{ $editingRowId ? 'bg-[#343f328f] p-3 border-white/20 border-dashed' : '' }}">
                 <div class="flex items-center justify-center">
                     <div id="lottery-selection-box"
-                        class="flex items-center justify-center border-2 border-transparent bg-[#22272b] {{ $editingRowId ? 'p-3 border-white/20 border-dashed' : '' }} rounded-lg p-2 md:p-3 w-full">
+                        class="flex items-center justify-center border-2 border-transparent bg-[#22272b] {{ $editingRowId ? 'p-3 border-white/20 border-dashed' : '' }} rounded-lg p-2 md:p-3 max-w-fit mx-auto">
                         <div class="w-full overflow-x-auto">
-                            <table class="w-full text-center rounded-lg text-xs sm:text-sm min-w-max">
+                            <table class="text-center rounded-lg text-xs">
                         <thead>
-                            <tr class="text-[10px] md:text-xs">
-                                <th class="md:ps-1 py-1 flex items-center gap-1 sm:gap-2">
+                            <tr class="text-[10px]">
+                                <th class="px-1 py-1 flex items-center gap-1">
                                     <input type="checkbox" id="all"
-                                        class="w-5 h-5 2xl:w-6 2xl:h-6 bg-[#22272b] cursor-pointer border border-gray-300 rounded text-green-400 focus:ring-green-400"
+                                        class="w-5 h-5 bg-[#22272b] cursor-pointer border border-gray-300 rounded text-green-400 focus:ring-green-400"
                                         wire:click="toggleAllCheckboxes($event.target.checked)"
                                         aria-label="Seleccionar todos los horarios">
                                     <label for="all"
-                                        class="font-medium select-none text-white text-[11px] sm:text-xs md:text-sm">Todos</label>
+                                        class="font-medium select-none text-white text-xs">Todos</label>
                                 </th>
                                     @if(isset($lotteryGroups) && !empty($lotteryGroups))
                                         @php
@@ -82,7 +82,7 @@
                                             });
                                         @endphp
                                         @foreach ($filteredLotteries as $lottery)
-                                            <th class="text-[10px] sm:text-[10px] md:text-xs text-white">{{ $lottery['abbreviation'] ?? $lottery['name'] }}
+                                            <th class="text-[10px] text-white px-1 py-1">{{ $lottery['abbreviation'] ?? $lottery['name'] }}
                                             </th>
                                         @endforeach
                                     @endif
@@ -90,17 +90,17 @@
                         </thead>
                         <tbody>
                             @foreach ($horariosConEstado as $horario)
-                                <tr data-time="{{ $horario['time'] }}" class="h-full">
+                                <tr data-time="{{ $horario['time'] }}">
                                     <td
-                                        class="pt-[5px] pb-[4px] me-3 font-medium flex items-center h-full gap-1 sm:gap-2 md:p-1">
+                                        class="px-1 py-1 font-medium flex items-center gap-1">
                                         <input type="checkbox" id="time-{{ $horario['time'] }}-all"
-                                            class="w-5 h-5 2xl:w-6 2xl:h-6 bg-[#22272b] rounded border border-gray-300 {{ $horario['checkboxClass'] }}"
+                                            class="w-5 h-5 bg-[#22272b] rounded border border-gray-300 {{ $horario['checkboxClass'] }}"
                                             {{ $horario['disabledAttr'] }}
                                             wire:model="selected.{{ $horario['time'] }}"
                                             wire:click="toggleRowCheckboxes('{{ $horario['time'] }}', $event.target.checked)"
                                             aria-label="Seleccionar horario {{ $horario['time'] }}">
                                         <label for="time-{{ $horario['time'] }}-all"
-                                            class="select-none text-[11px] sm:text-xs md:text-sm text-white {{ $horario['textClass'] }}">
+                                            class="select-none text-xs text-white {{ $horario['textClass'] }}">
                                             {{ $horario['time'] }}
                                         </label>
                                     </td>
@@ -138,17 +138,17 @@
                                                     return $item['name'] === $lottery['name'];
                                                 }) + 1 : null;
                                             @endphp
-                                            <td class="p-1">
+                                            <td class="px-1 py-1">
                                                 @if($shouldShow && $lotteryInTime && $colIndex)
                                                     <input type="checkbox"
                                                         id="time-{{ $horario['time'] }}-col-{{ $colIndex }}"
-                                                        class="w-5 h-5 2xl:w-6 2xl:h-6 bg-[#22272b] rounded border border-gray-300 {{ $horario['checkboxClass'] }}"
+                                                        class="w-5 h-5 bg-[#22272b] rounded border border-gray-300 {{ $horario['checkboxClass'] }}"
                                                         {{ $horario['disabledAttr'] }}
                                                         wire:model="selected.{{ $horario['time'] }}_col_{{ $colIndex }}"
                                                         wire:click="toggleColumnCheckbox('{{ $horario['time'] }}', {{ $colIndex }}, $event.target.checked)"
                                                         aria-label="Seleccionar opción {{ $horario['time'] }} - Columna {{ $colIndex }}">
                                                 @else
-                                                    <div class="w-5 h-5 2xl:w-6 2xl:h-6"></div>
+                                                    <div class="w-5 h-5"></div>
                                                 @endif
                                             </td>
                                         @endforeach
@@ -977,4 +977,6 @@
         }
         </style>
     @endpush
+
+
 
