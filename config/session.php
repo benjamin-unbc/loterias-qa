@@ -103,17 +103,20 @@ return [
     'store' => env('SESSION_STORE'),
 
     /*
-    |--------------------------------------------------------------------------
-    | Session Sweeping Lottery
-    |--------------------------------------------------------------------------
-    |
-    | Some session drivers must manually sweep their storage location to get
-    | rid of old sessions from storage. Here are the chances that it will
-    | happen on a given request. By default, the odds are 2 out of 100.
-    |
-    */
+     |--------------------------------------------------------------------------
+     | Session Sweeping Lottery
+     |--------------------------------------------------------------------------
+     |
+     | Some session drivers must manually sweep their storage location to get
+     | rid of old sessions from storage. Here are the chances that it will
+     | happen on a given request. By default, the odds are 2 out of 100.
+     |
+     | OPTIMIZADO: Reducido de [2, 100] a [1, 100] para menos limpiezas
+     | y mejor rendimiento con SESSION_DRIVER=database
+     |
+     */
 
-    'lottery' => [2, 100],
+    'lottery' => [1, 100],
 
     /*
     |--------------------------------------------------------------------------
