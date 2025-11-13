@@ -5,10 +5,12 @@ namespace App\Livewire\Admin\Clients;
 use App\Models\Client;
 use App\Models\Result;
 use App\Models\ApusModel;
+use App\Models\ClientPayment;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Livewire\Attributes\Layout;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
 
 class ClientLiquidations extends Component
 {
@@ -24,6 +26,13 @@ class ClientLiquidations extends Component
     public $weekLiquidations = [];
     public $showFullLiquidationModal = false;
     public $fullLiquidationDate = null;
+    
+    // Propiedades para el modal de pago
+    public $showPaymentModal = false;
+    public $paymentDate = null;
+    public $paymentAmount = 0;
+    public $paymentNotes = '';
+    public $currentUdDeja = 0;
     
     public function mount($id)
     {
@@ -105,13 +114,26 @@ class ClientLiquidations extends Component
             
             // Solo agregar la semana si tiene al menos un día con liquidación
             if (!empty($weekDates)) {
+                // Obtener el último día de la semana con liquidación (sábado o el más reciente)
+                $lastDate = end($weekDates);
+                $liquidationData = $this->computeLiquidationDataForDate($lastDate, $this->client->associatedUser->id);
+                $clienteDeja = $liquidationData['udDeja'] ?? 0;
+                
+                // Detectar si es la semana actual
+                $today = Carbon::today();
+                $currentWeekMonday = $today->copy()->startOfWeek();
+                $isCurrentWeek = $currentMonday->format('Y-m-d') === $currentWeekMonday->format('Y-m-d');
+                
                 $weeks->push([
                     'monday' => $currentMonday->format('Y-m-d'),
                     'saturday' => $saturday->format('Y-m-d'),
                     'mondayFormatted' => $currentMonday->format('d-m-Y'),
                     'saturdayFormatted' => $saturday->format('d-m-Y'),
                     'dates' => $weekDates,
-                    'label' => "Semana {$currentMonday->format('d-m-Y')} hasta {$saturday->format('d-m-Y')}"
+                    'label' => "Semana {$currentMonday->format('d-m-Y')} hasta {$saturday->format('d-m-Y')}",
+                    'lastDate' => $lastDate,
+                    'clienteDeja' => $clienteDeja,
+                    'isCurrentWeek' => $isCurrentWeek
                 ]);
             }
             
@@ -180,6 +202,14 @@ class ClientLiquidations extends Component
         $clientPrevLiquidation = $this->getClientPreviousLiquidation($userId, $date);
         $prevClientDeja = $clientPrevLiquidation ? (float) $clientPrevLiquidation['ud_deja'] : 0;
         
+        // Aplicar los pagos registrados del día anterior
+        $previousDate = Carbon::parse($date)->subDay();
+        if ($selectedDate->isMonday()) {
+            $previousDate = $selectedDate->copy()->subDays(2); // Sábado anterior
+        }
+        $paymentsAdjustment = $this->getPaymentsForDate($previousDate->format('Y-m-d'));
+        $prevClientDeja += $paymentsAdjustment; // Sumar el ajuste (puede ser positivo o negativo)
+        
         if ($selectedDate->isSaturday()) {
             $comiDejaSem = ($totalGanaPase + $prevClientDeja) * 0.30;
             $udDeja = ($totalGanaPase + $prevClientDeja) - $comiDejaSem;
@@ -209,14 +239,25 @@ class ClientLiquidations extends Component
         ];
     }
     
-    protected function getClientPreviousLiquidation(int $userId, string $currentDate): ?array
+    protected function getClientPreviousLiquidation(int $userId, string $currentDate, bool $skipRecursion = false): ?array
     {
-        $previousDate = Carbon::parse($currentDate)->subDay();
+        $currentDateCarbon = Carbon::parse($currentDate);
         
-        $prevResultsQuery = Result::whereDate('date', $previousDate)->where('user_id', $userId);
+        // Si es lunes, buscar el sábado anterior (2 días atrás)
+        // Si es cualquier otro día, buscar el día anterior normal
+        if ($currentDateCarbon->isMonday()) {
+            $previousDate = $currentDateCarbon->copy()->subDays(2); // Sábado anterior
+        } else {
+            $previousDate = $currentDateCarbon->copy()->subDay(); // Día anterior
+        }
+        
+        $prevDateStr = $previousDate->format('Y-m-d');
+        
+        // Consulta de resultados filtrada por cliente
+        $prevResultsQuery = Result::whereDate('date', $prevDateStr)->where('user_id', $userId);
         $prevTotalAciert = (float) $prevResultsQuery->sum('aciert');
         
-        $prevApusQuery = ApusModel::whereDate('created_at', $previousDate)
+        $prevApusQuery = ApusModel::whereDate('created_at', $prevDateStr)
                                  ->where('user_id', $userId)
                                  ->whereHas('playsSent', function($query) {
                                      $query->where('status', '!=', 'I');
@@ -230,7 +271,24 @@ class ClientLiquidations extends Component
         $commissionPercentage = $this->client->commission_percentage ?? 20.00;
         $prevComision = $prevTotalApus * ($commissionPercentage / 100);
         $prevTotalGanaPase = $prevTotalApus - $prevComision - $prevTotalAciert;
-        $prevUdDeja = $prevTotalGanaPase;
+        
+        // Si skipRecursion es true, solo devolver el totalGanaPase (sin arrastre)
+        // Si es false, calcular recursivamente el udDeja del día anterior
+        if ($skipRecursion) {
+            $prevUdDeja = $prevTotalGanaPase;
+        } else {
+            // Calcular recursivamente el udDeja del día anterior
+            $prevPrevLiquidation = $this->getClientPreviousLiquidation($userId, $prevDateStr, true);
+            $prevPrevDeja = $prevPrevLiquidation ? (float) $prevPrevLiquidation['ud_deja'] : 0;
+            
+            // Calcular udDeja del día anterior
+            if ($previousDate->isSaturday()) {
+                $comiDejaSem = ($prevTotalGanaPase + $prevPrevDeja) * 0.30;
+                $prevUdDeja = ($prevTotalGanaPase + $prevPrevDeja) - $comiDejaSem;
+            } else {
+                $prevUdDeja = $prevTotalGanaPase + $prevPrevDeja;
+            }
+        }
         
         return [
             'ud_deja' => $prevUdDeja,
@@ -378,6 +436,117 @@ class ClientLiquidations extends Component
             // Si no se pudo determinar el turno, usar un valor alto para ponerlo al final
             return $turn ?? 9999;
         })->values();
+    }
+    
+    /**
+     * Obtiene el "Cliente Deja" (UD Deja) del día actual
+     */
+    public function getCurrentDayUdDejaProperty()
+    {
+        if (!$this->client || !$this->client->associatedUser) {
+            return 0;
+        }
+        
+        $today = Carbon::today()->format('Y-m-d');
+        $liquidationData = $this->computeLiquidationDataForDate($today, $this->client->associatedUser->id);
+        
+        return $liquidationData['udDeja'] ?? 0;
+    }
+    
+    /**
+     * Obtiene el ajuste de pagos para una fecha específica
+     * Retorna el monto que se debe aplicar al udDeja del día siguiente
+     * Negativo si se resta (pago al cliente), positivo si se suma (pago del cliente)
+     */
+    protected function getPaymentsForDate(string $date): float
+    {
+        try {
+            $payments = ClientPayment::where('client_id', $this->client->id)
+                ->whereDate('payment_date', $date)
+                ->get();
+            
+            if ($payments->isEmpty()) {
+                return 0.0;
+            }
+            
+            // Calcular el ajuste total
+            // Si es pago al cliente (paid_to_client), se resta del udDeja (retorna negativo)
+            // Si es pago del cliente (received_from_client), se suma al udDeja (retorna positivo, reduce deuda negativa)
+            $adjustment = 0;
+            foreach ($payments as $payment) {
+                if ($payment->type === 'paid_to_client') {
+                    $adjustment -= $payment->amount; // Se resta del udDeja
+                } else {
+                    $adjustment += $payment->amount; // Se suma al udDeja (reduce deuda negativa)
+                }
+            }
+            
+            return (float) $adjustment;
+        } catch (\Exception $e) {
+            // Si hay algún error (tabla no existe, etc.), retornar 0
+            \Log::warning('Error al obtener pagos para fecha: ' . $e->getMessage());
+            return 0.0;
+        }
+    }
+    
+    /**
+     * Abre el modal de pago para una fecha específica
+     */
+    public function openPaymentModal($date)
+    {
+        $this->paymentDate = $date;
+        $liquidationData = $this->computeLiquidationDataForDate($date, $this->client->associatedUser->id ?? null);
+        $this->currentUdDeja = $liquidationData['udDeja'] ?? 0;
+        $this->paymentAmount = 0;
+        $this->paymentNotes = '';
+        $this->showPaymentModal = true;
+    }
+    
+    /**
+     * Cierra el modal de pago
+     */
+    public function closePaymentModal()
+    {
+        $this->showPaymentModal = false;
+        $this->paymentDate = null;
+        $this->paymentAmount = 0;
+        $this->paymentNotes = '';
+        $this->currentUdDeja = 0;
+    }
+    
+    /**
+     * Guarda un pago
+     */
+    public function savePayment()
+    {
+        $this->validate([
+            'paymentDate' => 'required|date',
+            'paymentAmount' => 'required|numeric|min:0.01',
+        ], [
+            'paymentDate.required' => 'La fecha es requerida',
+            'paymentAmount.required' => 'El monto es requerido',
+            'paymentAmount.numeric' => 'El monto debe ser un número',
+            'paymentAmount.min' => 'El monto debe ser mayor a 0',
+        ]);
+        
+        // Determinar el tipo de pago basado en el UD Deja actual
+        $type = $this->currentUdDeja >= 0 ? 'paid_to_client' : 'received_from_client';
+        
+        // Crear el pago
+        ClientPayment::create([
+            'client_id' => $this->client->id,
+            'payment_date' => $this->paymentDate,
+            'amount' => $this->paymentAmount,
+            'type' => $type,
+            'notes' => $this->paymentNotes,
+            'created_by' => Auth::id(),
+        ]);
+        
+        // Cerrar el modal
+        $this->closePaymentModal();
+        
+        // Mostrar mensaje de éxito con SweetAlert
+        $this->dispatch('payment-saved', message: 'Pago registrado correctamente. Se verá reflejado en la siguiente liquidación.');
     }
     
     public function render()

@@ -4,6 +4,7 @@ namespace App\Livewire\Admin;
 
 use App\Models\Result; // Use the correct Result model
 use App\Models\DailyLiquidation;
+use App\Models\ClientPayment;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -166,6 +167,14 @@ class Liquidations extends Component
         $clientPrevLiquidation = $this->getClientPreviousLiquidation($user->id, $this->date);
         $prevClientDeja = $clientPrevLiquidation ? (float) $clientPrevLiquidation['ud_deja'] : 0;
         
+        // Aplicar los pagos registrados del día anterior
+        $previousDate = Carbon::parse($this->date)->subDay();
+        if ($selectedDate->isMonday()) {
+            $previousDate = $selectedDate->copy()->subDays(2); // Sábado anterior
+        }
+        $paymentsAdjustment = $this->getPaymentsForDate($user->id, $previousDate->format('Y-m-d'));
+        $prevClientDeja += $paymentsAdjustment; // Sumar el ajuste (puede ser positivo o negativo)
+        
         // Calcular arrastre individual del cliente
         if ($selectedDate->isSaturday()) {
             $comiDejaSem = ($totalGanaPase + $prevClientDeja) * 0.30;
@@ -204,18 +213,27 @@ class Liquidations extends Component
      * @param string $currentDate Fecha actual
      * @return array|null Datos de la liquidación anterior del cliente
      */
-    protected function getClientPreviousLiquidation(int $userId, string $currentDate): ?array
+    protected function getClientPreviousLiquidation(int $userId, string $currentDate, bool $skipRecursion = false): ?array
     {
-        // Buscar la fecha anterior con datos del cliente
-        $previousDate = Carbon::parse($currentDate)->subDay();
+        $currentDateCarbon = Carbon::parse($currentDate);
+        
+        // Si es lunes, buscar el sábado anterior (2 días atrás)
+        // Si es cualquier otro día, buscar el día anterior normal
+        if ($currentDateCarbon->isMonday()) {
+            $previousDate = $currentDateCarbon->copy()->subDays(2); // Sábado anterior
+        } else {
+            $previousDate = $currentDateCarbon->copy()->subDay(); // Día anterior
+        }
+        
+        $prevDateStr = $previousDate->format('Y-m-d');
         
         // Calcular liquidación del día anterior para este cliente específico
-        $prevResultsQuery = Result::query()->whereDate('date', $previousDate)->where('user_id', $userId);
+        $prevResultsQuery = Result::query()->whereDate('date', $prevDateStr)->where('user_id', $userId);
         $prevTotalAciert = (float) $prevResultsQuery->sum('aciert');
         
         // ✅ Excluir jugadas anuladas (status != 'I' en plays_sent)
         $prevApusQuery = \App\Models\ApusModel::query()
-            ->whereDate('created_at', $previousDate)
+            ->whereDate('created_at', $prevDateStr)
             ->where('user_id', $userId)
             ->whereHas('playsSent', function($query) {
                 $query->where('status', '!=', 'I');
@@ -233,9 +251,23 @@ class Liquidations extends Component
         $prevComision = $prevTotalApus * ($commissionPercentage / 100);
         $prevTotalGanaPase = $prevTotalApus - $prevComision - $prevTotalAciert;
         
-        // Para simplificar, asumimos que el cliente no tiene arrastre previo
-        // En un sistema más complejo, se podría almacenar el arrastre por cliente
-        $prevUdDeja = $prevTotalGanaPase;
+        // Si skipRecursion es true, solo devolver el totalGanaPase (sin arrastre)
+        // Si es false, calcular recursivamente el udDeja del día anterior
+        if ($skipRecursion) {
+            $prevUdDeja = $prevTotalGanaPase;
+        } else {
+            // Calcular recursivamente el udDeja del día anterior
+            $prevPrevLiquidation = $this->getClientPreviousLiquidation($userId, $prevDateStr, true);
+            $prevPrevDeja = $prevPrevLiquidation ? (float) $prevPrevLiquidation['ud_deja'] : 0;
+            
+            // Calcular udDeja del día anterior
+            if ($previousDate->isSaturday()) {
+                $comiDejaSem = ($prevTotalGanaPase + $prevPrevDeja) * 0.30;
+                $prevUdDeja = ($prevTotalGanaPase + $prevPrevDeja) - $comiDejaSem;
+            } else {
+                $prevUdDeja = $prevTotalGanaPase + $prevPrevDeja;
+            }
+        }
         
         return [
             'ud_deja' => $prevUdDeja,

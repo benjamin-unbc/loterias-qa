@@ -26,32 +26,61 @@
                             Semana
                         </th>
                         <th scope="col" class="px-6 py-3">
+                            Cliente Deja
+                        </th>
+                        <th scope="col" class="px-6 py-3">
                             Acciones
                         </th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse($weeks as $week)
-                        <tr class="border-gray-600 bg-[#22272b] border-b text-white">
+                        <tr class="border-gray-600 {{ ($week['isCurrentWeek'] ?? false) ? 'bg-yellow-900/20 border-yellow-500 border-2' : 'bg-[#22272b]' }} border-b text-white">
                             <td class="px-6 py-4">
-                                <div class="flex flex-col">
-                                    <span class="font-medium">{{ $week['label'] }}</span>
+                                <div class="flex flex-col gap-2">
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-medium">{{ $week['label'] }}</span>
+                                        @if($week['isCurrentWeek'] ?? false)
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-500 text-yellow-900 border border-yellow-600">
+                                                <i class="fa-solid fa-star mr-1"></i>Semana Actual
+                                            </span>
+                                        @endif
+                                    </div>
                                     <span class="text-gray-400 text-xs">
                                         ({{ count($week['dates']) }} día{{ count($week['dates']) > 1 ? 's' : '' }} con liquidación)
                                     </span>
                                 </div>
                             </td>
                             <td class="px-6 py-4">
-                                <button wire:click="openWeekModal('{{ $week['monday'] }}')"
-                                    class="font-medium text-yellow-200 hover:text-yellow-300 transition-colors duration-200"
-                                    title="Ver semana">
-                                    <i class="fa-solid fa-calendar"></i>
-                                </button>
+                                <div class="flex items-center gap-2">
+                                    <span class="font-semibold {{ ($week['clienteDeja'] ?? 0) >= 0 ? 'text-green-400' : 'text-red-400' }}">
+                                        ${{ number_format($week['clienteDeja'] ?? 0, 2, ',', '.') }}
+                                    </span>
+                                    @if(($week['clienteDeja'] ?? 0) >= 0)
+                                        <span class="text-xs text-gray-400">(Debe pagar)</span>
+                                    @else
+                                        <span class="text-xs text-gray-400">(Debe cobrar)</span>
+                                    @endif
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="flex items-center gap-3">
+                                    <button wire:click="openWeekModal('{{ $week['monday'] }}')"
+                                        class="font-medium text-yellow-200 hover:text-yellow-300 transition-colors duration-200"
+                                        title="Ver semana">
+                                        <i class="fa-solid fa-calendar"></i>
+                                    </button>
+                                    <button wire:click="openPaymentModal('{{ $week['lastDate'] ?? end($week['dates']) }}')"
+                                        class="font-medium text-blue-400 hover:text-blue-300 transition-colors duration-200"
+                                        title="Registrar pago">
+                                        <i class="fa-solid fa-dollar-sign"></i>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="2" class="px-6 py-8 text-center text-gray-400">
+                            <td colspan="3" class="px-6 py-8 text-center text-gray-400">
                                 No hay liquidaciones disponibles
                             </td>
                         </tr>
@@ -385,5 +414,183 @@
         </div>
     </div>
     @endif
+
+    <!-- Modal de Pago -->
+    @if($showPaymentModal)
+    <div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <!-- Background overlay -->
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" wire:click="closePaymentModal"></div>
+
+            <!-- Modal panel -->
+            <div class="inline-block align-bottom bg-[#1b1f22] rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <!-- Header -->
+                <div class="bg-[#22272b] px-6 py-4 border-b border-gray-600">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-lg font-semibold text-white">
+                                Registrar Pago
+                            </h3>
+                            <p class="text-sm text-gray-400">
+                                Fecha: {{ \Carbon\Carbon::parse($paymentDate)->format('d/m/Y') }}
+                            </p>
+                        </div>
+                        <button wire:click="closePaymentModal" class="text-gray-400 hover:text-white">
+                            <i class="fa-solid fa-times text-xl"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Content -->
+                <div class="bg-[#1b1f22] px-6 py-4">
+                    <!-- Cliente Deja Actual -->
+                    <div class="mb-4 p-3 rounded-lg {{ $currentUdDeja >= 0 ? 'bg-green-900/30 border border-green-700' : 'bg-red-900/30 border border-red-700' }}">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-300 text-sm">Cliente Deja:</span>
+                            <span class="font-semibold text-lg {{ $currentUdDeja >= 0 ? 'text-green-400' : 'text-red-400' }}">
+                                ${{ number_format($currentUdDeja, 2, ',', '.') }}
+                            </span>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-1">
+                            @if($currentUdDeja >= 0)
+                                El administrador debe pagar al cliente
+                            @else
+                                El cliente debe pagar al administrador
+                            @endif
+                        </p>
+                    </div>
+
+                    <!-- Formulario -->
+                    <form wire:submit.prevent="savePayment">
+                        <div class="space-y-4">
+                            <!-- Monto -->
+                            <div>
+                                <label for="paymentAmount" class="block text-sm font-medium text-gray-300 mb-2">
+                                    Monto del Pago
+                                </label>
+                                <div class="relative">
+                                    <input type="text" 
+                                        id="paymentAmount"
+                                        x-data="{
+                                            rawValue: ($wire.paymentAmount || '').toString(),
+                                            formatNumber(num) {
+                                                if (!num || num === '' || num === '0') return '';
+                                                let clean = num.toString().replace(/[^\d.,]/g, '');
+                                                clean = clean.replace(',', '.');
+                                                let parts = clean.split('.');
+                                                if (parts.length > 2) {
+                                                    clean = parts[0] + '.' + parts.slice(1).join('');
+                                                }
+                                                let number = parseFloat(clean);
+                                                if (isNaN(number)) return '';
+                                                return number.toLocaleString('es-ES', {
+                                                    minimumFractionDigits: 0,
+                                                    maximumFractionDigits: 2
+                                                });
+                                            },
+                                            getNumericValue(str) {
+                                                if (!str) return '';
+                                                return str.toString().replace(/\./g, '').replace(',', '.');
+                                            }
+                                        }"
+                                        x-effect="
+                                            if ($wire.paymentAmount !== undefined && $wire.paymentAmount !== null) {
+                                                rawValue = ($wire.paymentAmount || '').toString();
+                                                if (document.activeElement !== $el) {
+                                                    $el.value = formatNumber(rawValue);
+                                                }
+                                            }
+                                        "
+                                        x-on:input="
+                                            let numeric = getNumericValue($event.target.value);
+                                            rawValue = numeric;
+                                            $wire.paymentAmount = numeric;
+                                            $nextTick(() => {
+                                                if ($event.target === document.activeElement) {
+                                                    let formatted = formatNumber(numeric);
+                                                    if (formatted !== $event.target.value) {
+                                                        let cursorPos = $event.target.selectionStart;
+                                                        $event.target.value = formatted;
+                                                        // Intentar mantener la posición del cursor
+                                                        let newPos = Math.max(0, cursorPos - ($event.target.value.length - formatted.length));
+                                                        $event.target.setSelectionRange(newPos, newPos);
+                                                    }
+                                                }
+                                            });
+                                        "
+                                        x-on:focus="
+                                            if (rawValue) {
+                                                $event.target.value = rawValue;
+                                            }
+                                        "
+                                        x-on:blur="
+                                            let formatted = formatNumber(rawValue);
+                                            $event.target.value = formatted;
+                                        "
+                                        :value="formatNumber(rawValue)"
+                                        class="w-full px-3 py-2 bg-[#22272b] border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        placeholder="0"
+                                        required>
+                                </div>
+                                @error('paymentAmount')
+                                    <p class="mt-1 text-sm text-red-400">{{ $message }}</p>
+                                @enderror
+                            </div>
+
+                            <!-- Notas -->
+                            <div>
+                                <label for="paymentNotes" class="block text-sm font-medium text-gray-300 mb-2">
+                                    Notas (Opcional)
+                                </label>
+                                <textarea 
+                                    id="paymentNotes"
+                                    wire:model="paymentNotes" 
+                                    rows="3"
+                                    class="w-full px-3 py-2 bg-[#22272b] border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="Agregar notas sobre el pago..."></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Footer -->
+                        <div class="mt-6 flex justify-end gap-3">
+                            <button type="button" 
+                                wire:click="closePaymentModal"
+                                class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors">
+                                Cancelar
+                            </button>
+                            <button type="submit"
+                                class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
+                                Guardar Pago
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
 </div>
+
+@push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    document.addEventListener('livewire:init', function() {
+        Livewire.on('payment-saved', (event) => {
+            const data = event[0] || event;
+            const message = data?.message || 'Pago registrado correctamente. Se verá reflejado en la siguiente liquidación.';
+            
+            Swal.fire({
+                icon: 'success',
+                title: '¡Pago Registrado!',
+                text: message,
+                confirmButtonText: 'Aceptar',
+                confirmButtonColor: '#3b82f6',
+                background: '#1b1f22',
+                color: '#ffffff',
+                iconColor: '#3b82f6'
+            });
+        });
+    });
+</script>
+@endpush
 

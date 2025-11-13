@@ -77,6 +77,14 @@ class Client extends Authenticatable
     }
 
     /**
+     * Relación con los pagos del cliente
+     */
+    public function payments()
+    {
+        return $this->hasMany(ClientPayment::class);
+    }
+
+    /**
      * Delete the client and its associated user
      */
     public function deleteWithAssociatedUser()

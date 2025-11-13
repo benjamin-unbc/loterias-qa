@@ -8,6 +8,7 @@ use App\Models\Result;
 use App\Models\Extract;
 use App\Models\City;
 use App\Models\Number;
+use App\Models\ClientPayment;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Illuminate\Support\Facades\Auth;
@@ -297,9 +298,12 @@ class ClientDetailsModal extends Component
         return $results;
     }
 
-    public function getLiquidacionDataProperty()
+    /**
+     * Calcula los datos de liquidación para una fecha específica
+     */
+    protected function computeClientLiquidationDataForDate(string $date, int $userId): array
     {
-        if (!$this->client || !$this->client->associatedUser || !$this->liquidacionesDate) {
+        if (!$this->client || !$userId) {
             return [
                 'totalApus' => 0,
                 'comision' => 0,
@@ -314,14 +318,14 @@ class ClientDetailsModal extends Component
                 'matutinaTotalApus' => 0,
                 'tardeTotalApus' => 0,
                 'nocheTotalApus' => 0,
+                'comiDejaSem' => 0,
             ];
         }
 
-        $userId = $this->client->associatedUser->id;
-        $selectedDate = \Carbon\Carbon::parse($this->liquidacionesDate);
+        $selectedDate = \Carbon\Carbon::parse($date);
 
         // Consulta de resultados filtrada por cliente
-        $resultsQuery = Result::whereDate('date', $this->liquidacionesDate)
+        $resultsQuery = Result::whereDate('date', $date)
                              ->where('user_id', $userId);
         $allResults = $resultsQuery->get();
         
@@ -330,7 +334,7 @@ class ClientDetailsModal extends Component
 
         // Consulta de apuestas filtrada por cliente
         // ✅ Excluir jugadas anuladas (status != 'I' en plays_sent)
-        $apusQuery = \App\Models\ApusModel::whereDate('created_at', $this->liquidacionesDate)
+        $apusQuery = \App\Models\ApusModel::whereDate('created_at', $date)
                                          ->where('user_id', $userId)
                                          ->whereHas('playsSent', function($query) {
                                              $query->where('status', '!=', 'I');
@@ -354,8 +358,16 @@ class ClientDetailsModal extends Component
         $totalGanaPase = $totalApus - $comision - $totalAciert;
         
         // Para clientes, calcular arrastre basado en sus datos históricos
-        $clientPrevLiquidation = $this->getClientPreviousLiquidation($userId, $this->liquidacionesDate);
+        $clientPrevLiquidation = $this->getClientPreviousLiquidation($userId, $date);
         $prevClientDeja = $clientPrevLiquidation ? (float) $clientPrevLiquidation['ud_deja'] : 0;
+        
+        // Aplicar los pagos registrados del día anterior
+        $previousDate = \Carbon\Carbon::parse($date)->subDay();
+        if ($selectedDate->isMonday()) {
+            $previousDate = $selectedDate->copy()->subDays(2); // Sábado anterior
+        }
+        $paymentsAdjustment = $this->getPaymentsForDate($previousDate->format('Y-m-d'));
+        $prevClientDeja += $paymentsAdjustment; // Sumar el ajuste (puede ser positivo o negativo)
         
         // Calcular arrastre individual del cliente
         if ($selectedDate->isSaturday()) {
@@ -374,7 +386,7 @@ class ClientDetailsModal extends Component
             'totalAciert' => $totalAciert,
             'totalGanaPase' => $totalGanaPase,
             'anteri' => $prevClientDeja,
-            'udRecibe' => $totalAciert, // Corregido: debe ser totalAciert, no totalApus
+            'udRecibe' => $totalAciert,
             'udDeja' => $udDeja,
             'arrastre' => $arrastre,
             'previaTotalApus' => $previaTotalApus,
@@ -386,17 +398,49 @@ class ClientDetailsModal extends Component
         ];
     }
 
-    protected function getClientPreviousLiquidation(int $userId, string $currentDate): ?array
+    public function getLiquidacionDataProperty()
     {
-        // Buscar la fecha anterior con datos del cliente
-        $previousDate = \Carbon\Carbon::parse($currentDate)->subDay();
+        if (!$this->client || !$this->client->associatedUser || !$this->liquidacionesDate) {
+            return [
+                'totalApus' => 0,
+                'comision' => 0,
+                'totalAciert' => 0,
+                'totalGanaPase' => 0,
+                'anteri' => 0,
+                'udRecibe' => 0,
+                'udDeja' => 0,
+                'arrastre' => 0,
+                'previaTotalApus' => 0,
+                'mananaTotalApus' => 0,
+                'matutinaTotalApus' => 0,
+                'tardeTotalApus' => 0,
+                'nocheTotalApus' => 0,
+            ];
+        }
+
+        $userId = $this->client->associatedUser->id;
+        return $this->computeClientLiquidationDataForDate($this->liquidacionesDate, $userId);
+    }
+
+    protected function getClientPreviousLiquidation(int $userId, string $currentDate, bool $skipRecursion = false): ?array
+    {
+        $currentDateCarbon = \Carbon\Carbon::parse($currentDate);
         
-        // Calcular liquidación del día anterior para este cliente específico
-        $prevResultsQuery = Result::whereDate('date', $previousDate)->where('user_id', $userId);
+        // Si es lunes, buscar el sábado anterior (2 días atrás)
+        // Si es cualquier otro día, buscar el día anterior normal
+        if ($currentDateCarbon->isMonday()) {
+            $previousDate = $currentDateCarbon->copy()->subDays(2); // Sábado anterior
+        } else {
+            $previousDate = $currentDateCarbon->copy()->subDay(); // Día anterior
+        }
+        
+        $prevDateStr = $previousDate->format('Y-m-d');
+        
+        // Consulta de resultados filtrada por cliente
+        $prevResultsQuery = Result::whereDate('date', $prevDateStr)->where('user_id', $userId);
         $prevTotalAciert = (float) $prevResultsQuery->sum('aciert');
         
-        // ✅ Excluir jugadas anuladas (status != 'I' en plays_sent)
-        $prevApusQuery = \App\Models\ApusModel::whereDate('created_at', $previousDate)
+        $prevApusQuery = \App\Models\ApusModel::whereDate('created_at', $prevDateStr)
                                              ->where('user_id', $userId)
                                              ->whereHas('playsSent', function($query) {
                                                  $query->where('status', '!=', 'I');
@@ -404,17 +448,30 @@ class ClientDetailsModal extends Component
         $prevTotalApus = (float) $prevApusQuery->sum('import');
         
         if ($prevTotalApus == 0) {
-            return null; // No hay datos del cliente en la fecha anterior
+            return null;
         }
         
-        // Obtener la comisión personalizada del cliente para el cálculo anterior
         $commissionPercentage = $this->client->commission_percentage ?? 20.00;
         $prevComision = $prevTotalApus * ($commissionPercentage / 100);
         $prevTotalGanaPase = $prevTotalApus - $prevComision - $prevTotalAciert;
         
-        // Para simplificar, asumimos que el cliente no tiene arrastre previo
-        // En un sistema más complejo, se podría almacenar el arrastre por cliente
-        $prevUdDeja = $prevTotalGanaPase;
+        // Si skipRecursion es true, solo devolver el totalGanaPase (sin arrastre)
+        // Si es false, calcular recursivamente el udDeja del día anterior
+        if ($skipRecursion) {
+            $prevUdDeja = $prevTotalGanaPase;
+        } else {
+            // Calcular recursivamente el udDeja del día anterior
+            $prevPrevLiquidation = $this->getClientPreviousLiquidation($userId, $prevDateStr, true);
+            $prevPrevDeja = $prevPrevLiquidation ? (float) $prevPrevLiquidation['ud_deja'] : 0;
+            
+            // Calcular udDeja del día anterior
+            if ($previousDate->isSaturday()) {
+                $comiDejaSem = ($prevTotalGanaPase + $prevPrevDeja) * 0.30;
+                $prevUdDeja = ($prevTotalGanaPase + $prevPrevDeja) - $comiDejaSem;
+            } else {
+                $prevUdDeja = $prevTotalGanaPase + $prevPrevDeja;
+            }
+        }
         
         return [
             'ud_deja' => $prevUdDeja,
@@ -422,6 +479,45 @@ class ClientDetailsModal extends Component
             'total_aciert' => $prevTotalAciert,
             'total_gana_pase' => $prevTotalGanaPase,
         ];
+    }
+    
+    /**
+     * Obtiene el ajuste de pagos para una fecha específica
+     * Retorna el monto que se debe aplicar al udDeja del día siguiente
+     */
+    protected function getPaymentsForDate(string $date): float
+    {
+        try {
+            if (!$this->client) {
+                return 0.0;
+            }
+            
+            $payments = ClientPayment::where('client_id', $this->client->id)
+                ->whereDate('payment_date', $date)
+                ->get();
+            
+            if ($payments->isEmpty()) {
+                return 0.0;
+            }
+            
+            // Calcular el ajuste total
+            // Si es pago al cliente (paid_to_client), se resta del udDeja (retorna negativo)
+            // Si es pago del cliente (received_from_client), se suma al udDeja (retorna positivo, reduce deuda negativa)
+            $adjustment = 0;
+            foreach ($payments as $payment) {
+                if ($payment->type === 'paid_to_client') {
+                    $adjustment -= $payment->amount; // Se resta del udDeja
+                } else {
+                    $adjustment += $payment->amount; // Se suma al udDeja (reduce deuda negativa)
+                }
+            }
+            
+            return (float) $adjustment;
+        } catch (\Exception $e) {
+            // Si hay algún error, retornar 0
+            \Log::warning('Error al obtener pagos para fecha en ClientDetailsModal: ' . $e->getMessage());
+            return 0.0;
+        }
     }
 
     public function toggleExtractView()
