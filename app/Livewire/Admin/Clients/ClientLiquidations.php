@@ -48,9 +48,9 @@ class ClientLiquidations extends Component
     }
     
     /**
-     * Obtiene todas las fechas únicas con liquidaciones del cliente
+     * Obtiene todas las fechas únicas con liquidaciones del cliente agrupadas por semanas
      */
-    public function getLiquidationDatesProperty()
+    public function getLiquidationWeeksProperty()
     {
         if (!$this->client || !$this->client->associatedUser) {
             return collect();
@@ -67,8 +67,59 @@ class ClientLiquidations extends Component
             })
             ->unique()
             ->values();
+        
+        if ($dates->isEmpty()) {
+            return collect();
+        }
+        
+        // Obtener la primera y última fecha
+        $firstDate = Carbon::parse($dates->last());
+        $lastDate = Carbon::parse($dates->first());
+        
+        // Obtener el lunes de la primera semana
+        $firstMonday = $firstDate->copy()->startOfWeek();
+        // Obtener el lunes de la última semana
+        $lastMonday = $lastDate->copy()->startOfWeek();
+        
+        // Agrupar fechas por semanas (lunes a sábado)
+        $weeks = collect();
+        $datesCollection = $dates->toArray();
+        
+        // Iterar desde la primera semana hasta la última
+        $currentMonday = $firstMonday->copy();
+        
+        while ($currentMonday->lte($lastMonday)) {
+            $saturday = $currentMonday->copy()->addDays(5);
             
-        return $dates;
+            // Generar todas las fechas de la semana (lunes a sábado)
+            $weekDates = [];
+            for ($i = 0; $i < 6; $i++) {
+                $day = $currentMonday->copy()->addDays($i);
+                $dayStr = $day->format('Y-m-d');
+                
+                // Solo incluir si tiene liquidación
+                if (in_array($dayStr, $datesCollection)) {
+                    $weekDates[] = $dayStr;
+                }
+            }
+            
+            // Solo agregar la semana si tiene al menos un día con liquidación
+            if (!empty($weekDates)) {
+                $weeks->push([
+                    'monday' => $currentMonday->format('Y-m-d'),
+                    'saturday' => $saturday->format('Y-m-d'),
+                    'mondayFormatted' => $currentMonday->format('d-m-Y'),
+                    'saturdayFormatted' => $saturday->format('d-m-Y'),
+                    'dates' => $weekDates,
+                    'label' => "Semana {$currentMonday->format('d-m-Y')} hasta {$saturday->format('d-m-Y')}"
+                ]);
+            }
+            
+            // Avanzar a la siguiente semana (7 días después)
+            $currentMonday->addWeek();
+        }
+        
+        return $weeks->sortByDesc('monday')->values();
     }
     
     /**
@@ -190,15 +241,12 @@ class ClientLiquidations extends Component
     }
     
     /**
-     * Abre el modal de semana para una fecha específica
+     * Abre el modal de semana para una semana específica
      */
-    public function openWeekModal($date)
+    public function openWeekModal($mondayDate)
     {
-        $this->selectedDate = $date;
-        $selectedCarbon = Carbon::parse($date);
-        
-        // Obtener el lunes de esa semana
-        $monday = $selectedCarbon->copy()->startOfWeek();
+        $this->selectedDate = $mondayDate;
+        $monday = Carbon::parse($mondayDate);
         
         // Generar fechas de lunes a sábado
         $this->weekDates = [];
@@ -224,6 +272,44 @@ class ClientLiquidations extends Component
         }
         
         $this->showWeekModal = true;
+    }
+    
+    /**
+     * Calcula los totales de una semana
+     */
+    public function computeWeekTotals($weekDates)
+    {
+        if (!$this->client || !$this->client->associatedUser) {
+            return [
+                'totalApus' => 0,
+                'totalComision' => 0,
+                'totalAciert' => 0,
+                'totalGanaPase' => 0,
+                'totalUdDeja' => 0,
+                'totalArrastre' => 0,
+            ];
+        }
+        
+        $totals = [
+            'totalApus' => 0,
+            'totalComision' => 0,
+            'totalAciert' => 0,
+            'totalGanaPase' => 0,
+            'totalUdDeja' => 0,
+            'totalArrastre' => 0,
+        ];
+        
+        foreach ($weekDates as $date) {
+            $data = $this->computeLiquidationDataForDate($date, $this->client->associatedUser->id);
+            $totals['totalApus'] += $data['totalApus'];
+            $totals['totalComision'] += $data['comision'];
+            $totals['totalAciert'] += $data['totalAciert'];
+            $totals['totalGanaPase'] += $data['totalGanaPase'];
+            $totals['totalUdDeja'] += $data['udDeja'];
+            $totals['totalArrastre'] += $data['arrastre'];
+        }
+        
+        return $totals;
     }
     
     public function closeWeekModal()
@@ -296,11 +382,11 @@ class ClientLiquidations extends Component
     
     public function render()
     {
-        $dates = $this->liquidationDates;
+        $weeks = $this->liquidationWeeks;
         $firstDate = $this->firstLiquidationDate;
         
         return view('livewire.admin.clients.client-liquidations', [
-            'dates' => $dates,
+            'weeks' => $weeks,
             'firstDate' => $firstDate
         ]);
     }

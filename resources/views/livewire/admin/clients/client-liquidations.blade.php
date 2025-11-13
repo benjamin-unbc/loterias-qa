@@ -23,7 +23,7 @@
                 <thead class="text-xs text-white uppercase bg-gray-600">
                     <tr>
                         <th scope="col" class="px-6 py-3">
-                            Fecha
+                            Semana
                         </th>
                         <th scope="col" class="px-6 py-3">
                             Total Pase
@@ -43,45 +43,45 @@
                         <th scope="col" class="px-6 py-3">
                             Arrastre
                         </th>
-                            <th scope="col" class="px-6 py-3">
+                        <th scope="col" class="px-6 py-3">
                             Acciones
                         </th>
                     </tr>
                 </thead>
                 <tbody>
-                    @forelse($dates as $date)
+                    @forelse($weeks as $week)
                         @php
-                            $dateCarbon = \Carbon\Carbon::parse($date);
-                            $userId = $client->associatedUser->id ?? null;
-                            $liquidationData = $this->computeLiquidationDataForDate($date, $userId);
+                            $weekTotals = $this->computeWeekTotals($week['dates']);
                         @endphp
                         <tr class="border-gray-600 bg-[#22272b] border-b text-white">
                             <td class="px-6 py-4">
-                                {{ $dateCarbon->format('d/m/Y') }}
-                                <span class="text-gray-400 text-xs ml-2">
-                                    ({{ $dateCarbon->locale('es')->dayName }})
-                                </span>
+                                <div class="flex flex-col">
+                                    <span class="font-medium">{{ $week['label'] }}</span>
+                                    <span class="text-gray-400 text-xs">
+                                        ({{ count($week['dates']) }} día{{ count($week['dates']) > 1 ? 's' : '' }} con liquidación)
+                                    </span>
+                                </div>
                             </td>
                             <td class="px-6 py-4">
-                                ${{ number_format($liquidationData['totalApus'], 2, ',', '.') }}
+                                ${{ number_format($weekTotals['totalApus'], 2, ',', '.') }}
                             </td>
                             <td class="px-6 py-4">
-                                ${{ number_format($liquidationData['comision'], 2, ',', '.') }}
+                                ${{ number_format($weekTotals['totalComision'], 2, ',', '.') }}
                             </td>
                             <td class="px-6 py-4">
-                                ${{ number_format($liquidationData['totalAciert'], 2, ',', '.') }}
+                                ${{ number_format($weekTotals['totalAciert'], 2, ',', '.') }}
                             </td>
                             <td class="px-6 py-4">
-                                ${{ number_format($liquidationData['totalGanaPase'], 2, ',', '.') }}
+                                ${{ number_format($weekTotals['totalGanaPase'], 2, ',', '.') }}
                             </td>
                             <td class="px-6 py-4">
-                                ${{ number_format($liquidationData['udDeja'], 2, ',', '.') }}
+                                ${{ number_format($weekTotals['totalUdDeja'], 2, ',', '.') }}
                             </td>
                             <td class="px-6 py-4">
-                                ${{ number_format($liquidationData['arrastre'], 2, ',', '.') }}
+                                ${{ number_format($weekTotals['totalArrastre'], 2, ',', '.') }}
                             </td>
                             <td class="px-6 py-4">
-                                <button wire:click="openWeekModal('{{ $date }}')"
+                                <button wire:click="openWeekModal('{{ $week['monday'] }}')"
                                     class="font-medium text-yellow-200 hover:text-yellow-300 transition-colors duration-200"
                                     title="Ver semana">
                                     <i class="fa-solid fa-calendar"></i>
