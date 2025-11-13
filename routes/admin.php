@@ -55,6 +55,11 @@ Route::middleware([
             Route::get('/clients/store/{id?}', StoreClient::class)->name('clients.store')
                 ->middleware('permission:editar clientes|crear clientes');
         });
+        
+        //Clients liquidations
+        Route::group(['middleware' => ['permission:access_menu_liquidaciones']], function () {
+            Route::get('/clients/{id}/liquidations', \App\Livewire\Admin\Clients\ClientLiquidations::class)->name('clients.liquidations');
+        });
 
       
     });

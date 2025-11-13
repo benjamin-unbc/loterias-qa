@@ -596,9 +596,6 @@
                                                                     $firstLottery = !empty($uniqueDisplayCodes) ? $uniqueDisplayCodes[0] : '';
                                                                 @endphp
                                                                 {{ $firstLottery }}
-                                                                <span class="font-medium">
-                                                                    {{ substr($result->time, 0, 2) }}
-                                                                </span>
                                                             </div>
                                                             <div class="text-center text-nowrap px-4">{{ $result->number }}</div>
                                                             <div class="text-center text-nowrap px-4">{{ $result->position }}</div>

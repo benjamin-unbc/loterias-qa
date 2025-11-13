@@ -109,6 +109,13 @@
                                 <i class="fa-solid fa-eye"></i>
                             </button>
                             @endcan
+                            @can('access_menu_liquidaciones')
+                            <a href="{{ route('clients.liquidations', $client->id) }}"
+                                class="font-medium text-white hover:text-yellow-200 transition-colors duration-200"
+                                title="Ver liquidaciones del cliente">
+                                <i class="fa-solid fa-dollar-sign"></i>
+                            </a>
+                            @endcan
                             @can('editar clientes')
                             <a href="{{ route('clients.store', $client->id) }}"
                                 class="font-medium text-white hover:underline"><i
