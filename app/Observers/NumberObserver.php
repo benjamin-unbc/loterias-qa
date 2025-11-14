@@ -224,14 +224,15 @@ class NumberObserver
     
     /**
      * ✅ NUEVO: Verifica si la posición apostada es correcta según las reglas de quiniela
+     * ✅ MODIFICADO: Usa nuevos rangos (posición 10 busca 2-10, posición 20 busca 2-20)
      */
     private function isPositionCorrect($playedPosition, $winningPosition)
     {
-        // Reglas de quiniela:
+        // ✅ NUEVA LÓGICA:
         // - Posición 1 (Quiniela): Solo gana si sale en posición 1
         // - Posición 5: Gana si sale en posiciones 2-5
-        // - Posición 10: Gana si sale en posiciones 6-10  
-        // - Posición 20: Gana si sale en posiciones 11-20
+        // - Posición 10: Gana si sale en posiciones 2-10
+        // - Posición 20: Gana si sale en posiciones 2-20
         
         switch ($playedPosition) {
             case 1:
@@ -243,12 +244,12 @@ class NumberObserver
                 return $winningPosition >= 2 && $winningPosition <= 5;
                 
             case 10:
-                // A los 10: gana si sale en posiciones 6-10
-                return $winningPosition >= 6 && $winningPosition <= 10;
+                // A los 10: gana si sale en posiciones 2-10
+                return $winningPosition >= 2 && $winningPosition <= 10;
                 
             case 20:
-                // A los 20: gana si sale en posiciones 11-20
-                return $winningPosition >= 11 && $winningPosition <= 20;
+                // A los 20: gana si sale en posiciones 2-20
+                return $winningPosition >= 2 && $winningPosition <= 20;
                 
             default:
                 // Para otras posiciones, verificar coincidencia exacta
@@ -422,6 +423,7 @@ class NumberObserver
     /**
      * ✅ NUEVO: Obtiene el número ganador y la posición ganadora para una jugada
      * Retorna null si no es ganadora, o un array con isWinner, winningNumber y winningPosition
+     * ✅ MODIFICADO: Usa nuevos rangos (posición 10 busca 2-10, posición 20 busca 2-20)
      */
     private function getWinningNumberAndPosition($play, $completeNumbers, $lotteryCode)
     {
@@ -433,7 +435,10 @@ class NumberObserver
             return null;
         }
         
-        // ✅ CORREGIDO: Determinar rango permitido según posición apostada (REGLAS DE QUINIELA)
+        // ✅ NUEVA LÓGICA: Determinar rango permitido según posición apostada
+        // Posición 5: busca de 2-5
+        // Posición 10: busca de 2-10
+        // Posición 20: busca de 2-20
         $allowedIndexes = [];
         $playedPosition = (int)$play->position;
         
@@ -447,12 +452,12 @@ class NumberObserver
                 $allowedIndexes = range(2, 5);
                 break;
             case 10:
-                // A los 10: posiciones 6-10
-                $allowedIndexes = range(6, 10);
+                // A los 10: posiciones 2-10
+                $allowedIndexes = range(2, 10);
                 break;
             case 20:
-                // A los 20: posiciones 11-20
-                $allowedIndexes = range(11, 20);
+                // A los 20: posiciones 2-20
+                $allowedIndexes = range(2, 20);
                 break;
             default:
                 // Para otras posiciones específicas, solo esa posición
@@ -460,6 +465,7 @@ class NumberObserver
         }
 
         // Verificar si los números coinciden con alguno de los números ganadores completos EN POSICIÓN VÁLIDA
+        // Retornar el primero que encuentre (para mantener compatibilidad con código existente)
         foreach ($completeNumbers as $number) {
             if (!in_array((int)$number->index, $allowedIndexes)) {
                 continue;
@@ -479,6 +485,7 @@ class NumberObserver
 
     /**
      * ✅ NUEVO: Calcula el premio para una lotería completa
+     * ✅ MODIFICADO: Ahora cuenta múltiples apariciones y usa pago base de la posición jugada
      */
     private function calculatePrizeForLotteryComplete($play, $completeNumbers, $lotteryCode)
     {
@@ -493,10 +500,13 @@ class NumberObserver
             // Solo calcular premio principal si NO hay redoblona
             $playedNumber = str_replace('*', '', $play->number);
             $playedDigits = strlen($playedNumber);
-
-            // ✅ CORREGIDO: Determinar rango permitido según posición apostada (REGLAS DE QUINIELA)
-            $allowedIndexes = [];
             $playedPosition = (int)$play->position;
+
+            // ✅ NUEVA LÓGICA: Determinar rango permitido según posición apostada
+            // Posición 5: busca de 2-5
+            // Posición 10: busca de 2-10
+            // Posición 20: busca de 2-20
+            $allowedIndexes = [];
             
             switch ($playedPosition) {
                 case 1:
@@ -508,49 +518,60 @@ class NumberObserver
                     $allowedIndexes = range(2, 5);
                     break;
                 case 10:
-                    // A los 10: posiciones 6-10
-                    $allowedIndexes = range(6, 10);
+                    // A los 10: posiciones 2-10
+                    $allowedIndexes = range(2, 10);
                     break;
                 case 20:
-                    // A los 20: posiciones 11-20
-                    $allowedIndexes = range(11, 20);
+                    // A los 20: posiciones 2-20
+                    $allowedIndexes = range(2, 20);
                     break;
                 default:
                     // Para otras posiciones específicas, solo esa posición
                     $allowedIndexes = [$playedPosition];
             }
 
+            // ✅ NUEVA LÓGICA: Contar cuántas veces sale el número en el rango válido
+            $winningCount = 0;
             foreach ($completeNumbers as $number) {
                 if (!in_array((int)$number->index, $allowedIndexes)) {
                     continue;
                 }
-                // ✅ Verificar tanto números como posición correcta
+                // Verificar tanto números como posición correcta
                 if ($this->isWinningPlay($play, $number->value, $number->index)) {
-                    // Posición 1 usa tabla Quiniela según dígitos apostados
-                    if ((int)$play->position === 1) {
-                        $payoutTable = self::$payoutTables['quiniela'] ?? null;
-                        if ($payoutTable) {
-                            $mult = 0;
-                            if ($playedDigits == 1) $mult = (float)($payoutTable->cobra_1_cifra ?? 0);
-                            elseif ($playedDigits == 2) $mult = (float)($payoutTable->cobra_2_cifra ?? 0);
-                            elseif ($playedDigits == 3) $mult = (float)($payoutTable->cobra_3_cifra ?? 0);
-                            elseif ($playedDigits == 4) $mult = (float)($payoutTable->cobra_4_cifra ?? 0);
-                            $mainPrize = $play->import * $mult;
-                        }
-                    } else {
-                        // Para posiciones 2-20, pagar según la POSICIÓN REAL donde salió
-                        if ($playedDigits == 1 || $playedDigits == 2) {
-                            $payoutTable = self::$payoutTables['prizes'] ?? null;
-                        } elseif ($playedDigits == 3) {
-                            $payoutTable = self::$payoutTables['figureOne'] ?? null;
-                        } else { // 4 dígitos
-                            $payoutTable = self::$payoutTables['figureTwo'] ?? null;
-                        }
-                        if ($payoutTable) {
-                            $mainPrize = $play->import * $this->getPositionMultiplier((int)$number->index, $payoutTable);
-                        }
+                    $winningCount++;
+                }
+            }
+
+            if ($winningCount > 0) {
+                // Posición 1 usa tabla Quiniela según dígitos apostados
+                if ($playedPosition === 1) {
+                    $payoutTable = self::$payoutTables['quiniela'] ?? null;
+                    if ($payoutTable) {
+                        $mult = 0;
+                        if ($playedDigits == 1) $mult = (float)($payoutTable->cobra_1_cifra ?? 0);
+                        elseif ($playedDigits == 2) $mult = (float)($payoutTable->cobra_2_cifra ?? 0);
+                        elseif ($playedDigits == 3) $mult = (float)($payoutTable->cobra_3_cifra ?? 0);
+                        elseif ($playedDigits == 4) $mult = (float)($payoutTable->cobra_4_cifra ?? 0);
+                        // Para posición 1, no se multiplica por veces (solo puede salir una vez)
+                        $mainPrize = $play->import * $mult;
                     }
-                    break;
+                } else {
+                    // ✅ NUEVA LÓGICA: Para posiciones 5, 10, 20 usar pago base de la posición JUGADA
+                    // Determinar tabla según dígitos
+                    if ($playedDigits == 1 || $playedDigits == 2) {
+                        $payoutTable = self::$payoutTables['prizes'] ?? null;
+                    } elseif ($playedDigits == 3) {
+                        $payoutTable = self::$payoutTables['figureOne'] ?? null;
+                    } else { // 4 dígitos
+                        $payoutTable = self::$payoutTables['figureTwo'] ?? null;
+                    }
+                    
+                    if ($payoutTable) {
+                        // ✅ Usar pago base de la posición JUGADA, no de donde salió
+                        $baseMultiplier = $this->getPositionMultiplier($playedPosition, $payoutTable);
+                        // Multiplicar: pago base × veces que salió × importe
+                        $mainPrize = $baseMultiplier * $winningCount * $play->import;
+                    }
                 }
             }
         }

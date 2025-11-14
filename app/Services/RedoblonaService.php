@@ -58,6 +58,7 @@ class RedoblonaService
     /**
      * Calcula el premio de redoblona según las nuevas especificaciones
      * IMPORTANTE: Cuando hay redoblona, se paga TODO como redoblona, no por tablas separadas
+     * ✅ MODIFICADO: Ahora cuenta múltiples apariciones de la redoblona
      */
     public function calculateRedoblonaPrize($play, $date, $lotteryCode): float
     {
@@ -73,7 +74,34 @@ class RedoblonaService
             return 0;
         }
 
-        // Buscar números ganadores en el rango de posiciones de redoblona
+        // ✅ NUEVA LÓGICA: Primero validar que el primer número (jugada principal) sea ganador
+        $mainRange = $this->getMainPositionRange($play->position);
+        $mainNumbers = Number::with(['city', 'extract'])
+            ->whereHas('city', function($query) use ($lotteryCode) {
+                $query->where('code', $lotteryCode);
+            })
+            ->whereBetween('index', [$mainRange['min'], $mainRange['max']])
+            ->whereDate('date', $date)
+            ->get();
+
+        $isMainWinner = false;
+        foreach ($mainNumbers as $mainNumber) {
+            if ($this->isMainWinner($play->number, $mainNumber->value)) {
+                $isMainWinner = true;
+                Log::info("RedoblonaService - Número principal ganador: {$play->number} vs {$mainNumber->value} en posición {$mainNumber->index}");
+                break;
+            }
+        }
+
+        if (!$isMainWinner) {
+            Log::info("RedoblonaService - Número principal NO ganador: {$play->number}");
+            return 0;
+        }
+
+        // ✅ NUEVA LÓGICA: Buscar números ganadores en el rango de posiciones de redoblona
+        // Posición 5: busca de 2-5
+        // Posición 10: busca de 2-10
+        // Posición 20: busca de 2-20
         $redoblonaRange = $this->getRedoblonaPositionRange($play->positionR);
         $redoblonaNumbers = Number::with(['city', 'extract'])
             ->whereHas('city', function($query) use ($lotteryCode) {
@@ -88,47 +116,92 @@ class RedoblonaService
             return 0;
         }
 
-        // Verificar si la redoblona es ganadora en algún número del rango
-        $isRedoblonaWinner = false;
+        // ✅ NUEVA LÓGICA: Contar cuántas veces sale la redoblona en el rango válido
+        $redoblonaWinningCount = 0;
         foreach ($redoblonaNumbers as $redoblonaNumber) {
             if ($this->isRedoblonaWinner($play->numberR, $redoblonaNumber->value)) {
-                $isRedoblonaWinner = true;
-                Log::info("RedoblonaService - Redoblona ganadora: {$play->numberR} vs {$redoblonaNumber->value} en posición {$redoblonaNumber->index}");
-                break;
+                $redoblonaWinningCount++;
+                Log::info("RedoblonaService - Redoblona ganadora encontrada: {$play->numberR} vs {$redoblonaNumber->value} en posición {$redoblonaNumber->index} (aparición #{$redoblonaWinningCount})");
             }
         }
 
-        if (!$isRedoblonaWinner) {
+        if ($redoblonaWinningCount == 0) {
             Log::info("RedoblonaService - Redoblona no ganadora en rango {$redoblonaRange['min']}-{$redoblonaRange['max']}");
             return 0;
         }
 
         // IMPORTANTE: Cuando hay redoblona, se paga TODO como redoblona
         // No se paga por las tablas normales (Quiniela, Prizes, FigureOne, FigureTwo)
-        $prize = $this->calculatePrizeByMainPosition($play->position, $play->positionR, $play->import);
+        // ✅ NUEVA LÓGICA: Multiplicar pago base × veces que salió × importe
+        $basePrize = $this->calculatePrizeByMainPosition($play->position, $play->positionR, 1); // Pago base para importe 1
+        $prize = $basePrize * $redoblonaWinningCount * $play->import;
         
-        Log::info("RedoblonaService - Premio TOTAL como redoblona: {$prize} para jugada {$play->number} en posición {$play->position}, redoblona {$play->numberR} en posición {$play->positionR}");
+        Log::info("RedoblonaService - Premio TOTAL como redoblona: {$prize} (base: {$basePrize} × veces: {$redoblonaWinningCount} × importe: {$play->import}) para jugada {$play->number} en posición {$play->position}, redoblona {$play->numberR} en posición {$play->positionR}");
         
         return $prize;
     }
 
     /**
-     * Obtiene el rango de posiciones para la redoblona (igual que las jugadas normales)
+     * Obtiene el rango de posiciones para el número principal
+     * ✅ NUEVA LÓGICA: Posición 5 busca 2-5, posición 10 busca 2-10, posición 20 busca 2-20
      */
-    private function getRedoblonaPositionRange($position): array
+    private function getMainPositionRange($position): array
     {
-        // Misma lógica que las jugadas normales
         if ($position == 1) {
             return ['min' => 1, 'max' => 1];
+        } elseif ($position == 5) {
+            return ['min' => 2, 'max' => 5];
+        } elseif ($position == 10) {
+            return ['min' => 2, 'max' => 10];
+        } elseif ($position == 20) {
+            return ['min' => 2, 'max' => 20];
         } elseif ($position >= 2 && $position <= 5) {
             return ['min' => 2, 'max' => 5];
         } elseif ($position >= 6 && $position <= 10) {
-            return ['min' => 6, 'max' => 10];
+            return ['min' => 2, 'max' => 10];
         } elseif ($position >= 11 && $position <= 20) {
-            return ['min' => 11, 'max' => 20];
+            return ['min' => 2, 'max' => 20];
         }
         
         return ['min' => $position, 'max' => $position];
+    }
+
+    /**
+     * Obtiene el rango de posiciones para la redoblona (igual que las jugadas normales)
+     * ✅ MODIFICADO: Posición 5 busca 2-5, posición 10 busca 2-10, posición 20 busca 2-20
+     */
+    private function getRedoblonaPositionRange($position): array
+    {
+        if ($position == 1) {
+            return ['min' => 1, 'max' => 1];
+        } elseif ($position == 5) {
+            return ['min' => 2, 'max' => 5];
+        } elseif ($position == 10) {
+            return ['min' => 2, 'max' => 10];
+        } elseif ($position == 20) {
+            return ['min' => 2, 'max' => 20];
+        } elseif ($position >= 2 && $position <= 5) {
+            return ['min' => 2, 'max' => 5];
+        } elseif ($position >= 6 && $position <= 10) {
+            return ['min' => 2, 'max' => 10];
+        } elseif ($position >= 11 && $position <= 20) {
+            return ['min' => 2, 'max' => 20];
+        }
+        
+        return ['min' => $position, 'max' => $position];
+    }
+
+    /**
+     * Verifica si el número principal es ganador
+     */
+    private function isMainWinner($playNumber, $winningNumber): bool
+    {
+        $playNumber = str_replace('*', '', $playNumber);
+        $winningNumberStr = str_pad($winningNumber, 4, '0', STR_PAD_LEFT);
+        $playLength = strlen($playNumber);
+        $winningSuffix = substr($winningNumberStr, -$playLength);
+
+        return $playNumber === $winningSuffix;
     }
 
     /**
