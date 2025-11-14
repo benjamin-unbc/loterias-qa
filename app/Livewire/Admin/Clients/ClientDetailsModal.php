@@ -370,14 +370,35 @@ class ClientDetailsModal extends Component
         $prevClientDeja += $paymentsAdjustment; // Sumar el ajuste (puede ser positivo o negativo)
         
         // Calcular arrastre individual del cliente
+        // Obtener el porcentaje semanal del cliente
+        $weeklyCommissionPercentage = $this->client->weekly_commission_percentage ?? 30.00;
+        
         if ($selectedDate->isSaturday()) {
-            $comiDejaSem = ($totalGanaPase + $prevClientDeja) * 0.30;
-            $udDeja = ($totalGanaPase + $prevClientDeja) - $comiDejaSem;
+            // Solo aplicar comisión semanal si el porcentaje es positivo
+            if ($weeklyCommissionPercentage > 0) {
+                $comiDejaSem = ($totalGanaPase + $prevClientDeja) * ($weeklyCommissionPercentage / 100);
+                $udDeja = ($totalGanaPase + $prevClientDeja) - $comiDejaSem;
+            } else {
+                $comiDejaSem = 0;
+                $udDeja = $totalGanaPase + $prevClientDeja;
+            }
             $arrastre = 0;
         } else {
             $comiDejaSem = null;
-            $udDeja = $totalGanaPase + $prevClientDeja;
-            $arrastre = $udDeja;
+            // Si es lunes y el porcentaje semanal del sábado anterior fue 0 o negativo, no aplicar arrastre
+            if ($selectedDate->isMonday()) {
+                // Verificar el porcentaje semanal del cliente
+                if ($weeklyCommissionPercentage <= 0) {
+                    $udDeja = $totalGanaPase;
+                    $arrastre = 0;
+                } else {
+                    $udDeja = $totalGanaPase + $prevClientDeja;
+                    $arrastre = $udDeja;
+                }
+            } else {
+                $udDeja = $totalGanaPase + $prevClientDeja;
+                $arrastre = $udDeja;
+            }
         }
         
         return [

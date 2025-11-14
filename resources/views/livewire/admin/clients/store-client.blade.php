@@ -136,10 +136,16 @@
                 @endif
             </div>
             <div class="">
-                <x-label for="commission_percentage" value="{{ __('Porcentaje Comisión (%)') }}" />
-                <x-input id="commission_percentage" type="number" step="0.01" min="0" max="100" class="mt-1 block w-full" wire:model.live="commission_percentage" placeholder="20.00" required />
+                <x-label for="commission_percentage" value="{{ __('Porcentaje Comisión Diaria (%)') }}" />
+                <x-input id="commission_percentage" type="number" step="0.01" class="mt-1 block w-full" wire:model.live="commission_percentage" placeholder="20.00" required />
                 <x-input-error for="commission_percentage" class="mt-2" />
-                <p class="mt-1 text-sm text-gray-400">Porcentaje de comisión que se aplicará a las apuestas del cliente</p>
+                <p class="mt-1 text-sm text-gray-400">Porcentaje de comisión diaria que se aplicará a las apuestas del cliente</p>
+            </div>
+            <div class="">
+                <x-label for="weekly_commission_percentage" value="{{ __('Porcentaje Comisión Semanal (%)') }}" />
+                <x-input id="weekly_commission_percentage" type="number" step="0.01" min="0" max="100" class="mt-1 block w-full" wire:model.live="weekly_commission_percentage" placeholder="30.00" required />
+                <x-input-error for="weekly_commission_percentage" class="mt-2" />
+                <p class="mt-1 text-sm text-gray-400">Porcentaje de comisión semanal que se aplicará solo los sábados. Debe ser positivo (≥ 0)</p>
             </div>
             <div>
                 <x-label for="is_active" value="{{ __('Estado') }}" />

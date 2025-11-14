@@ -20,6 +20,7 @@ class StoreClient extends Component
     public $nombre, $apellido, $correo, $nombre_fantasia, $password;
     public bool $is_active = true;
     public $commission_percentage = 20.00;
+    public $weekly_commission_percentage = 30.00;
     public $photo;
 
     /**
@@ -33,7 +34,8 @@ class StoreClient extends Component
             'correo' => ['required', 'email', 'regex:/@.+\..+/i'],
             'nombre_fantasia' => ['required', 'string', 'max:255'],
             'is_active' => ['required', 'boolean'],
-            'commission_percentage' => ['required', 'numeric', 'min:0', 'max:100'],
+            'commission_percentage' => ['required', 'numeric'],
+            'weekly_commission_percentage' => ['required', 'numeric', 'min:0', 'max:100'],
             'photo' => ['nullable', 'mimes:jpg,jpeg,png', 'max:1024'],
         ];
 
@@ -63,6 +65,7 @@ class StoreClient extends Component
             $this->nombre_fantasia = $this->client->nombre_fantasia;
             $this->is_active = $this->client->is_active;
             $this->commission_percentage = $this->client->commission_percentage ?? 20.00;
+            $this->weekly_commission_percentage = $this->client->weekly_commission_percentage ?? 30.00;
             $this->password = ''; // Don't pre-fill password
         } else {
             $this->action = 'create';
@@ -84,6 +87,7 @@ class StoreClient extends Component
             'nombre_fantasia' => $this->nombre_fantasia,
             'is_active' => $this->is_active,
             'commission_percentage' => $this->commission_percentage,
+            'weekly_commission_percentage' => $this->weekly_commission_percentage,
         ];
 
         // Manejar el logo de perfil

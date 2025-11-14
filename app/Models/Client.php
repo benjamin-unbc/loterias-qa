@@ -27,6 +27,7 @@ class Client extends Authenticatable
         'password',
         'is_active',
         'commission_percentage',
+        'weekly_commission_percentage',
         'profile_photo_path'
     ];
 
@@ -47,6 +48,7 @@ class Client extends Authenticatable
     protected $casts = [
         'is_active' => 'boolean',
         'commission_percentage' => 'decimal:2',
+        'weekly_commission_percentage' => 'decimal:2',
     ];
 
     /**

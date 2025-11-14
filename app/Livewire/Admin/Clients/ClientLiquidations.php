@@ -210,14 +210,35 @@ class ClientLiquidations extends Component
         $paymentsAdjustment = $this->getPaymentsForDate($previousDate->format('Y-m-d'));
         $prevClientDeja += $paymentsAdjustment; // Sumar el ajuste (puede ser positivo o negativo)
         
+        // Obtener el porcentaje semanal del cliente
+        $weeklyCommissionPercentage = $this->client->weekly_commission_percentage ?? 30.00;
+        
         if ($selectedDate->isSaturday()) {
-            $comiDejaSem = ($totalGanaPase + $prevClientDeja) * 0.30;
-            $udDeja = ($totalGanaPase + $prevClientDeja) - $comiDejaSem;
+            // Solo aplicar comisión semanal si el porcentaje es positivo
+            if ($weeklyCommissionPercentage > 0) {
+                $comiDejaSem = ($totalGanaPase + $prevClientDeja) * ($weeklyCommissionPercentage / 100);
+                $udDeja = ($totalGanaPase + $prevClientDeja) - $comiDejaSem;
+            } else {
+                $comiDejaSem = 0;
+                $udDeja = $totalGanaPase + $prevClientDeja;
+            }
             $arrastre = 0;
         } else {
             $comiDejaSem = null;
-            $udDeja = $totalGanaPase + $prevClientDeja;
-            $arrastre = $udDeja;
+            // Si es lunes y el porcentaje semanal del sábado anterior fue 0 o negativo, no aplicar arrastre
+            if ($selectedDate->isMonday()) {
+                // Verificar el porcentaje semanal del cliente
+                if ($weeklyCommissionPercentage <= 0) {
+                    $udDeja = $totalGanaPase;
+                    $arrastre = 0;
+                } else {
+                    $udDeja = $totalGanaPase + $prevClientDeja;
+                    $arrastre = $udDeja;
+                }
+            } else {
+                $udDeja = $totalGanaPase + $prevClientDeja;
+                $arrastre = $udDeja;
+            }
         }
         
         return [
@@ -282,9 +303,17 @@ class ClientLiquidations extends Component
             $prevPrevDeja = $prevPrevLiquidation ? (float) $prevPrevLiquidation['ud_deja'] : 0;
             
             // Calcular udDeja del día anterior
+            // Obtener el porcentaje semanal del cliente
+            $prevWeeklyCommissionPercentage = $this->client->weekly_commission_percentage ?? 30.00;
+            
             if ($previousDate->isSaturday()) {
-                $comiDejaSem = ($prevTotalGanaPase + $prevPrevDeja) * 0.30;
-                $prevUdDeja = ($prevTotalGanaPase + $prevPrevDeja) - $comiDejaSem;
+                // Solo aplicar comisión semanal si el porcentaje es positivo
+                if ($prevWeeklyCommissionPercentage > 0) {
+                    $comiDejaSem = ($prevTotalGanaPase + $prevPrevDeja) * ($prevWeeklyCommissionPercentage / 100);
+                    $prevUdDeja = ($prevTotalGanaPase + $prevPrevDeja) - $comiDejaSem;
+                } else {
+                    $prevUdDeja = $prevTotalGanaPase + $prevPrevDeja;
+                }
             } else {
                 $prevUdDeja = $prevTotalGanaPase + $prevPrevDeja;
             }
