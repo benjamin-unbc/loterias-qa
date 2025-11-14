@@ -175,14 +175,22 @@
 
                                 <div class="flex flex-col pt-3 gap-1 border-b pb-2 w-full text-sm">
                                     <div class="flex justify-between">
-                                        <h4 class="font-medium">TOTAL DEJA:</h4>
+                                        @if($totalGanaPase < 0)
+                                            <h4 class="font-medium">USTED GANA:</h4>
+                                        @else
+                                            <h4 class="font-medium">TOTAL DEJA:</h4>
+                                        @endif
                                         <p>{{ number_format($totalGanaPase, 2) }}</p>
                                     </div>
                                 </div>
 
                                 <div class="flex flex-col pt-3 gap-1 border-b pb-2 w-full text-sm">
                                     <div class="flex justify-between">
-                                        <h4 class="font-medium">GENER. DEJA:</h4>
+                                        @if($totalGanaPase < 0)
+                                            <h4 class="font-medium">USTED GANA:</h4>
+                                        @else
+                                            <h4 class="font-medium">GENER. DEJA:</h4>
+                                        @endif
                                         <p>{{ number_format($totalGanaPase, 2) }}</p>
                                     </div>
                                     <div class="flex justify-between">
