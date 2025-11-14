@@ -478,8 +478,8 @@ class LotteryResultProcessor
         // Reglas de quiniela:
         // - Posición 1 (Quiniela): Solo gana si sale en posición 1
         // - Posición 5: Gana si sale en posiciones 2-5
-        // - Posición 10: Gana si sale en posiciones 2-10  
-        // - Posición 20: Gana si sale en posiciones 2-20
+        // - Posición 10: Gana si sale en posiciones 6-10  
+        // - Posición 20: Gana si sale en posiciones 11-20
         
         switch ($playedPosition) {
             case 1:
@@ -491,12 +491,12 @@ class LotteryResultProcessor
                 return $winningPosition >= 2 && $winningPosition <= 5;
                 
             case 10:
-                // A los 10: gana si sale en posiciones 2-10
-                return $winningPosition >= 2 && $winningPosition <= 10;
+                // A los 10: gana si sale en posiciones 6-10
+                return $winningPosition >= 6 && $winningPosition <= 10;
                 
             case 20:
-                // A los 20: gana si sale en posiciones 2-20
-                return $winningPosition >= 2 && $winningPosition <= 20;
+                // A los 20: gana si sale en posiciones 11-20
+                return $winningPosition >= 11 && $winningPosition <= 20;
                 
             default:
                 // Para otras posiciones, verificar coincidencia exacta
