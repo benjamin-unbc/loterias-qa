@@ -545,14 +545,43 @@ class NumberObserver
 
             // ✅ NUEVA LÓGICA: Contar cuántas veces sale el número en el rango válido
             $winningCount = 0;
+            $winningPositions = [];
+            $playNumber = str_replace('*', '', $play->number);
+            $playLength = strlen($playNumber);
+            
+            Log::info("NumberObserver - Contando apariciones: {$play->number} (limpio: {$playNumber}, {$playLength} dígitos) posición {$playedPosition} en {$lotteryCode}");
+            Log::info("NumberObserver - Rango permitido: " . implode(', ', $allowedIndexes));
+            Log::info("NumberObserver - Total números completos: " . $completeNumbers->count());
+            
             foreach ($completeNumbers as $number) {
                 if (!in_array((int)$number->index, $allowedIndexes)) {
                     continue;
                 }
-                // Verificar tanto números como posición correcta
-                if ($this->isWinningPlay($play, $number->value, $number->index)) {
+                
+                // Verificar números directamente
+                $winningNumberStr = str_pad($number->value, 4, '0', STR_PAD_LEFT);
+                $winningSuffix = substr($winningNumberStr, -$playLength);
+                $numbersMatch = $playNumber === $winningSuffix;
+                
+                // Verificar posición
+                $positionCorrect = $this->isPositionCorrect($playedPosition, $number->index);
+                
+                if ($numbersMatch && $positionCorrect) {
                     $winningCount++;
+                    $winningPositions[] = $number->index;
+                    Log::info("NumberObserver - ✅ Aparición #{$winningCount}: {$play->number} coincide con {$number->value} en posición {$number->index}");
+                } else {
+                    if ($numbersMatch && !$positionCorrect) {
+                        Log::info("NumberObserver - ⚠️ Número coincide pero posición incorrecta: {$play->number} vs {$number->value} en posición {$number->index} (apostado: {$playedPosition})");
+                    }
                 }
+            }
+            
+            // Log para depuración
+            Log::info("NumberObserver - Conteo final: {$play->number} posición {$playedPosition} en {$lotteryCode} - Veces: {$winningCount} - Posiciones: " . implode(', ', $winningPositions));
+            
+            if ($winningCount > 1) {
+                Log::info("NumberObserver - ✅ MÚLTIPLES APARICIONES DETECTADAS: {$play->number} posición {$playedPosition} en {$lotteryCode} - Veces: {$winningCount}");
             }
 
             if ($winningCount > 0) {
