@@ -329,25 +329,31 @@ class ClientLiquidations extends Component
     
     /**
      * Abre el modal de semana para una semana específica
+     * Incluye todos los días hasta hoy, incluso si no tienen jugadas
      */
     public function openWeekModal($mondayDate)
     {
         $this->selectedDate = $mondayDate;
         $monday = Carbon::parse($mondayDate);
+        $today = Carbon::today();
         
-        // Generar fechas de lunes a sábado
+        // Generar fechas de lunes a sábado, solo hasta hoy
         $this->weekDates = [];
         for ($i = 0; $i < 6; $i++) {
             $day = $monday->copy()->addDays($i);
-            $this->weekDates[] = [
-                'date' => $day->format('Y-m-d'),
-                'formatted' => $day->format('d/m/Y'),
-                'dayName' => $day->locale('es')->dayName,
-                'carbon' => $day
-            ];
+            
+            // Solo incluir días hasta hoy (no futuros)
+            if ($day->lte($today)) {
+                $this->weekDates[] = [
+                    'date' => $day->format('Y-m-d'),
+                    'formatted' => $day->format('d/m/Y'),
+                    'dayName' => $day->locale('es')->dayName,
+                    'carbon' => $day
+                ];
+            }
         }
         
-        // Calcular liquidaciones para cada día de la semana
+        // Calcular liquidaciones para cada día de la semana (incluso sin jugadas)
         $this->weekLiquidations = [];
         if ($this->client && $this->client->associatedUser) {
             foreach ($this->weekDates as $weekDay) {

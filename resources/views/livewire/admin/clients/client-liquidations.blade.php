@@ -148,7 +148,7 @@
                                     <span class="text-gray-400 text-sm">{{ $weekDay['formatted'] }}</span>
                                 </div>
                                 
-                                @if($dayData && $dayData['totalApus'] > 0)
+                                @if($dayData)
                                     <div class="space-y-2 text-sm">
                                         <div class="flex justify-between text-white">
                                             <span class="text-gray-400">Total Pase:</span>
@@ -171,7 +171,7 @@
                                             <span class="font-medium">${{ number_format($dayData['arrastre'], 2, ',', '.') }}</span>
                                         </div>
                                         
-                                        @if($weekDay['carbon']->isSaturday() && $dayData['comiDejaSem'] > 0)
+                                        @if($weekDay['carbon']->isSaturday() && isset($dayData['comiDejaSem']) && $dayData['comiDejaSem'] > 0)
                                             <div class="flex justify-between text-white pt-2 border-t border-gray-600">
                                                 <span class="text-gray-400">Comi Deja Sem:</span>
                                                 <span class="font-medium text-yellow-400">${{ number_format($dayData['comiDejaSem'], 2, ',', '.') }}</span>
