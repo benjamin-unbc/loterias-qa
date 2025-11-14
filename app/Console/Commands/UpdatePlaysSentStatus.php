@@ -41,57 +41,28 @@ class UpdatePlaysSentStatus extends Command
         $this->info("Hora actual: " . $now->toDateTimeString());
         $this->info("Fecha actual: " . $today->toDateString());
 
-        // ✅ OPTIMIZADO: Usar actualización masiva en lugar de iterar registro por registro
-        // Esto reduce significativamente el tiempo de ejecución y bloqueos de BD
         $records = PlaysSentModel::whereDate('date', $today)
             ->where('statusPlay', 'A')
             ->get();
 
         if ($records->isEmpty()) {
             $this->info("No se encontraron registros con status 'A' para hoy.");
-            return 0;
         }
-
-        $updatedCount = 0;
-        $ticketIdsToUpdate = [];
 
         foreach ($records as $record) {
             $timePlay = $record->timePlay;
-            if (empty($timePlay)) {
-                continue;
-            }
-            
-            // Limpiar el formato si contiene comas (ej: '10:15,12:00' -> '10:15')
-            if (strpos($timePlay, ',') !== false) {
-                $timePlay = explode(',', $timePlay)[0];
-            }
-            
-            // Validar formato de hora (HH:MM)
-            if (!preg_match('/^\d{1,2}:\d{2}$/', trim($timePlay))) {
-                Log::warning("Formato de hora inválido en plays_sent ID {$record->id}: '{$record->timePlay}'");
-                continue;
-            }
-            
-            try {
-                $recordTime = Carbon::parse($timePlay, $timezone)
-                    ->setDate($today->year, $today->month, $today->day);
+            $recordTime = Carbon::parse($timePlay, $timezone)
+                ->setDate($today->year, $today->month, $today->day);
 
-                if ($now->greaterThan($recordTime)) {
-                    $ticketIdsToUpdate[] = $record->id;
-                }
-            } catch (\Exception $e) {
-                Log::error("Error al parsear hora en plays_sent ID {$record->id}: '{$record->timePlay}' - " . $e->getMessage());
-                continue;
-            }
-        }
+            $this->info("Procesando ticket {$record->ticket} con timePlay {$timePlay} (recordTime: " . $recordTime->toDateTimeString() . ")");
 
-        // ✅ Actualización masiva en una sola consulta
-        if (!empty($ticketIdsToUpdate)) {
-            $updatedCount = PlaysSentModel::whereIn('id', $ticketIdsToUpdate)
-                ->update(['statusPlay' => 'I']);
-            $this->info("✅ Actualizados {$updatedCount} tickets a status 'I'.");
-        } else {
-            $this->info("No hay tickets que necesiten actualización.");
+            if ($now->greaterThan($recordTime)) {
+                $record->statusPlay = 'I';
+                $record->save();
+                $this->info("Ticket {$record->ticket} actualizado a status 'I'.");
+            } else {
+                $this->info("Ticket {$record->ticket} no se actualiza porque timePlay (" . $recordTime->toDateTimeString() . ") aún no ha pasado.");
+            }
         }
 
         $this->info("=== Fin de la actualización ===");

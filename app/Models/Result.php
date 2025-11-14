@@ -36,7 +36,6 @@ class Result extends Model
         'XA',
         'import',
         'aciert',
-        'times_won',
         'date',
         'time',
     ];
