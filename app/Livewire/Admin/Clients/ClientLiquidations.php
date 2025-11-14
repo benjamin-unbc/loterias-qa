@@ -137,14 +137,31 @@ class ClientLiquidations extends Component
             
             // Agregar la semana si tiene al menos un día (hasta hoy)
             if (!empty($weekDates)) {
-                // Obtener el último día de la semana (hasta hoy) para calcular clienteDeja
-                $lastDateOfWeek = end($weekDates);
-                $liquidationData = $this->computeLiquidationDataForDate($lastDateOfWeek, $userId);
-                $clienteDeja = $liquidationData['udDeja'] ?? 0;
-                
                 // Detectar si es la semana actual
                 $currentWeekMonday = $today->copy()->startOfWeek();
                 $isCurrentWeek = $currentMonday->format('Y-m-d') === $currentWeekMonday->format('Y-m-d');
+                
+                // Obtener el último día de la semana (hasta hoy) para calcular clienteDeja
+                $lastDateOfWeek = end($weekDates);
+                
+                // Si es la semana actual, calcular el UD Deja del día anterior (ayer)
+                // La liquidación del día actual solo se desbloquea al día siguiente
+                if ($isCurrentWeek) {
+                    // Obtener la fecha de ayer (día anterior)
+                    // Si es lunes, el día anterior es el sábado (2 días atrás)
+                    if ($today->isMonday()) {
+                        $previousDate = $today->copy()->subDays(2); // Sábado anterior
+                    } else {
+                        $previousDate = $today->copy()->subDay(); // Día anterior
+                    }
+                    $dateForClienteDeja = $previousDate->format('Y-m-d');
+                } else {
+                    // Si no es la semana actual, usar el último día de esa semana
+                    $dateForClienteDeja = $lastDateOfWeek;
+                }
+                
+                $liquidationData = $this->computeLiquidationDataForDate($dateForClienteDeja, $userId);
+                $clienteDeja = $liquidationData['udDeja'] ?? 0;
                 
                 $weeks->push([
                     'monday' => $currentMonday->format('Y-m-d'),
