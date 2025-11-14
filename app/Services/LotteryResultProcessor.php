@@ -368,6 +368,7 @@ class LotteryResultProcessor
                         'XA'          => 'X',
                         'import'      => (float) $apu->import,
                         'aciert'      => $aciertValue + $aciertValueR, // Sum both aciertos
+                        'times_won'   => 1, // ✅ Agregar times_won (por defecto 1, este procesador no cuenta múltiples apariciones)
                         'date'        => $dateToCalculate,
                         'time'        => $apu->timeApu,
                         'user_id'     => $apu->user_id,

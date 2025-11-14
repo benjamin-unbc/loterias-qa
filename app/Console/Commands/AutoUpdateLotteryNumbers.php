@@ -530,21 +530,19 @@ class AutoUpdateLotteryNumbers extends Command
             
             // Para cada jugada, buscar en qué posición REAL salió el número apostado
             foreach ($matchingPlays as $play) {
-                // ✅ Buscar la posición REAL donde salió el número apostado en los 20 números completos
-                $winningInfo = $this->findWinningNumberAndPosition($play, $completeNumbers);
+                // ✅ MODIFICADO: Contar todas las apariciones del número en el rango válido
+                $winningData = $this->countWinningOccurrences($play, $completeNumbers, $lotteryCode);
                 
-                if (!$winningInfo) {
+                if (!$winningData || $winningData['times_won'] == 0) {
                     continue; // No es ganadora
                 }
                 
-                // ✅ Verificar que la posición REAL donde salió coincida con la posición apostada según las reglas
-                if (!$this->isPositionCorrect($play->position, $winningInfo['winningPosition'])) {
-                    Log::info("AutoUpdateLotteryNumbers - Jugada NO ganadora: Ticket {$play->ticket} - Apostó posición {$play->position} pero salió en posición {$winningInfo['winningPosition']}");
-                    continue;
-                }
+                $timesWon = $winningData['times_won'];
+                $winningInfo = $winningData['winningInfo']; // Primer número ganador para referencia
                 
                 // ✅ Es ganadora: calcular premio
-                $aciertoValue = $this->calculatePrize($play, $winningInfo['winningNumber'], $quinielaPayouts, $winningInfo['winningPosition']);
+                // Usar la posición apostada para determinar el multiplicador base
+                $aciertoValue = $this->calculatePrizeWithCount($play, $quinielaPayouts, $play->position, $timesWon);
                 $redoblonaValue = 0; // PlaysSentModel no tiene redoblona
                 
                 $totalPrize = $aciertoValue + $redoblonaValue;
@@ -566,12 +564,13 @@ class AutoUpdateLotteryNumbers extends Command
                         'position' => $play->position, // Posición apostada
                         'import' => $play->amount,
                         'aciert' => $totalPrize,
+                        'times_won' => $timesWon, // ✅ Contar correctamente las veces que salió
                         'date' => $date,
                         'time' => $extract->time,
                         'user_id' => $play->user_id,
                         'XA' => 'X',
-                        'numero_g' => $winningInfo['winningNumber'], // Número ganador real
-                        'posicion_g' => $winningInfo['winningPosition'], // Posición real donde salió
+                        'numero_g' => $winningInfo['winningNumber'], // Número ganador real (primer encontrado)
+                        'posicion_g' => $winningInfo['winningPosition'], // Posición real donde salió (primera encontrada)
                         'numR' => null,
                         'posR' => null,
                         'num_g_r' => null,
@@ -582,7 +581,7 @@ class AutoUpdateLotteryNumbers extends Command
 
                     if ($result) {
                         $resultsInserted++;
-                        Log::info("AutoUpdateLotteryNumbers - ✅ Resultado insertado: Ticket {$play->ticket} - Apostó pos {$play->position}, salió en pos {$winningInfo['winningPosition']} - Premio: \${$totalPrize}");
+                        Log::info("AutoUpdateLotteryNumbers - ✅ Resultado insertado: Ticket {$play->ticket} - Apostó pos {$play->position}, salió {$timesWon} veces - Premio: \${$totalPrize}");
                     }
                 }
             }
@@ -630,14 +629,15 @@ class AutoUpdateLotteryNumbers extends Command
     
     /**
      * ✅ NUEVO: Verifica si la posición apostada es correcta según las reglas de quiniela
+     * ✅ MODIFICADO: Usa nuevos rangos (posición 10 busca 2-10, posición 20 busca 2-20)
      */
     private function isPositionCorrect($playedPosition, $winningPosition)
     {
-        // Reglas de quiniela:
+        // ✅ NUEVA LÓGICA:
         // - Posición 1 (Quiniela): Solo gana si sale en posición 1
         // - Posición 5: Gana si sale en posiciones 2-5
-        // - Posición 10: Gana si sale en posiciones 6-10  
-        // - Posición 20: Gana si sale en posiciones 11-20
+        // - Posición 10: Gana si sale en posiciones 2-10
+        // - Posición 20: Gana si sale en posiciones 2-20
         
         switch ($playedPosition) {
             case 1:
@@ -649,17 +649,148 @@ class AutoUpdateLotteryNumbers extends Command
                 return $winningPosition >= 2 && $winningPosition <= 5;
                 
             case 10:
-                // A los 10: gana si sale en posiciones 6-10
-                return $winningPosition >= 6 && $winningPosition <= 10;
+                // A los 10: gana si sale en posiciones 2-10
+                return $winningPosition >= 2 && $winningPosition <= 10;
                 
             case 20:
-                // A los 20: gana si sale en posiciones 11-20
-                return $winningPosition >= 11 && $winningPosition <= 20;
+                // A los 20: gana si sale en posiciones 2-20
+                return $winningPosition >= 2 && $winningPosition <= 20;
                 
             default:
                 // Para otras posiciones, verificar coincidencia exacta
                 return $playedPosition == $winningPosition;
         }
+    }
+    
+    /**
+     * ✅ NUEVO: Cuenta todas las apariciones del número en el rango válido
+     * Retorna array con times_won y winningInfo (primer número encontrado)
+     */
+    private function countWinningOccurrences($play, $completeNumbers, $lotteryCode)
+    {
+        $playedNumber = str_replace('*', '', $play->code);
+        $playedDigits = strlen($playedNumber);
+        $playedPosition = (int)$play->position;
+        
+        if ($playedDigits <= 0 || $playedDigits > 4) {
+            return null;
+        }
+        
+        // ✅ Determinar rango permitido según posición apostada
+        $allowedIndexes = [];
+        
+        switch ($playedPosition) {
+            case 1:
+                // Quiniela: solo posición 1
+                $allowedIndexes = [1];
+                break;
+            case 5:
+                // A los 5: posiciones 2-5
+                $allowedIndexes = range(2, 5);
+                break;
+            case 10:
+                // A los 10: posiciones 2-10
+                $allowedIndexes = range(2, 10);
+                break;
+            case 20:
+                // A los 20: posiciones 2-20
+                $allowedIndexes = range(2, 20);
+                break;
+            default:
+                // Para otras posiciones específicas, solo esa posición
+                $allowedIndexes = [$playedPosition];
+        }
+        
+        // Contar cuántas veces sale el número en el rango válido
+        $winningCount = 0;
+        $winningInfo = null;
+        
+        foreach ($completeNumbers as $number) {
+            if (!in_array((int)$number->index, $allowedIndexes)) {
+                continue;
+            }
+            
+            // Verificar números directamente
+            $winningNumberStr = str_pad($number->value, 4, '0', STR_PAD_LEFT);
+            $winningSuffix = substr($winningNumberStr, -$playedDigits);
+            $numbersMatch = $playedNumber === $winningSuffix;
+            
+            // Verificar posición
+            $positionCorrect = $this->isPositionCorrect($playedPosition, $number->index);
+            
+            if ($numbersMatch && $positionCorrect) {
+                $winningCount++;
+                // Guardar el primer número ganador para winningInfo
+                if ($winningCount == 1) {
+                    $winningInfo = [
+                        'winningNumber' => $number->value,
+                        'winningPosition' => $number->index
+                    ];
+                }
+            }
+        }
+        
+        if ($winningCount > 0) {
+            return [
+                'times_won' => $winningCount,
+                'winningInfo' => $winningInfo
+            ];
+        }
+        
+        return null;
+    }
+    
+    /**
+     * ✅ NUEVO: Calcula el premio multiplicando por times_won
+     */
+    private function calculatePrizeWithCount($play, $quinielaPayouts, $playedPosition, $timesWon)
+    {
+        $playedNumber = str_replace('*', '', $play->code);
+        $playedDigits = strlen($playedNumber);
+        
+        if ($playedDigits <= 0 || $playedDigits > 4) {
+            return 0;
+        }
+        
+        // Obtener todas las tablas de pagos
+        $prizes = \App\Models\PrizesModel::first();
+        $figureOne = \App\Models\FigureOneModel::first();
+        $figureTwo = \App\Models\FigureTwoModel::first();
+        
+        $prizeMultiplier = 0;
+        
+        // Posición 1 usa tabla Quiniela según dígitos apostados
+        if ($playedPosition === 1) {
+            $prizeMultiplier = $quinielaPayouts->{"cobra_{$playedDigits}_cifra"} ?? 0;
+            // Para posición 1, no se multiplica por veces (solo puede salir una vez)
+            return $play->amount * $prizeMultiplier;
+        }
+        
+        // Determinar tabla según dígitos
+        $payoutTable = null;
+        if ($playedDigits == 1 || $playedDigits == 2) {
+            $payoutTable = $prizes;
+        } elseif ($playedDigits == 3) {
+            $payoutTable = $figureOne;
+        } elseif ($playedDigits == 4) {
+            $payoutTable = $figureTwo;
+        }
+        
+        if ($payoutTable) {
+            // ✅ Usar pago base de la posición JUGADA
+            if ($playedPosition <= 5) {
+                $prizeMultiplier = $payoutTable->cobra_5 ?? 0;
+            } elseif ($playedPosition <= 10) {
+                $prizeMultiplier = $payoutTable->cobra_10 ?? 0;
+            } elseif ($playedPosition <= 20) {
+                $prizeMultiplier = $payoutTable->cobra_20 ?? 0;
+            }
+            
+            // Multiplicar: pago base × veces que salió × importe
+            return $prizeMultiplier * $timesWon * $play->amount;
+        }
+        
+        return 0;
     }
     
     /**

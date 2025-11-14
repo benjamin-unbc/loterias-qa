@@ -1009,6 +1009,7 @@ class Extracts extends Component
                     'XA'         => null,
                     'import'     => $play->import,
                     'aciert'     => 0, // Se calculará correctamente por el sistema automático
+                    'times_won'  => 1, // ✅ Agregar times_won (por defecto 1, se calculará correctamente por el sistema automático)
                     'date'       => isset($this->indexData) ? $this->indexData->date : $dateToStore,
                     'time'       => $play->timeApu,
                 ];
@@ -1125,6 +1126,7 @@ class Extracts extends Component
                     'XA'         => null,
                     'import'     => $play->import,
                     'aciert'     => 0, // Se calculará correctamente por el sistema automático
+                    'times_won'  => 1, // ✅ Agregar times_won (por defecto 1, se calculará correctamente por el sistema automático)
                     'date'       => $numero->date,
                     'time'       => $play->timeApu,
                 ];
