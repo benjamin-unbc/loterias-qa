@@ -66,6 +66,7 @@
                                 <th scope="col" class="px-6 py-3">PosR</th>
                                 <!-- <th scope="col" class="px-6 py-3">XA</th> -->
                                 <th scope="col" class="px-6 py-3">Importe</th>
+                                <th scope="col" class="px-6 py-3 text-center">Veces</th>
                                 <th scope="col" class="px-6 py-3 text-center">Aciertos</th>
                             </tr>
                         </thead>
@@ -84,13 +85,16 @@
                                     <td class="px-6 py-4">
                                         ${{ number_format($result->import, 2, '.') }} {{-- Revertido a import --}}
                                     </td>
+                                    <td class="px-6 py-4 text-center">
+                                        {{ $result->times_won ?? 1 }}
+                                    </td>
                                     <td class="px-6 py-4 text-end">
                                         ${{ number_format($result->aciert, 2, '.') }} {{-- Revertido a aciert --}}
                                     </td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="9" class="px-6 py-4 text-center text-gray-300">
+                                    <td colspan="10" class="px-6 py-4 text-center text-gray-300">
                                         No hay resultados
                                     </td>
                                 </tr>

@@ -389,6 +389,14 @@ class CalculateLotteryResults implements ShouldQueue
                 }
 
                 if ($aciertoValue > 0 && $winningNumberData) {
+                    // Determinar times_won según el tipo de jugada
+                    $timesWon = 1;
+                    if (isset($winningCount) && $winningCount > 0) {
+                        $timesWon = $winningCount;
+                    } elseif (isset($redoblonaWinningCount) && $redoblonaWinningCount > 0) {
+                        $timesWon = $redoblonaWinningCount;
+                    }
+                    
                     $winningPlays[] = [
                         'user_id' => $play->user_id,
                         'ticket' => $play->ticket,
@@ -400,6 +408,7 @@ class CalculateLotteryResults implements ShouldQueue
                         'XA' => 'X', // Este valor parece ser estático
                         'import' => $play->import,
                         'aciert' => $aciertoValue,
+                        'times_won' => $timesWon, // ✅ Guardar veces que salió
                         'date' => $this->date,
                         'time' => $winningNumberData->extract->time,
                         'created_at' => now(),

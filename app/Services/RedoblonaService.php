@@ -142,6 +142,41 @@ class RedoblonaService
     }
 
     /**
+     * Calcula el premio de redoblona y retorna también el conteo de veces que salió
+     * ✅ NUEVO: Versión que retorna array con prize y times_won
+     */
+    public function calculateRedoblonaPrizeWithCount($play, $date, $lotteryCode): array
+    {
+        $prize = $this->calculateRedoblonaPrize($play, $date, $lotteryCode);
+        
+        if ($prize == 0) {
+            return ['prize' => 0, 'times_won' => 0];
+        }
+
+        // Obtener el conteo de veces que salió la redoblona
+        $redoblonaRange = $this->getRedoblonaPositionRange($play->positionR);
+        $redoblonaNumbers = Number::with(['city', 'extract'])
+            ->whereHas('city', function($query) use ($lotteryCode) {
+                $query->where('code', $lotteryCode);
+            })
+            ->whereBetween('index', [$redoblonaRange['min'], $redoblonaRange['max']])
+            ->whereDate('date', $date)
+            ->get();
+
+        $redoblonaWinningCount = 0;
+        foreach ($redoblonaNumbers as $redoblonaNumber) {
+            if ($this->isRedoblonaWinner($play->numberR, $redoblonaNumber->value)) {
+                $redoblonaWinningCount++;
+            }
+        }
+
+        return [
+            'prize' => $prize,
+            'times_won' => $redoblonaWinningCount
+        ];
+    }
+
+    /**
      * Obtiene el rango de posiciones para el número principal
      * ✅ NUEVA LÓGICA: Posición 5 busca 2-5, posición 10 busca 2-10, posición 20 busca 2-20
      */

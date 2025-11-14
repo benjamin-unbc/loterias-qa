@@ -106,7 +106,9 @@ class NumberObserver
                 $winningInfo = $this->getWinningNumberAndPosition($play, $completeNumbers, $lotteryCode);
                 
                 if ($winningInfo && $winningInfo['isWinner']) {
-                    $prize = $this->calculatePrizeForLotteryComplete($play, $completeNumbers, $lotteryCode);
+                    $prizeData = $this->calculatePrizeForLotteryComplete($play, $completeNumbers, $lotteryCode);
+                    $prize = $prizeData['prize'];
+                    $timesWon = $prizeData['times_won'];
                     
                     if ($prize > 0) {
                         // ✅ Usar ResultManager para inserción segura
@@ -121,6 +123,7 @@ class NumberObserver
                             'XA' => 'X',
                             'import' => $play->import,
                             'aciert' => $prize, // ✅ Solo el premio de esta lotería específica
+                            'times_won' => $timesWon, // ✅ Número de veces que salió
                             'date' => $number->date,
                             'time' => $number->extract->time,
                             'numero_g' => $winningInfo['winningNumber'], // ✅ Número ganador real
@@ -133,7 +136,7 @@ class NumberObserver
                         if ($result) {
                             $resultsInserted++;
                             $totalPrize += $prize;
-                            Log::info("NumberObserver - Resultado insertado: Ticket {$play->ticket} - Lotería {$lotteryCode} - Premio: {$prize} - numero_g: {$winningInfo['winningNumber']} - posicion_g: {$winningInfo['winningPosition']}");
+                            Log::info("NumberObserver - Resultado insertado: Ticket {$play->ticket} - Lotería {$lotteryCode} - Premio: {$prize} - Veces: {$timesWon} - numero_g: {$winningInfo['winningNumber']} - posicion_g: {$winningInfo['winningPosition']}");
                         }
                     }
                 }
@@ -486,16 +489,20 @@ class NumberObserver
     /**
      * ✅ NUEVO: Calcula el premio para una lotería completa
      * ✅ MODIFICADO: Ahora cuenta múltiples apariciones y usa pago base de la posición jugada
+     * ✅ MODIFICADO: Retorna array con premio y times_won
      */
     private function calculatePrizeForLotteryComplete($play, $completeNumbers, $lotteryCode)
     {
         $mainPrize = 0;
         $redoblonaPrize = 0;
+        $timesWon = 1; // Por defecto 1 vez
 
         // IMPORTANTE: Si hay redoblona, NO se paga premio principal, solo redoblona
         if (!empty($play->numberR) && !empty($play->positionR)) {
             // Solo calcular premio de redoblona (se paga TODO como redoblona)
-            $redoblonaPrize = $this->redoblonaService->calculateRedoblonaPrize($play, $completeNumbers->first()->date, $lotteryCode);
+            $redoblonaData = $this->redoblonaService->calculateRedoblonaPrizeWithCount($play, $completeNumbers->first()->date, $lotteryCode);
+            $redoblonaPrize = $redoblonaData['prize'];
+            $timesWon = $redoblonaData['times_won'];
         } else {
             // Solo calcular premio principal si NO hay redoblona
             $playedNumber = str_replace('*', '', $play->number);
@@ -543,6 +550,7 @@ class NumberObserver
             }
 
             if ($winningCount > 0) {
+                $timesWon = $winningCount; // Guardar el conteo de veces que salió
                 // Posición 1 usa tabla Quiniela según dígitos apostados
                 if ($playedPosition === 1) {
                     $payoutTable = self::$payoutTables['quiniela'] ?? null;
@@ -576,7 +584,10 @@ class NumberObserver
             }
         }
 
-        return $mainPrize + $redoblonaPrize;
+        return [
+            'prize' => $mainPrize + $redoblonaPrize,
+            'times_won' => $timesWon
+        ];
     }
 
     /**
