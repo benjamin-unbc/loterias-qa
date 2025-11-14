@@ -52,9 +52,20 @@ class ResultManager
                     return null;
                 }
 
+                // Log para depuración
+                $timesWonInData = $resultData['times_won'] ?? 'NO DEFINIDO';
+                Log::info("ResultManager - ANTES de crear: times_won en resultData = {$timesWonInData}");
+                
                 // Crear el resultado
                 $result = Result::create($resultData);
-                Log::info("ResultManager - Resultado creado exitosamente: ID {$result->id} - Ticket {$resultData['ticket']} - Premio: \${$resultData['aciert']}");
+                
+                // Verificar el valor guardado
+                $savedTimesWon = $result->times_won ?? 'NO DEFINIDO';
+                Log::info("ResultManager - Resultado creado exitosamente: ID {$result->id} - Ticket {$resultData['ticket']} - Premio: \${$resultData['aciert']} - times_won recibido: {$timesWonInData} - times_won guardado: {$savedTimesWon}");
+                
+                if (isset($resultData['times_won']) && $resultData['times_won'] != $savedTimesWon) {
+                    Log::error("ResultManager - ⚠️ DISCREPANCIA: times_won recibido ({$resultData['times_won']}) != times_won guardado ({$savedTimesWon})");
+                }
                 
                 return $result;
             });
