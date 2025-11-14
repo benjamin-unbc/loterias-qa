@@ -61,7 +61,8 @@ class Results extends Component
                 'import',
                 'user_id',
                 'date',
-                'aciert' // ✅ Mostrar el premio individual de cada lotería
+                'aciert', // ✅ Mostrar el premio individual de cada lotería
+                'times_won' // ✅ Agregar times_won para mostrar las veces que salió
             )
             ->whereDate('date', $this->date);
 
