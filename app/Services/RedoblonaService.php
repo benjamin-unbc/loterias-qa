@@ -118,12 +118,22 @@ class RedoblonaService
 
         // ✅ NUEVA LÓGICA: Contar cuántas veces sale la redoblona en el rango válido
         $redoblonaWinningCount = 0;
+        $redoblonaPositions = [];
+        $redoblonaNumberClean = str_replace('*', '', $play->numberR);
+        
+        Log::info("RedoblonaService - Contando redoblona: {$play->numberR} (limpio: {$redoblonaNumberClean}) posición {$play->positionR} en {$lotteryCode}");
+        Log::info("RedoblonaService - Rango redoblona: {$redoblonaRange['min']}-{$redoblonaRange['max']}");
+        Log::info("RedoblonaService - Total números en rango: " . $redoblonaNumbers->count());
+        
         foreach ($redoblonaNumbers as $redoblonaNumber) {
             if ($this->isRedoblonaWinner($play->numberR, $redoblonaNumber->value)) {
                 $redoblonaWinningCount++;
-                Log::info("RedoblonaService - Redoblona ganadora encontrada: {$play->numberR} vs {$redoblonaNumber->value} en posición {$redoblonaNumber->index} (aparición #{$redoblonaWinningCount})");
+                $redoblonaPositions[] = $redoblonaNumber->index;
+                Log::info("RedoblonaService - ✅ Redoblona ganadora #{$redoblonaWinningCount}: {$play->numberR} vs {$redoblonaNumber->value} en posición {$redoblonaNumber->index}");
             }
         }
+        
+        Log::info("RedoblonaService - Conteo final redoblona: {$play->numberR} posición {$play->positionR} en {$lotteryCode} - Veces: {$redoblonaWinningCount} - Posiciones: " . implode(', ', $redoblonaPositions));
 
         if ($redoblonaWinningCount == 0) {
             Log::info("RedoblonaService - Redoblona no ganadora en rango {$redoblonaRange['min']}-{$redoblonaRange['max']}");
