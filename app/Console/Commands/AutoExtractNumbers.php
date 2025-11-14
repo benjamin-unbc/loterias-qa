@@ -656,47 +656,57 @@ class AutoExtractNumbers extends Command
             $resultsInserted = 0;
             $totalPrize = 0;
 
-            // Para cada jugada, verificar si es ganadora para esta lotería específica
+            // Obtener configuraciones de premios
+            $quinielaPayouts = \App\Models\QuinielaModel::first();
+            
+            // Para cada jugada, usar la misma lógica que NumberObserver
             foreach ($plays as $play) {
-                if ($this->isWinningPlayForLotteryComplete($play, $completeNumbers, $lotteryCode)) {
-                    $prize = $this->calculatePrizeForLotteryComplete($play, $completeNumbers, $lotteryCode);
-                    
-                    if ($prize > 0) {
-                        // Verificar si ya existe este resultado específico para esta lotería
-                        $existingResult = \App\Models\Result::where('ticket', $play->ticket)
-                            ->where('lottery', $lotteryCode)
-                            ->where('number', $play->number)
-                            ->where('position', $play->position)
-                            ->where('date', $date)
-                            ->first();
+                // Usar el mismo método que NumberObserver para calcular premio y times_won
+                $prizeData = $this->calculatePrizeForLotteryCompleteWithCount($play, $completeNumbers, $lotteryCode, $quinielaPayouts);
+                $prize = $prizeData['prize'];
+                $timesWon = $prizeData['times_won'];
+                $winningInfo = $prizeData['winningInfo'] ?? null;
+                
+                if ($prize > 0 && $winningInfo) {
+                    // Verificar si ya existe este resultado específico para esta lotería
+                    $existingResult = \App\Models\Result::where('ticket', $play->ticket)
+                        ->where('lottery', $lotteryCode)
+                        ->where('number', $play->number)
+                        ->where('position', $play->position)
+                        ->where('date', $date)
+                        ->first();
 
-                        if (!$existingResult) {
-                            // Usar ResultManager para inserción segura
-                            $resultData = [
-                                'user_id' => $play->user_id,
-                                'ticket' => $play->ticket,
-                                'lottery' => $lotteryCode,
-                                'number' => $play->number,
-                                'position' => $play->position,
-                                'numR' => $play->numberR,
-                                'posR' => $play->positionR,
-                                'XA' => 'X',
-                                'import' => $play->import,
-                                'aciert' => $prize,
-                                'date' => $date,
-                                'time' => $completeNumbers->first()->extract->time,
-                                'created_at' => now(),
-                                'updated_at' => now(),
-                            ];
+                    if (!$existingResult) {
+                        // Usar ResultManager para inserción segura
+                        $resultData = [
+                            'user_id' => $play->user_id,
+                            'ticket' => $play->ticket,
+                            'lottery' => $lotteryCode,
+                            'number' => $play->number,
+                            'position' => $play->position,
+                            'numR' => $play->numberR,
+                            'posR' => $play->positionR,
+                            'XA' => 'X',
+                            'import' => $play->import,
+                            'aciert' => $prize,
+                            'times_won' => $timesWon, // ✅ Agregar times_won
+                            'numero_g' => $winningInfo['winningNumber'] ?? null,
+                            'posicion_g' => $winningInfo['winningPosition'] ?? null,
+                            'date' => $date,
+                            'time' => $completeNumbers->first()->extract->time,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ];
 
-                            $result = \App\Services\ResultManager::createResultSafely($resultData);
-                            if ($result) {
-                                $resultsInserted++;
-                                $totalPrize += $prize;
-                                Log::info("AutoExtractNumbers - Resultado insertado: Ticket {$play->ticket} - Lotería {$lotteryCode} - Premio: {$prize}");
-                                
-                                // Notificar ganador encontrado
-                                $this->notifyWinner($play, $prize, $completeNumbers->first()->value, $completeNumbers->first()->index);
+                        $result = \App\Services\ResultManager::createResultSafely($resultData);
+                        if ($result) {
+                            $resultsInserted++;
+                            $totalPrize += $prize;
+                            Log::info("AutoExtractNumbers - Resultado insertado: Ticket {$play->ticket} - Lotería {$lotteryCode} - Premio: {$prize} - Veces: {$timesWon}");
+                            
+                            // Notificar ganador encontrado
+                            if ($winningInfo['winningNumber'] ?? null) {
+                                $this->notifyWinner($play, $prize, $winningInfo['winningNumber'], $winningInfo['winningPosition']);
                             }
                         }
                     }
