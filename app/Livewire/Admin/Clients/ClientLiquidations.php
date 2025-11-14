@@ -474,7 +474,8 @@ class ClientLiquidations extends Component
     }
     
     /**
-     * Obtiene el "Cliente Deja" (UD Deja) del día actual
+     * Obtiene el "Cliente Deja" (UD Deja) de la última liquidación disponible
+     * Busca la última fecha que tenga datos (Result o ApusModel) y calcula su UD Deja
      */
     public function getCurrentDayUdDejaProperty()
     {
@@ -482,8 +483,37 @@ class ClientLiquidations extends Component
             return 0;
         }
         
-        $today = Carbon::today()->format('Y-m-d');
-        $liquidationData = $this->computeLiquidationDataForDate($today, $this->client->associatedUser->id);
+        $userId = $this->client->associatedUser->id;
+        
+        // Buscar la última fecha que tenga datos en Result
+        $lastResult = Result::where('user_id', $userId)
+            ->orderBy('date', 'desc')
+            ->first();
+        
+        // Buscar la última fecha que tenga datos en ApusModel
+        $lastApu = ApusModel::where('user_id', $userId)
+            ->orderBy('created_at', 'desc')
+            ->first();
+        
+        // Determinar la última fecha disponible
+        $lastDate = null;
+        if ($lastResult && $lastApu) {
+            $resultDate = Carbon::parse($lastResult->date);
+            $apuDate = Carbon::parse($lastApu->created_at);
+            $lastDate = $resultDate->gte($apuDate) ? $resultDate->format('Y-m-d') : $apuDate->format('Y-m-d');
+        } elseif ($lastResult) {
+            $lastDate = Carbon::parse($lastResult->date)->format('Y-m-d');
+        } elseif ($lastApu) {
+            $lastDate = Carbon::parse($lastApu->created_at)->format('Y-m-d');
+        }
+        
+        // Si no hay datos, retornar 0
+        if (!$lastDate) {
+            return 0;
+        }
+        
+        // Calcular el UD Deja de la última fecha disponible
+        $liquidationData = $this->computeLiquidationDataForDate($lastDate, $userId);
         
         return $liquidationData['udDeja'] ?? 0;
     }
