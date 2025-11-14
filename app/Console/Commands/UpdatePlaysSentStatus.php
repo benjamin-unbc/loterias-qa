@@ -61,11 +61,27 @@ class UpdatePlaysSentStatus extends Command
                 continue;
             }
             
-            $recordTime = Carbon::parse($timePlay, $timezone)
-                ->setDate($today->year, $today->month, $today->day);
+            // Limpiar el formato si contiene comas (ej: '10:15,12:00' -> '10:15')
+            if (strpos($timePlay, ',') !== false) {
+                $timePlay = explode(',', $timePlay)[0];
+            }
+            
+            // Validar formato de hora (HH:MM)
+            if (!preg_match('/^\d{1,2}:\d{2}$/', trim($timePlay))) {
+                Log::warning("Formato de hora inválido en plays_sent ID {$record->id}: '{$record->timePlay}'");
+                continue;
+            }
+            
+            try {
+                $recordTime = Carbon::parse($timePlay, $timezone)
+                    ->setDate($today->year, $today->month, $today->day);
 
-            if ($now->greaterThan($recordTime)) {
-                $ticketIdsToUpdate[] = $record->id;
+                if ($now->greaterThan($recordTime)) {
+                    $ticketIdsToUpdate[] = $record->id;
+                }
+            } catch (\Exception $e) {
+                Log::error("Error al parsear hora en plays_sent ID {$record->id}: '{$record->timePlay}' - " . $e->getMessage());
+                continue;
             }
         }
 
