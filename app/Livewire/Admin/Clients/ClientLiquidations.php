@@ -529,6 +529,20 @@ class ClientLiquidations extends Component
             'paymentAmount.min' => 'El monto debe ser mayor a 0',
         ]);
         
+        // Verificar si ya existe un pago para esta fecha
+        $existingPayment = ClientPayment::where('client_id', $this->client->id)
+            ->whereDate('payment_date', $this->paymentDate)
+            ->first();
+        
+        if ($existingPayment) {
+            // Cerrar el modal
+            $this->closePaymentModal();
+            
+            // Mostrar mensaje de error
+            $this->dispatch('payment-error', message: 'Ya se registró un pago para este día. Debe esperar al siguiente día para registrar otro pago.');
+            return;
+        }
+        
         // Determinar el tipo de pago basado en el UD Deja actual
         $type = $this->currentUdDeja >= 0 ? 'paid_to_client' : 'received_from_client';
         

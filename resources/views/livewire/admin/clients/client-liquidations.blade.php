@@ -70,11 +70,25 @@
                                         title="Ver semana">
                                         <i class="fa-solid fa-calendar"></i>
                                     </button>
-                                    <button wire:click="openPaymentModal('{{ $week['lastDate'] ?? end($week['dates']) }}')"
-                                        class="font-medium text-blue-400 hover:text-blue-300 transition-colors duration-200"
-                                        title="Registrar pago">
-                                        <i class="fa-solid fa-dollar-sign"></i>
-                                    </button>
+                                    @if($week['isCurrentWeek'] ?? false)
+                                        @php
+                                            $lastDate = $week['lastDate'] ?? end($week['dates']);
+                                            $hasPayment = \App\Models\ClientPayment::where('client_id', $client->id)
+                                                ->whereDate('payment_date', $lastDate)
+                                                ->exists();
+                                        @endphp
+                                        @if(!$hasPayment)
+                                            <button wire:click="openPaymentModal('{{ $lastDate }}')"
+                                                class="font-medium text-blue-400 hover:text-blue-300 transition-colors duration-200"
+                                                title="Registrar pago">
+                                                <i class="fa-solid fa-dollar-sign"></i>
+                                            </button>
+                                        @else
+                                            <span class="text-gray-500 text-xs" title="Ya se registró un pago para este día. Debe esperar al siguiente día para registrar otro.">
+                                                <i class="fa-solid fa-check-circle text-green-400"></i>
+                                            </span>
+                                        @endif
+                                    @endif
                                 </div>
                             </td>
                         </tr>
@@ -588,6 +602,22 @@
                 background: '#1b1f22',
                 color: '#ffffff',
                 iconColor: '#3b82f6'
+            });
+        });
+        
+        Livewire.on('payment-error', (event) => {
+            const data = event[0] || event;
+            const message = data?.message || 'Ya se registró un pago para este día. Debe esperar al siguiente día para registrar otro pago.';
+            
+            Swal.fire({
+                icon: 'warning',
+                title: 'Pago Ya Registrado',
+                text: message,
+                confirmButtonText: 'Aceptar',
+                confirmButtonColor: '#f59e0b',
+                background: '#1b1f22',
+                color: '#ffffff',
+                iconColor: '#f59e0b'
             });
         });
     });
