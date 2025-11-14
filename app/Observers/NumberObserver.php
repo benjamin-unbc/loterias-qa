@@ -546,33 +546,73 @@ class NumberObserver
             // ✅ NUEVA LÓGICA: Contar cuántas veces sale el número en el rango válido
             $winningCount = 0;
             $winningPositions = [];
-            $playNumber = str_replace('*', '', $play->number);
+            
+            // ✅ MEJORADO: Limpiar y normalizar el número jugado
+            $playNumber = trim(str_replace('*', '', $play->number));
             $playLength = strlen($playNumber);
             
-            Log::info("NumberObserver - Contando apariciones: {$play->number} (limpio: {$playNumber}, {$playLength} dígitos) posición {$playedPosition} en {$lotteryCode}");
-            Log::info("NumberObserver - Rango permitido: " . implode(', ', $allowedIndexes));
-            Log::info("NumberObserver - Total números completos: " . $completeNumbers->count());
-            
-            foreach ($completeNumbers as $number) {
-                if (!in_array((int)$number->index, $allowedIndexes)) {
-                    continue;
-                }
+            // Validar que el número jugado tenga entre 1 y 4 dígitos
+            if ($playLength < 1 || $playLength > 4) {
+                Log::warning("NumberObserver - Número jugado inválido: {$play->number} (longitud: {$playLength})");
+                $winningCount = 0; // No se encontraron coincidencias porque el número es inválido
+            } else {
+                Log::info("NumberObserver - Contando apariciones: {$play->number} (limpio: '{$playNumber}', {$playLength} dígitos) posición {$playedPosition} en {$lotteryCode}");
+                Log::info("NumberObserver - Rango permitido: " . implode(', ', $allowedIndexes));
+                Log::info("NumberObserver - Total números completos: " . $completeNumbers->count());
                 
-                // Verificar números directamente
-                $winningNumberStr = str_pad($number->value, 4, '0', STR_PAD_LEFT);
-                $winningSuffix = substr($winningNumberStr, -$playLength);
-                $numbersMatch = $playNumber === $winningSuffix;
-                
-                // Verificar posición
-                $positionCorrect = $this->isPositionCorrect($playedPosition, $number->index);
-                
-                if ($numbersMatch && $positionCorrect) {
-                    $winningCount++;
-                    $winningPositions[] = $number->index;
-                    Log::info("NumberObserver - ✅ Aparición #{$winningCount}: {$play->number} coincide con {$number->value} en posición {$number->index}");
+                // ✅ MEJORADO: Verificar que completeNumbers tenga datos
+                if ($completeNumbers->isEmpty()) {
+                    Log::warning("NumberObserver - ⚠️ completeNumbers está vacío para {$lotteryCode}");
+                    $winningCount = 0; // No se encontraron coincidencias porque no hay números
                 } else {
-                    if ($numbersMatch && !$positionCorrect) {
-                        Log::info("NumberObserver - ⚠️ Número coincide pero posición incorrecta: {$play->number} vs {$number->value} en posición {$number->index} (apostado: {$playedPosition})");
+                    foreach ($completeNumbers as $number) {
+                        // ✅ MEJORADO: Asegurar que index sea un entero válido
+                        $numberIndex = (int)$number->index;
+                        
+                        // ✅ MEJORADO: Validar que el índice esté en rango válido (1-20)
+                        if ($numberIndex < 1 || $numberIndex > 20) {
+                            Log::warning("NumberObserver - ⚠️ Índice inválido: {$numberIndex} para número {$number->value}");
+                            continue;
+                        }
+                        
+                        // ✅ MEJORADO: Verificar si está en el rango permitido ANTES de procesar
+                        if (!in_array($numberIndex, $allowedIndexes)) {
+                            continue;
+                        }
+                        
+                        // ✅ MEJORADO: Limpiar y normalizar el número ganador
+                        $winningValue = trim((string)$number->value);
+                        if (empty($winningValue)) {
+                            Log::warning("NumberObserver - ⚠️ Número ganador vacío en posición {$numberIndex}");
+                            continue;
+                        }
+                        
+                        // ✅ MEJORADO: Normalizar el número ganador a 4 dígitos con ceros a la izquierda
+                        $winningNumberStr = str_pad($winningValue, 4, '0', STR_PAD_LEFT);
+                        
+                        // ✅ MEJORADO: Extraer el sufijo del número ganador
+                        $winningSuffix = substr($winningNumberStr, -$playLength);
+                        
+                        // ✅ MEJORADO: Comparación estricta (case-sensitive, pero ambos son números)
+                        $numbersMatch = ($playNumber === $winningSuffix);
+                        
+                        // ✅ MEJORADO: Verificar posición con validación adicional
+                        $positionCorrect = $this->isPositionCorrect($playedPosition, $numberIndex);
+                        
+                        // Log detallado de la comparación
+                        Log::info("NumberObserver - Comparación pos {$numberIndex}: jugado '{$playNumber}' vs ganador '{$winningSuffix}' (completo: '{$winningValue}' -> '{$winningNumberStr}') - Coincide: " . ($numbersMatch ? 'SÍ' : 'NO') . " - Posición correcta: " . ($positionCorrect ? 'SÍ' : 'NO'));
+                        
+                        if ($numbersMatch && $positionCorrect) {
+                            $winningCount++;
+                            $winningPositions[] = $numberIndex;
+                            Log::info("NumberObserver - ✅ Aparición #{$winningCount}: {$play->number} coincide con {$winningValue} en posición {$numberIndex}");
+                        } else {
+                            if ($numbersMatch && !$positionCorrect) {
+                                Log::info("NumberObserver - ⚠️ Número coincide pero posición incorrecta: {$play->number} vs {$winningValue} en posición {$numberIndex} (apostado: {$playedPosition})");
+                            } elseif (!$numbersMatch && $positionCorrect) {
+                                Log::info("NumberObserver - ⚠️ Posición correcta pero número no coincide: '{$playNumber}' vs '{$winningSuffix}' (completo: '{$winningValue}') en posición {$numberIndex}");
+                            }
+                        }
                     }
                 }
             }
@@ -582,10 +622,19 @@ class NumberObserver
             
             if ($winningCount > 1) {
                 Log::info("NumberObserver - ✅ MÚLTIPLES APARICIONES DETECTADAS: {$play->number} posición {$playedPosition} en {$lotteryCode} - Veces: {$winningCount}");
+            } elseif ($winningCount == 0) {
+                Log::warning("NumberObserver - ⚠️ NO SE ENCONTRARON COINCIDENCIAS: {$play->number} posición {$playedPosition} en {$lotteryCode} - times_won se quedará en 1 (valor por defecto)");
             }
 
+            // ✅ IMPORTANTE: Actualizar timesWon SOLO si se encontraron coincidencias
             if ($winningCount > 0) {
                 $timesWon = $winningCount; // Guardar el conteo de veces que salió
+                Log::info("NumberObserver - ✅ Actualizando times_won a {$winningCount} para {$play->number} posición {$playedPosition}");
+            } else {
+                Log::warning("NumberObserver - ⚠️ winningCount es 0, times_won se mantiene en 1 (valor por defecto) para {$play->number} posición {$playedPosition}");
+            }
+            
+            if ($winningCount > 0) {
                 // Posición 1 usa tabla Quiniela según dígitos apostados
                 if ($playedPosition === 1) {
                     $payoutTable = self::$payoutTables['quiniela'] ?? null;
