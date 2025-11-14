@@ -58,6 +58,7 @@ class ClientLiquidations extends Component
     
     /**
      * Obtiene todas las fechas únicas con liquidaciones del cliente agrupadas por semanas
+     * Ahora incluye TODOS los días hasta hoy, incluso sin jugadas
      */
     public function getLiquidationWeeksProperty()
     {
@@ -65,10 +66,12 @@ class ClientLiquidations extends Component
             return collect();
         }
         
-        $dates = Result::where('user_id', $this->client->associatedUser->id)
+        $userId = $this->client->associatedUser->id;
+        
+        // Obtener todas las fechas que tienen datos (Result o ApusModel)
+        $resultDates = Result::where('user_id', $userId)
             ->select('date')
             ->distinct()
-            ->orderBy('date', 'desc')
             ->get()
             ->pluck('date')
             ->map(function($date) {
@@ -77,13 +80,33 @@ class ClientLiquidations extends Component
             ->unique()
             ->values();
         
-        if ($dates->isEmpty()) {
+        $apusDates = ApusModel::where('user_id', $userId)
+            ->selectRaw('DATE(created_at) as date')
+            ->distinct()
+            ->get()
+            ->pluck('date')
+            ->map(function($date) {
+                return Carbon::parse($date)->format('Y-m-d');
+            })
+            ->unique()
+            ->values();
+        
+        // Combinar todas las fechas que tienen datos
+        $allDatesWithData = $resultDates->merge($apusDates)->unique()->sort()->values();
+        
+        if ($allDatesWithData->isEmpty()) {
             return collect();
         }
         
-        // Obtener la primera y última fecha
-        $firstDate = Carbon::parse($dates->last());
-        $lastDate = Carbon::parse($dates->first());
+        // Obtener la primera y última fecha con datos
+        $firstDate = Carbon::parse($allDatesWithData->first());
+        $lastDate = Carbon::parse($allDatesWithData->last());
+        
+        // Extender hasta hoy si la última fecha es anterior a hoy
+        $today = Carbon::today();
+        if ($lastDate->lt($today)) {
+            $lastDate = $today;
+        }
         
         // Obtener el lunes de la primera semana
         $firstMonday = $firstDate->copy()->startOfWeek();
@@ -92,7 +115,6 @@ class ClientLiquidations extends Component
         
         // Agrupar fechas por semanas (lunes a sábado)
         $weeks = collect();
-        $datesCollection = $dates->toArray();
         
         // Iterar desde la primera semana hasta la última
         $currentMonday = $firstMonday->copy();
@@ -100,27 +122,27 @@ class ClientLiquidations extends Component
         while ($currentMonday->lte($lastMonday)) {
             $saturday = $currentMonday->copy()->addDays(5);
             
-            // Generar todas las fechas de la semana (lunes a sábado)
+            // Generar TODAS las fechas de la semana (lunes a sábado)
+            // Incluir todos los días hasta hoy, incluso si no tienen jugadas
             $weekDates = [];
             for ($i = 0; $i < 6; $i++) {
                 $day = $currentMonday->copy()->addDays($i);
                 $dayStr = $day->format('Y-m-d');
                 
-                // Solo incluir si tiene liquidación
-                if (in_array($dayStr, $datesCollection)) {
+                // Solo incluir días hasta hoy (no futuros)
+                if ($day->lte($today)) {
                     $weekDates[] = $dayStr;
                 }
             }
             
-            // Solo agregar la semana si tiene al menos un día con liquidación
+            // Agregar la semana si tiene al menos un día (hasta hoy)
             if (!empty($weekDates)) {
-                // Obtener el último día de la semana con liquidación (sábado o el más reciente)
-                $lastDate = end($weekDates);
-                $liquidationData = $this->computeLiquidationDataForDate($lastDate, $this->client->associatedUser->id);
+                // Obtener el último día de la semana (hasta hoy) para calcular clienteDeja
+                $lastDateOfWeek = end($weekDates);
+                $liquidationData = $this->computeLiquidationDataForDate($lastDateOfWeek, $userId);
                 $clienteDeja = $liquidationData['udDeja'] ?? 0;
                 
                 // Detectar si es la semana actual
-                $today = Carbon::today();
                 $currentWeekMonday = $today->copy()->startOfWeek();
                 $isCurrentWeek = $currentMonday->format('Y-m-d') === $currentWeekMonday->format('Y-m-d');
                 
@@ -131,7 +153,7 @@ class ClientLiquidations extends Component
                     'saturdayFormatted' => $saturday->format('d-m-Y'),
                     'dates' => $weekDates,
                     'label' => "Semana {$currentMonday->format('d-m-Y')} hasta {$saturday->format('d-m-Y')}",
-                    'lastDate' => $lastDate,
+                    'lastDate' => $lastDateOfWeek,
                     'clienteDeja' => $clienteDeja,
                     'isCurrentWeek' => $isCurrentWeek
                 ]);
@@ -580,10 +602,11 @@ class ClientLiquidations extends Component
         ]);
         
         // Verificar si ya existe un pago registrado HOY (fecha actual)
-        // Solo se permite un pago por día, y el siguiente solo se puede hacer a las 00:00 del día siguiente
-        $today = Carbon::today()->format('Y-m-d');
+        // Solo se permite un pago por día natural, y el siguiente solo se puede hacer a las 00:00 del día siguiente
+        // Usamos la fecha actual del servidor para evitar problemas de zona horaria
+        $today = Carbon::today();
         $existingPaymentToday = ClientPayment::where('client_id', $this->client->id)
-            ->whereDate('created_at', $today)
+            ->whereDate('created_at', $today->format('Y-m-d'))
             ->first();
         
         if ($existingPaymentToday) {
@@ -592,20 +615,6 @@ class ClientLiquidations extends Component
             
             // Mostrar mensaje de error
             $this->dispatch('payment-error', message: 'Ya se registró un pago hoy. Debe esperar hasta las 00:00 del día siguiente para registrar otro pago.');
-            return;
-        }
-        
-        // También verificar si ya existe un pago para la fecha específica del pago
-        $existingPaymentForDate = ClientPayment::where('client_id', $this->client->id)
-            ->whereDate('payment_date', $this->paymentDate)
-            ->first();
-        
-        if ($existingPaymentForDate) {
-            // Cerrar el modal
-            $this->closePaymentModal();
-            
-            // Mostrar mensaje de error
-            $this->dispatch('payment-error', message: 'Ya se registró un pago para esta fecha. Debe esperar al siguiente día para registrar otro pago.');
             return;
         }
         
