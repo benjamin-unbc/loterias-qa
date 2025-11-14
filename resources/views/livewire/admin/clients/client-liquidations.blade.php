@@ -125,7 +125,7 @@
                                 Semana: 
                                 @if(!empty($weekDates))
                                     {{ \Carbon\Carbon::parse($weekDates[0]['date'])->format('d/m/Y') }} - 
-                                    {{ \Carbon\Carbon::parse($weekDates[5]['date'])->format('d/m/Y') }}
+                                    {{ \Carbon\Carbon::parse(end($weekDates)['date'])->format('d/m/Y') }}
                                 @endif
                             </h3>
                         </div>
