@@ -119,17 +119,24 @@ class RedoblonaService
         // ✅ NUEVA LÓGICA: Contar cuántas veces sale la redoblona en el rango válido
         $redoblonaWinningCount = 0;
         $redoblonaPositions = [];
-        $redoblonaNumberClean = str_replace('*', '', $play->numberR);
+        $redoblonaNumberClean = trim(str_replace('*', '', $play->numberR));
         
-        Log::info("RedoblonaService - Contando redoblona: {$play->numberR} (limpio: {$redoblonaNumberClean}) posición {$play->positionR} en {$lotteryCode}");
+        Log::info("RedoblonaService - Contando redoblona: {$play->numberR} (limpio: '{$redoblonaNumberClean}') posición {$play->positionR} en {$lotteryCode}");
         Log::info("RedoblonaService - Rango redoblona: {$redoblonaRange['min']}-{$redoblonaRange['max']}");
         Log::info("RedoblonaService - Total números en rango: " . $redoblonaNumbers->count());
         
         foreach ($redoblonaNumbers as $redoblonaNumber) {
+            // ✅ MEJORADO: Validar que el índice esté en rango válido (1-20)
+            $numberIndex = (int)$redoblonaNumber->index;
+            if ($numberIndex < 1 || $numberIndex > 20) {
+                Log::warning("RedoblonaService - ⚠️ Índice inválido: {$numberIndex} para número {$redoblonaNumber->value}");
+                continue;
+            }
+            
             if ($this->isRedoblonaWinner($play->numberR, $redoblonaNumber->value)) {
                 $redoblonaWinningCount++;
-                $redoblonaPositions[] = $redoblonaNumber->index;
-                Log::info("RedoblonaService - ✅ Redoblona ganadora #{$redoblonaWinningCount}: {$play->numberR} vs {$redoblonaNumber->value} en posición {$redoblonaNumber->index}");
+                $redoblonaPositions[] = $numberIndex;
+                Log::info("RedoblonaService - ✅ Redoblona ganadora #{$redoblonaWinningCount}: {$play->numberR} vs {$redoblonaNumber->value} en posición {$numberIndex}");
             }
         }
         
@@ -175,6 +182,12 @@ class RedoblonaService
 
         $redoblonaWinningCount = 0;
         foreach ($redoblonaNumbers as $redoblonaNumber) {
+            // ✅ MEJORADO: Validar que el índice esté en rango válido (1-20)
+            $numberIndex = (int)$redoblonaNumber->index;
+            if ($numberIndex < 1 || $numberIndex > 20) {
+                continue;
+            }
+            
             if ($this->isRedoblonaWinner($play->numberR, $redoblonaNumber->value)) {
                 $redoblonaWinningCount++;
             }
@@ -238,12 +251,24 @@ class RedoblonaService
 
     /**
      * Verifica si el número principal es ganador
+     * ✅ MEJORADO: Normaliza números con trim() para evitar problemas de espacios
      */
     private function isMainWinner($playNumber, $winningNumber): bool
     {
-        $playNumber = str_replace('*', '', $playNumber);
-        $winningNumberStr = str_pad($winningNumber, 4, '0', STR_PAD_LEFT);
+        // ✅ MEJORADO: Limpiar y normalizar el número jugado
+        $playNumber = trim(str_replace('*', '', $playNumber));
+        
+        // ✅ MEJORADO: Limpiar y normalizar el número ganador
+        $winningValue = trim((string)$winningNumber);
+        if (empty($winningValue)) {
+            return false;
+        }
+        
+        // ✅ MEJORADO: Normalizar el número ganador a 4 dígitos con ceros a la izquierda
+        $winningNumberStr = str_pad($winningValue, 4, '0', STR_PAD_LEFT);
         $playLength = strlen($playNumber);
+        
+        // ✅ MEJORADO: Extraer el sufijo del número ganador
         $winningSuffix = substr($winningNumberStr, -$playLength);
 
         return $playNumber === $winningSuffix;
@@ -251,12 +276,24 @@ class RedoblonaService
 
     /**
      * Verifica si la redoblona es ganadora
+     * ✅ MEJORADO: Normaliza números con trim() para evitar problemas de espacios
      */
     private function isRedoblonaWinner($playNumberR, $winningNumber): bool
     {
-        $playNumber = str_replace('*', '', $playNumberR);
-        $winningNumberStr = str_pad($winningNumber, 4, '0', STR_PAD_LEFT);
+        // ✅ MEJORADO: Limpiar y normalizar el número jugado
+        $playNumber = trim(str_replace('*', '', $playNumberR));
+        
+        // ✅ MEJORADO: Limpiar y normalizar el número ganador
+        $winningValue = trim((string)$winningNumber);
+        if (empty($winningValue)) {
+            return false;
+        }
+        
+        // ✅ MEJORADO: Normalizar el número ganador a 4 dígitos con ceros a la izquierda
+        $winningNumberStr = str_pad($winningValue, 4, '0', STR_PAD_LEFT);
         $playLength = strlen($playNumber);
+        
+        // ✅ MEJORADO: Extraer el sufijo del número ganador
         $winningSuffix = substr($winningNumberStr, -$playLength);
 
         return $playNumber === $winningSuffix;
