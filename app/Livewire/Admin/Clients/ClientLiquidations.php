@@ -474,8 +474,9 @@ class ClientLiquidations extends Component
     }
     
     /**
-     * Obtiene el "Cliente Deja" (UD Deja) de la última liquidación disponible
-     * Busca la última fecha que tenga datos (Result o ApusModel) y calcula su UD Deja
+     * Obtiene el "Cliente Deja" (UD Deja) del día anterior
+     * La liquidación del día actual solo se desbloquea al día siguiente
+     * Ejemplo: Si hoy es 14, muestra el valor del 13
      */
     public function getCurrentDayUdDejaProperty()
     {
@@ -484,36 +485,20 @@ class ClientLiquidations extends Component
         }
         
         $userId = $this->client->associatedUser->id;
+        $today = Carbon::today();
         
-        // Buscar la última fecha que tenga datos en Result
-        $lastResult = Result::where('user_id', $userId)
-            ->orderBy('date', 'desc')
-            ->first();
-        
-        // Buscar la última fecha que tenga datos en ApusModel
-        $lastApu = ApusModel::where('user_id', $userId)
-            ->orderBy('created_at', 'desc')
-            ->first();
-        
-        // Determinar la última fecha disponible
-        $lastDate = null;
-        if ($lastResult && $lastApu) {
-            $resultDate = Carbon::parse($lastResult->date);
-            $apuDate = Carbon::parse($lastApu->created_at);
-            $lastDate = $resultDate->gte($apuDate) ? $resultDate->format('Y-m-d') : $apuDate->format('Y-m-d');
-        } elseif ($lastResult) {
-            $lastDate = Carbon::parse($lastResult->date)->format('Y-m-d');
-        } elseif ($lastApu) {
-            $lastDate = Carbon::parse($lastApu->created_at)->format('Y-m-d');
+        // Obtener la fecha de ayer (día anterior)
+        // Si es lunes, el día anterior es el sábado (2 días atrás)
+        if ($today->isMonday()) {
+            $previousDate = $today->copy()->subDays(2); // Sábado anterior
+        } else {
+            $previousDate = $today->copy()->subDay(); // Día anterior
         }
         
-        // Si no hay datos, retornar 0
-        if (!$lastDate) {
-            return 0;
-        }
+        $previousDateStr = $previousDate->format('Y-m-d');
         
-        // Calcular el UD Deja de la última fecha disponible
-        $liquidationData = $this->computeLiquidationDataForDate($lastDate, $userId);
+        // Calcular el UD Deja del día anterior
+        $liquidationData = $this->computeLiquidationDataForDate($previousDateStr, $userId);
         
         return $liquidationData['udDeja'] ?? 0;
     }
@@ -594,17 +579,33 @@ class ClientLiquidations extends Component
             'paymentAmount.min' => 'El monto debe ser mayor a 0',
         ]);
         
-        // Verificar si ya existe un pago para esta fecha
-        $existingPayment = ClientPayment::where('client_id', $this->client->id)
-            ->whereDate('payment_date', $this->paymentDate)
+        // Verificar si ya existe un pago registrado HOY (fecha actual)
+        // Solo se permite un pago por día, y el siguiente solo se puede hacer a las 00:00 del día siguiente
+        $today = Carbon::today()->format('Y-m-d');
+        $existingPaymentToday = ClientPayment::where('client_id', $this->client->id)
+            ->whereDate('created_at', $today)
             ->first();
         
-        if ($existingPayment) {
+        if ($existingPaymentToday) {
             // Cerrar el modal
             $this->closePaymentModal();
             
             // Mostrar mensaje de error
-            $this->dispatch('payment-error', message: 'Ya se registró un pago para este día. Debe esperar al siguiente día para registrar otro pago.');
+            $this->dispatch('payment-error', message: 'Ya se registró un pago hoy. Debe esperar hasta las 00:00 del día siguiente para registrar otro pago.');
+            return;
+        }
+        
+        // También verificar si ya existe un pago para la fecha específica del pago
+        $existingPaymentForDate = ClientPayment::where('client_id', $this->client->id)
+            ->whereDate('payment_date', $this->paymentDate)
+            ->first();
+        
+        if ($existingPaymentForDate) {
+            // Cerrar el modal
+            $this->closePaymentModal();
+            
+            // Mostrar mensaje de error
+            $this->dispatch('payment-error', message: 'Ya se registró un pago para esta fecha. Debe esperar al siguiente día para registrar otro pago.');
             return;
         }
         
