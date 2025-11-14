@@ -472,7 +472,7 @@
                             </span>
                         </div>
                         <p class="text-xs text-gray-400 mt-1">
-                            @if($currentUdDeja >= 0)
+                            @if($currentUdDeja < 0)
                                 El administrador debe pagar al cliente
                             @else
                                 El cliente debe pagar al administrador
