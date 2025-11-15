@@ -79,6 +79,9 @@ class PlaysManager extends Component
     
     // ✅ OPTIMIZACIÓN: Cachear jugada base para derivadas (evita consultas repetidas)
     private $cachedBasePlay = null;
+    
+    // ✅ OPTIMIZACIÓN: Mapeo pre-calculado de códigos UI a horarios (O(1) en lugar de O(n×m×k))
+    private $codeToTimeMap = [];
 
 
 
@@ -566,6 +569,9 @@ class PlaysManager extends Component
                 // Esto evita validaciones en cada addRow() - se calcula una sola vez
                 $selectedSchedules = $this->cachedGlobalConfig[$cityName] ?? [];
                 $this->validCodesMap[$uiCode] = in_array($time, $selectedSchedules, true);
+                
+                // ✅ OPTIMIZACIÓN: Crear mapeo código -> horario para búsquedas O(1)
+                $this->codeToTimeMap[$uiCode] = $time;
             }
         }
     }
@@ -2307,37 +2313,20 @@ public function addRow()
     private function getTimePlayFromPlays(Collection $plays): string
 
     {
-
+        // ✅ OPTIMIZADO: Extraer códigos únicos de todas las jugadas
         $allLotteryCodesFromPlays = $plays->pluck('lottery')
-
             ->map(fn($lotteryString) => !empty($lotteryString) ? explode(',', $lotteryString) : [])
-
             ->flatten()
-
             ->map(fn($code) => trim($code))
-
             ->filter()
-
             ->unique();
 
-
-
+        // ✅ OPTIMIZADO: Usar mapeo pre-calculado O(1) en lugar de bucles anidados O(n×m×k)
         $selectedTimes = [];
-
         foreach ($allLotteryCodesFromPlays as $code) {
-
-            // Buscar en la nueva estructura de lotteryGroups
-            foreach ($this->lotteryGroups as $time => $lotteries) {
-
-                foreach ($lotteries as $lottery) {
-
-                    if ($lottery['ui_code'] === $code) {
-
-                        $selectedTimes[] = $time;
-
-                        break 2; // Salir de ambos bucles
-                    }
-                }
+            $time = $this->codeToTimeMap[$code] ?? null;
+            if ($time) {
+                $selectedTimes[] = $time;
             }
         }
 
@@ -2349,20 +2338,8 @@ public function addRow()
     private function getTimeApuFromLottery($lotteryUiCode): string
 
     {
-
-        // Buscar en la nueva estructura de lotteryGroups
-        foreach ($this->lotteryGroups as $time => $lotteries) {
-
-            foreach ($lotteries as $lottery) {
-
-                if ($lottery['ui_code'] === $lotteryUiCode) {
-
-                    return $time;
-                }
-            }
-        }
-
-        return '';
+        // ✅ OPTIMIZADO: Búsqueda O(1) usando mapeo pre-calculado en lugar de bucles anidados O(n×m)
+        return $this->codeToTimeMap[$lotteryUiCode] ?? '';
     }
 
 
@@ -2930,8 +2907,14 @@ public function addRow()
             return $this->cachedTotal;
         }
         
+        // ✅ OPTIMIZADO: Calcular total de forma eficiente
+        // El explode() es necesario pero solo se ejecuta cuando needsTotalRecalculation = true
         $this->cachedTotal = $this->rows->sum(function($row) {
-            $lotteryCount = !empty($row->lottery) ? count(array_filter(explode(',', $row->lottery))) : 0;
+            // Optimización: evitar explode() si lottery está vacío
+            if (empty($row->lottery)) {
+                return 0;
+            }
+            $lotteryCount = count(array_filter(explode(',', $row->lottery)));
             return (float)$row->import * $lotteryCount;
         });
         
