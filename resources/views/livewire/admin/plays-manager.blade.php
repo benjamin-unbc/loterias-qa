@@ -758,23 +758,59 @@
                 }
             }
 
+            // Registrar listener para la alerta de redoblona (funciona incluso si Livewire aún no está cargado)
+            function registerRedoblonaAlertListener() {
+                if (typeof window.Livewire !== 'undefined') {
+                    Livewire.on('show-redoblona-alert', (event) => {
+                        const data = event[0] || event;
+                        const message = data?.message || 'La redoblona solo se puede con números de 2 cifras.';
+                        
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Validación de Redoblona',
+                            html: '<p style="color: #ffffff; font-size: 16px;">' + message + '</p>',
+                            confirmButtonText: 'Entendido',
+                            confirmButtonColor: '#f59e0b',
+                            background: '#1b1f22',
+                            color: '#ffffff',
+                            iconColor: '#f59e0b',
+                            customClass: {
+                                popup: 'swal-custom-popup',
+                                title: 'swal-custom-title',
+                                content: 'swal-custom-content'
+                            },
+                            buttonsStyling: true,
+                            allowOutsideClick: true,
+                            allowEscapeKey: true
+                        });
+                    });
+                } else {
+                    setTimeout(registerRedoblonaAlertListener, 100);
+                }
+            }
+
             // Inicializar cuando Livewire esté listo
             if (document.readyState === 'loading') {
                 document.addEventListener('DOMContentLoaded', function() {
                     document.addEventListener('livewire:init', initPlaysManagerScripts);
                     document.addEventListener('livewire:init', registerLotteryAlertListener);
+                    document.addEventListener('livewire:init', registerRedoblonaAlertListener);
                     setTimeout(initPlaysManagerScripts, 500);
                     setTimeout(registerLotteryAlertListener, 500);
+                    setTimeout(registerRedoblonaAlertListener, 500);
                 });
             } else {
                 document.addEventListener('livewire:init', initPlaysManagerScripts);
                 document.addEventListener('livewire:init', registerLotteryAlertListener);
+                document.addEventListener('livewire:init', registerRedoblonaAlertListener);
                 setTimeout(initPlaysManagerScripts, 500);
                 setTimeout(registerLotteryAlertListener, 500);
+                setTimeout(registerRedoblonaAlertListener, 500);
             }
             
             // Intentar registrar el listener inmediatamente si Livewire ya está disponible
             registerLotteryAlertListener();
+            registerRedoblonaAlertListener();
 
             function printTicket() {
                 const ticketContainer = document.getElementById('ticketContainer');

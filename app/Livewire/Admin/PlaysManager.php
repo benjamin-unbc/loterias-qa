@@ -2916,7 +2916,7 @@ public function addRow()
 
         // Validar que el número principal sea de 2 cifras
         if ($mainDigitCount !== 2) {
-            $this->dispatch('notify', message: 'La redoblona solo se puede con números de 2 cifras.', type: 'warning');
+            $this->dispatch('show-redoblona-alert', message: 'La redoblona solo se puede con números de 2 cifras. Tu número tiene ' . $mainDigitCount . ' cifras.');
             throw new \Exception('Redoblona validation failed');
         }
 
@@ -2925,7 +2925,7 @@ public function addRow()
         $redoblonaDigitCount = strlen($cleanRedoblonaNumber);
 
         if ($redoblonaDigitCount !== 2) {
-            $this->dispatch('notify', message: 'La redoblona solo se puede con números de 2 cifras.', type: 'warning');
+            $this->dispatch('show-redoblona-alert', message: 'La redoblona solo se puede con números de 2 cifras. Tu número de redoblona tiene ' . $redoblonaDigitCount . ' cifras.');
             throw new \Exception('Redoblona validation failed');
         }
     }
