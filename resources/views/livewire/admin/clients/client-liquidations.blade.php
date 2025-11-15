@@ -76,14 +76,15 @@
                                             $hasPayment = \App\Models\ClientPayment::where('client_id', $client->id)
                                                 ->whereDate('payment_date', $lastDate)
                                                 ->exists();
+                                            $clienteDeja = $week['clienteDeja'] ?? 0;
                                         @endphp
-                                        @if(!$hasPayment)
+                                        @if(!$hasPayment && $clienteDeja != 0)
                                             <button wire:click="openPaymentModal('{{ $lastDate }}')"
                                                 class="font-medium text-blue-400 hover:text-blue-300 transition-colors duration-200"
                                                 title="Registrar pago">
                                                 <i class="fa-solid fa-dollar-sign"></i>
                                             </button>
-                                        @else
+                                        @elseif($hasPayment)
                                             <span class="text-gray-500 text-xs" title="Ya se registró un pago para este día. Debe esperar al siguiente día para registrar otro.">
                                                 <i class="fa-solid fa-check-circle text-green-400"></i>
                                             </span>
