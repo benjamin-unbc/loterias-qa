@@ -45,13 +45,42 @@ echo "TEST 1: Información del Servidor MySQL\n";
 echo "----------------------------------------\n";
 
 try {
-    // Intentar obtener información del servidor (compatible con versiones antiguas)
-    $serverInfo = DB::select("SELECT 
-        VERSION() as version,
-        @@max_connections as max_connections,
-        @@threads_connected as threads_connected,
-        @@threads_running as threads_running
-    ")[0];
+    // Obtener versión primero
+    $versionInfo = DB::select("SELECT VERSION() as version")[0];
+    $serverInfo = (object)['version' => $versionInfo->version];
+    
+    // Intentar obtener información básica (compatible con versiones antiguas)
+    try {
+        $basicInfo = DB::select("SELECT @@max_connections as max_connections")[0];
+        $serverInfo->max_connections = $basicInfo->max_connections;
+    } catch (\Exception $e) {
+        $serverInfo->max_connections = 'N/A';
+    }
+    
+    // Intentar obtener threads usando SHOW STATUS (más compatible)
+    try {
+        $threadsConnected = DB::select("SHOW STATUS LIKE 'Threads_connected'");
+        $serverInfo->threads_connected = !empty($threadsConnected) ? $threadsConnected[0]->Value : 'N/A';
+    } catch (\Exception $e) {
+        try {
+            $threadsInfo = DB::select("SELECT @@threads_connected as threads_connected")[0];
+            $serverInfo->threads_connected = $threadsInfo->threads_connected;
+        } catch (\Exception $e2) {
+            $serverInfo->threads_connected = 'N/A';
+        }
+    }
+    
+    try {
+        $threadsRunning = DB::select("SHOW STATUS LIKE 'Threads_running'");
+        $serverInfo->threads_running = !empty($threadsRunning) ? $threadsRunning[0]->Value : 'N/A';
+    } catch (\Exception $e) {
+        try {
+            $threadsInfo = DB::select("SELECT @@threads_running as threads_running")[0];
+            $serverInfo->threads_running = $threadsInfo->threads_running;
+        } catch (\Exception $e2) {
+            $serverInfo->threads_running = 'N/A';
+        }
+    }
     
     // Intentar obtener variables adicionales si están disponibles
     try {
@@ -68,27 +97,31 @@ try {
     
     // Intentar obtener max_used_connections si está disponible
     try {
-        $maxUsed = DB::select("SHOW STATUS LIKE 'Max_used_connections'")[0];
-        $serverInfo->max_used_connections = $maxUsed->Value ?? 'N/A';
+        $maxUsed = DB::select("SHOW STATUS LIKE 'Max_used_connections'");
+        $serverInfo->max_used_connections = !empty($maxUsed) ? $maxUsed[0]->Value : 'N/A';
     } catch (\Exception $e) {
         $serverInfo->max_used_connections = 'N/A';
     }
     
     echo "  Versión MySQL: " . $serverInfo->version . "\n";
-    echo "  Conexiones máximas: " . number_format($serverInfo->max_connections) . "\n";
-    if ($serverInfo->max_used_connections !== 'N/A') {
+    if ($serverInfo->max_connections !== 'N/A') {
+        echo "  Conexiones máximas: " . number_format($serverInfo->max_connections) . "\n";
+    }
+    if ($serverInfo->max_used_connections !== 'N/A' && is_numeric($serverInfo->max_used_connections)) {
         echo "  Conexiones usadas (máx histórico): " . number_format($serverInfo->max_used_connections) . "\n";
     }
-    echo "  Conexiones activas ahora: " . number_format($serverInfo->threads_connected) . "\n";
-    echo "  Threads ejecutándose: " . number_format($serverInfo->threads_running) . "\n";
-    
-    if ($serverInfo->threads_connected > ($serverInfo->max_connections * 0.8)) {
-        echo "\n  ⚠️  ADVERTENCIA: Muchas conexiones activas (" . $serverInfo->threads_connected . "/" . $serverInfo->max_connections . ")\n";
+    if ($serverInfo->threads_connected !== 'N/A' && is_numeric($serverInfo->threads_connected)) {
+        echo "  Conexiones activas ahora: " . number_format($serverInfo->threads_connected) . "\n";
+        if ($serverInfo->max_connections !== 'N/A' && is_numeric($serverInfo->max_connections) && $serverInfo->threads_connected > ($serverInfo->max_connections * 0.8)) {
+            echo "\n  ⚠️  ADVERTENCIA: Muchas conexiones activas (" . $serverInfo->threads_connected . "/" . $serverInfo->max_connections . ")\n";
+        }
     }
-    
-    if ($serverInfo->threads_running > 10) {
-        echo "\n  ⚠️  ADVERTENCIA: Muchos threads ejecutándose (" . $serverInfo->threads_running . ")\n";
-        echo "      El servidor puede estar bajo carga\n";
+    if ($serverInfo->threads_running !== 'N/A' && is_numeric($serverInfo->threads_running)) {
+        echo "  Threads ejecutándose: " . number_format($serverInfo->threads_running) . "\n";
+        if ($serverInfo->threads_running > 10) {
+            echo "\n  ⚠️  ADVERTENCIA: Muchos threads ejecutándose (" . $serverInfo->threads_running . ")\n";
+            echo "      El servidor puede estar bajo carga\n";
+        }
     }
     
 } catch (\Exception $e) {
@@ -276,11 +309,25 @@ if (!empty($insertTimes)) {
         $avgDelete = array_sum(array_column($insertBreakdown, 'delete')) / count($insertBreakdown);
         echo "\n  Tiempo promedio de CREAR: " . number_format($avgCreate, 2) . " ms\n";
         echo "  Tiempo promedio de ELIMINAR: " . number_format($avgDelete, 2) . " ms\n";
+        
+        // Análisis específico: el problema es el DELETE, no el CREATE
+        if ($avgDelete > ($avgCreate * 10)) {
+            echo "\n  ✅ HALLAZGO IMPORTANTE: El tiempo de CREAR es rápido (" . number_format($avgCreate, 2) . " ms)\n";
+            echo "      Pero el tiempo de ELIMINAR es lento (" . number_format($avgDelete, 2) . " ms)\n";
+            echo "      ⚠️  En la aplicación REAL, solo se CREA (no se elimina)\n";
+            echo "      → El tiempo real de inserción debería ser ~" . number_format($avgCreate, 2) . " ms\n";
+            echo "      → Esto es EXCELENTE y no debería causar lentitud\n";
+            echo "\n  💡 CONCLUSIÓN: El problema NO es la base de datos\n";
+            echo "      Si el usuario siente lentitud, puede ser:\n";
+            echo "      1. Overhead de Livewire (serialización, HTTP, re-renders)\n";
+            echo "      2. Otras operaciones después de crear (cache, validaciones)\n";
+            echo "      3. Tiempo de respuesta HTTP completo (red, procesamiento PHP)\n";
+        }
     }
     
     if ($avg > 50) {
-        echo "\n  ⚠️  ADVERTENCIA: Tiempo de inserción alto\n";
-        echo "      En localhost debería ser < 20ms\n";
+        echo "\n  ⚠️  ADVERTENCIA: Tiempo total alto (pero incluye DELETE)\n";
+        echo "      Revisar tiempo de CREAR vs ELIMINAR arriba\n";
     } elseif ($max > ($avg * 3)) {
         echo "\n  ⚠️  ADVERTENCIA: Picos ocasionales muy altos\n";
         echo "      El máximo (" . number_format($max, 2) . " ms) es > 3x el promedio\n";
