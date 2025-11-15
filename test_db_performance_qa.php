@@ -45,19 +45,40 @@ echo "TEST 1: Información del Servidor MySQL\n";
 echo "----------------------------------------\n";
 
 try {
+    // Intentar obtener información del servidor (compatible con versiones antiguas)
     $serverInfo = DB::select("SELECT 
         VERSION() as version,
         @@max_connections as max_connections,
-        @@max_used_connections as max_used_connections,
         @@threads_connected as threads_connected,
-        @@threads_running as threads_running,
-        @@table_open_cache as table_open_cache,
-        @@innodb_buffer_pool_size as innodb_buffer_pool_size
+        @@threads_running as threads_running
     ")[0];
+    
+    // Intentar obtener variables adicionales si están disponibles
+    try {
+        $extraInfo = DB::select("SELECT 
+            @@table_open_cache as table_open_cache,
+            @@innodb_buffer_pool_size as innodb_buffer_pool_size
+        ")[0];
+        $serverInfo->table_open_cache = $extraInfo->table_open_cache ?? 'N/A';
+        $serverInfo->innodb_buffer_pool_size = $extraInfo->innodb_buffer_pool_size ?? 'N/A';
+    } catch (\Exception $e) {
+        $serverInfo->table_open_cache = 'N/A';
+        $serverInfo->innodb_buffer_pool_size = 'N/A';
+    }
+    
+    // Intentar obtener max_used_connections si está disponible
+    try {
+        $maxUsed = DB::select("SHOW STATUS LIKE 'Max_used_connections'")[0];
+        $serverInfo->max_used_connections = $maxUsed->Value ?? 'N/A';
+    } catch (\Exception $e) {
+        $serverInfo->max_used_connections = 'N/A';
+    }
     
     echo "  Versión MySQL: " . $serverInfo->version . "\n";
     echo "  Conexiones máximas: " . number_format($serverInfo->max_connections) . "\n";
-    echo "  Conexiones usadas (máx histórico): " . number_format($serverInfo->max_used_connections) . "\n";
+    if ($serverInfo->max_used_connections !== 'N/A') {
+        echo "  Conexiones usadas (máx histórico): " . number_format($serverInfo->max_used_connections) . "\n";
+    }
     echo "  Conexiones activas ahora: " . number_format($serverInfo->threads_connected) . "\n";
     echo "  Threads ejecutándose: " . number_format($serverInfo->threads_running) . "\n";
     
@@ -170,19 +191,24 @@ if (!empty($fkTimes)) {
     echo "  Máximo: " . number_format($max, 2) . " ms\n";
 }
 
-// Test 5: Tiempo de inserción real
+// Test 5: Tiempo de inserción real (con análisis detallado)
 echo "\n----------------------------------------\n";
 echo "TEST 5: Tiempo de Inserción de Jugada\n";
 echo "----------------------------------------\n";
 
 $insertTimes = [];
-for ($i = 1; $i <= 5; $i++) {
+$insertBreakdown = [];
+
+for ($i = 1; $i <= 10; $i++) {
     $start = microtime(true);
+    
     try {
+        // Medir solo la creación
+        $createStart = microtime(true);
         $play = Play::create([
             'user_id' => $userId,
             'type' => 'J',
-            'number' => 'TEST' . $i,
+            'number' => 'TEST' . time() . $i, // Usar timestamp para evitar duplicados
             'position' => '1',
             'import' => '100.00',
             'lottery' => 'TEST',
@@ -190,30 +216,75 @@ for ($i = 1; $i <= 5; $i++) {
             'positionR' => null,
             'isChecked' => false,
         ]);
+        $createEnd = microtime(true);
         
+        // Medir el delete
+        $deleteStart = microtime(true);
         $play->delete(); // Limpiar
+        $deleteEnd = microtime(true);
         
         $end = microtime(true);
-        $time = ($end - $start) * 1000;
-        $insertTimes[] = $time;
-        echo "  Intento {$i}: " . number_format($time, 2) . " ms\n";
+        $totalTime = ($end - $start) * 1000;
+        $createTime = ($createEnd - $createStart) * 1000;
+        $deleteTime = ($deleteEnd - $deleteStart) * 1000;
+        
+        $insertTimes[] = $totalTime;
+        $insertBreakdown[] = [
+            'total' => $totalTime,
+            'create' => $createTime,
+            'delete' => $deleteTime
+        ];
+        
+        echo "  Intento {$i}: " . number_format($totalTime, 2) . " ms";
+        echo " (crear: " . number_format($createTime, 2) . " ms, eliminar: " . number_format($deleteTime, 2) . " ms)\n";
     } catch (\Exception $e) {
         echo "  Intento {$i}: ERROR - " . $e->getMessage() . "\n";
     }
-    usleep(100000); // 100ms entre inserciones
+    usleep(50000); // 50ms entre inserciones
 }
 
 if (!empty($insertTimes)) {
     $avg = array_sum($insertTimes) / count($insertTimes);
     $min = min($insertTimes);
     $max = max($insertTimes);
+    
+    // Calcular desviación estándar para medir variabilidad
+    $variance = 0;
+    foreach ($insertTimes as $time) {
+        $variance += pow($time - $avg, 2);
+    }
+    $stdDev = sqrt($variance / count($insertTimes));
+    
     echo "\n  Promedio: " . number_format($avg, 2) . " ms\n";
     echo "  Mínimo: " . number_format($min, 2) . " ms\n";
     echo "  Máximo: " . number_format($max, 2) . " ms\n";
+    echo "  Desviación estándar: " . number_format($stdDev, 2) . " ms\n";
+    
+    // Análisis de variabilidad
+    if ($stdDev > ($avg * 0.5)) {
+        echo "\n  ⚠️  ADVERTENCIA: Alta variabilidad en tiempos de inserción\n";
+        echo "      La desviación estándar es > 50% del promedio\n";
+        echo "      Esto indica que hay factores externos afectando:\n";
+        echo "      - Bloqueos de tabla ocasionales\n";
+        echo "      - Otras operaciones compitiendo\n";
+        echo "      - Cache de MySQL calentándose\n";
+    }
+    
+    // Análisis de tiempos de creación vs eliminación
+    if (!empty($insertBreakdown)) {
+        $avgCreate = array_sum(array_column($insertBreakdown, 'create')) / count($insertBreakdown);
+        $avgDelete = array_sum(array_column($insertBreakdown, 'delete')) / count($insertBreakdown);
+        echo "\n  Tiempo promedio de CREAR: " . number_format($avgCreate, 2) . " ms\n";
+        echo "  Tiempo promedio de ELIMINAR: " . number_format($avgDelete, 2) . " ms\n";
+    }
     
     if ($avg > 50) {
         echo "\n  ⚠️  ADVERTENCIA: Tiempo de inserción alto\n";
         echo "      En localhost debería ser < 20ms\n";
+    } elseif ($max > ($avg * 3)) {
+        echo "\n  ⚠️  ADVERTENCIA: Picos ocasionales muy altos\n";
+        echo "      El máximo (" . number_format($max, 2) . " ms) es > 3x el promedio\n";
+        echo "      Esto puede causar la sensación de lentitud\n";
     }
 }
 
