@@ -421,22 +421,40 @@ class Liquidations extends Component
         
         // Si no está en cache, obtener el anterior del día anterior recursivamente
         // El anterior es simplemente el anterior del día anterior, no el UD Deja
+        // Caso base: si la fecha es muy antigua (más de 1 año), retornar 0 para evitar recursión infinita
+        if ($previousDate->lt(Carbon::now()->subYear())) {
+            return 0;
+        }
+        
+        // Marcar que estamos calculando para evitar recursión infinita
         if (!isset($this->anteriorCache[$cacheKey]) && !isset($this->anteriorCache[$cacheKeyWithPayments])) {
+            // Marcar temporalmente para evitar recursión
+            $this->anteriorCache[$cacheKey] = null;
+            
             // Obtener el anterior del día anterior recursivamente
             $anteri = $this->getAnteriorForDate($previousDate->format('Y-m-d'), $userId);
-            // Guardar en cache sin pagos (el anterior ya viene con pagos aplicados del día anterior)
+            
+            // Aplicar pagos del día anterior
+            $previousPayments = $this->getPaymentsForCurrentDate($userId, $previousDate->format('Y-m-d'));
+            $anteri = $anteri - $previousPayments['udDio'] + $previousPayments['udRecibe'];
+            
+            // Guardar en cache con pagos aplicados
             $this->anteriorCache[$cacheKey] = $anteri;
             $this->anteriorCache[$cacheKeyWithPayments] = $anteri;
+            
             return $anteri;
         }
         
-        // Si está en cache sin pagos, obtenerlo
+        // Si está en cache sin pagos, obtenerlo y aplicar pagos
+        // Si está marcado como null, significa que está siendo calculado, retornar 0 para evitar recursión
         if (isset($this->anteriorCache[$cacheKey]) && $this->anteriorCache[$cacheKey] !== null) {
             $anteri = $this->anteriorCache[$cacheKey];
+        } elseif (isset($this->anteriorCache[$cacheKey]) && $this->anteriorCache[$cacheKey] === null) {
+            // Está siendo calculado, retornar 0 para evitar recursión infinita
+            return 0;
         } else {
-            // Si no está en cache, obtener el anterior del día anterior recursivamente
-            $anteri = $this->getAnteriorForDate($previousDate->format('Y-m-d'), $userId);
-            $this->anteriorCache[$cacheKey] = $anteri;
+            // Si no está en cache, retornar 0 (caso base)
+            $anteri = 0;
         }
         
         // Aplicar pagos del día anterior
