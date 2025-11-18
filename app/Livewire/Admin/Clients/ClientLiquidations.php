@@ -145,6 +145,7 @@ class ClientLiquidations extends Component
                 // Esto asegura que usamos el mismo método que "ver semana"
                 if ($isCurrentWeek) {
                     $this->anteriorCache = [];
+                    $this->arrastreCache = [];
                 }
                 
                 // Para la semana actual, encontrar el último día que realmente tiene liquidación
@@ -211,6 +212,11 @@ class ClientLiquidations extends Component
      * Cache de instancia para evitar recursión infinita al calcular anteriores
      */
     protected $anteriorCache = [];
+    
+    /**
+     * Cache de instancia para almacenar arrastres calculados
+     */
+    protected $arrastreCache = [];
     
     /**
      * Calcula los datos de liquidación para una fecha específica
@@ -386,22 +392,24 @@ class ClientLiquidations extends Component
                 $comiDejaSem = 0;
                 $udDeja = $totalGanaPase + $prevClientDeja;
             }
-            $arrastre = 0;
+            // Arrastre del sábado = Arrastre del viernes + UD Deja del sábado
+            $previousDate = $selectedDate->copy()->subDay();
+            $prevArrastre = $this->getArrastreForDate($previousDate->format('Y-m-d'), $userId);
+            $arrastre = $prevArrastre + $udDeja;
         } else {
             $comiDejaSem = null;
-            // Si es lunes y el porcentaje semanal del sábado anterior fue 0 o negativo, no aplicar arrastre
+            // Calcular UD Deja
+            $udDeja = $totalGanaPase + $prevClientDeja;
+            
+            // Calcular Arrastre según el día
             if ($selectedDate->isMonday()) {
-                // Verificar el porcentaje semanal del cliente
-                if ($weeklyCommissionPercentage <= 0) {
-                    $udDeja = $totalGanaPase;
-                    $arrastre = 0;
-                } else {
-                    $udDeja = $totalGanaPase + $prevClientDeja;
-                    $arrastre = $udDeja;
-                }
-            } else {
-                $udDeja = $totalGanaPase + $prevClientDeja;
+                // Lunes: Arrastre = UD Deja (comienza en 0, luego es igual a UD Deja)
                 $arrastre = $udDeja;
+            } else {
+                // Martes a Viernes: Arrastre = Arrastre del día anterior + UD Deja del día actual
+                $previousDate = $selectedDate->copy()->subDay();
+                $prevArrastre = $this->getArrastreForDate($previousDate->format('Y-m-d'), $userId);
+                $arrastre = $prevArrastre + $udDeja;
             }
         }
         
@@ -422,6 +430,10 @@ class ClientLiquidations extends Component
         // Este es el valor que se usará como anterior para el día siguiente
         $anteriWithPayments = $prevClientDeja - $currentPayments['udDio'] + $currentPayments['udRecibe'];
         $this->anteriorCache[$cacheKeyWithPayments] = $anteriWithPayments;
+        
+        // Guardar el arrastre en cache para uso en días siguientes
+        $arrastreCacheKey = $userId . '_' . $date . '_arrastre';
+        $this->arrastreCache[$arrastreCacheKey] = $arrastre;
         
         return [
             'date' => $date,
@@ -547,6 +559,35 @@ class ClientLiquidations extends Component
         return $anteri;
     }
     
+    /**
+     * Obtiene el arrastre para una fecha específica
+     * Si está en cache, lo retorna. Si no, calcula la liquidación del día para obtener el arrastre
+     */
+    protected function getArrastreForDate(string $date, int $userId): float
+    {
+        $selectedDate = Carbon::parse($date);
+        
+        // Si es domingo, el arrastre es 0 (no se juega)
+        if ($selectedDate->isSunday()) {
+            return 0;
+        }
+        
+        // Verificar cache primero
+        $arrastreCacheKey = $userId . '_' . $date . '_arrastre';
+        if (isset($this->arrastreCache[$arrastreCacheKey]) && $this->arrastreCache[$arrastreCacheKey] !== null) {
+            return $this->arrastreCache[$arrastreCacheKey];
+        }
+        
+        // Si no está en cache, calcular la liquidación del día para obtener el arrastre
+        $liquidationData = $this->computeLiquidationDataForDate($date, $userId);
+        $arrastre = $liquidationData['arrastre'] ?? 0;
+        
+        // Guardar en cache
+        $this->arrastreCache[$arrastreCacheKey] = $arrastre;
+        
+        return $arrastre;
+    }
+    
     protected function getClientPreviousLiquidation(int $userId, string $currentDate, bool $skipRecursion = false): ?array
     {
         $currentDateCarbon = Carbon::parse($currentDate);
@@ -648,6 +689,7 @@ class ClientLiquidations extends Component
         
         // Limpiar el cache antes de calcular la semana para asegurar cálculos correctos
         $this->anteriorCache = [];
+        $this->arrastreCache = [];
         
         // Generar fechas de lunes a sábado, solo hasta hoy
         $this->weekDates = [];

@@ -18,11 +18,21 @@ class Liquidations extends Component
 
     public string $date;
     public int $cant = 15;
-    
+
     /**
      * Cache de instancia para evitar recursión infinita al calcular anteriores
      */
     protected $anteriorCache = [];
+    
+    /**
+     * Cache de instancia para almacenar arrastres calculados (global)
+     */
+    protected $arrastreCacheGlobal = [];
+    
+    /**
+     * Cache de instancia para almacenar arrastres calculados (por cliente)
+     */
+    protected $arrastreCache = [];
 
     public function mount()
     {
@@ -103,12 +113,29 @@ class Liquidations extends Component
         if ($selectedDate->isSaturday()) {
             $comiDejaSem = ($totalGanaPase + $prevGenerDeja) * 0.30;
             $udDeja = ($totalGanaPase + $prevGenerDeja) - $comiDejaSem;
-            $arrastre = 0;
+            // Arrastre del sábado = Arrastre del viernes + UD Deja del sábado
+            $previousDate = $selectedDate->copy()->subDay();
+            $prevArrastre = $this->getArrastreGlobalForDate($previousDate->format('Y-m-d'));
+            $arrastre = $prevArrastre + $udDeja;
         } else {
             $comiDejaSem = null;
             $udDeja = $totalGanaPase + $prevGenerDeja;
+            
+            // Calcular Arrastre según el día
+            if ($selectedDate->isMonday()) {
+                // Lunes: Arrastre = UD Deja (comienza en 0, luego es igual a UD Deja)
             $arrastre = $udDeja;
+            } else {
+                // Martes a Viernes: Arrastre = Arrastre del día anterior + UD Deja del día actual
+                $previousDate = $selectedDate->copy()->subDay();
+                $prevArrastre = $this->getArrastreGlobalForDate($previousDate->format('Y-m-d'));
+                $arrastre = $prevArrastre + $udDeja;
+            }
         }
+        
+        // Guardar el arrastre global en cache
+        $arrastreCacheKey = 'global_' . $this->date . '_arrastre';
+        $this->arrastreCacheGlobal[$arrastreCacheKey] = $arrastre;
         
         return [
             'results'           => $results,
@@ -203,7 +230,7 @@ class Liquidations extends Component
         } else {
             // Para días que no son lunes, obtener el anterior del día anterior
             // Necesitamos el 'anteri' del día anterior, no el 'ud_deja'
-            $previousDate = Carbon::parse($this->date)->subDay();
+        $previousDate = Carbon::parse($this->date)->subDay();
             // Si el día anterior es domingo, buscar el sábado anterior
             if ($previousDate->isSunday()) {
                 $previousDate = $previousDate->copy()->subDay(); // Sábado anterior
@@ -259,27 +286,33 @@ class Liquidations extends Component
                 $comiDejaSem = 0;
                 $udDeja = $totalGanaPase + $prevClientDeja;
             }
-            $arrastre = 0;
+            // Arrastre del sábado = Arrastre del viernes + UD Deja del sábado
+            $previousDate = $selectedDate->copy()->subDay();
+            $prevArrastre = $this->getArrastreForDate($previousDate->format('Y-m-d'), $user->id);
+            $arrastre = $prevArrastre + $udDeja;
         } else {
             $comiDejaSem = null;
-            // Si es lunes y el porcentaje semanal del sábado anterior fue 0 o negativo, no aplicar arrastre
+            // Calcular UD Deja
+            $udDeja = $totalGanaPase + $prevClientDeja;
+            
+            // Calcular Arrastre según el día
             if ($selectedDate->isMonday()) {
-                // Verificar el porcentaje semanal del cliente
-                if ($weeklyCommissionPercentage <= 0) {
-                    $udDeja = $totalGanaPase;
-                    $arrastre = 0;
-                } else {
-                    $udDeja = $totalGanaPase + $prevClientDeja;
+                // Lunes: Arrastre = UD Deja (comienza en 0, luego es igual a UD Deja)
                     $arrastre = $udDeja;
-                }
             } else {
-                $udDeja = $totalGanaPase + $prevClientDeja;
-                $arrastre = $udDeja;
+                // Martes a Viernes: Arrastre = Arrastre del día anterior + UD Deja del día actual
+                $previousDate = $selectedDate->copy()->subDay();
+                $prevArrastre = $this->getArrastreForDate($previousDate->format('Y-m-d'), $user->id);
+                $arrastre = $prevArrastre + $udDeja;
             }
         }
         
         // Obtener los pagos registrados para la fecha actual
         $currentPayments = $this->getPaymentsForCurrentDate($user->id, $this->date);
+        
+        // Guardar el arrastre en cache para uso en días siguientes
+        $arrastreCacheKey = $user->id . '_' . $this->date . '_arrastre';
+        $this->arrastreCache[$arrastreCacheKey] = $arrastre;
         
         return [
             'results'           => $results,
@@ -422,6 +455,86 @@ class Liquidations extends Component
         $this->anteriorCache[$cacheKeyWithPayments] = $anteri;
         
         return $anteri;
+    }
+    
+    /**
+     * Obtiene el arrastre para una fecha específica
+     * Si está en cache, lo retorna. Si no, calcula la liquidación del día para obtener el arrastre
+     */
+    protected function getArrastreForDate(string $date, int $userId): float
+    {
+        $selectedDate = Carbon::parse($date);
+        
+        // Si es domingo, el arrastre es 0 (no se juega)
+        if ($selectedDate->isSunday()) {
+            return 0;
+        }
+        
+        // Verificar cache primero
+        $arrastreCacheKey = $userId . '_' . $date . '_arrastre';
+        if (isset($this->arrastreCache[$arrastreCacheKey]) && $this->arrastreCache[$arrastreCacheKey] !== null) {
+            return $this->arrastreCache[$arrastreCacheKey];
+        }
+        
+        // Si no está en cache, calcular la liquidación del día para obtener el arrastre
+        // Necesitamos obtener el usuario y calcular su liquidación
+        $user = \App\Models\User::find($userId);
+        if (!$user) {
+            return 0;
+        }
+        
+        // Guardar la fecha actual temporalmente
+        $originalDate = $this->date;
+        $this->date = $date;
+        
+        // Calcular la liquidación del día
+        $liquidationData = $this->computeClientLiquidationData($user, $selectedDate);
+        $arrastre = $liquidationData['arrastre'] ?? 0;
+        
+        // Restaurar la fecha original
+        $this->date = $originalDate;
+        
+        // Guardar en cache
+        $this->arrastreCache[$arrastreCacheKey] = $arrastre;
+        
+        return $arrastre;
+    }
+    
+    /**
+     * Obtiene el arrastre global para una fecha específica
+     * Si está en cache, lo retorna. Si no, calcula la liquidación global del día para obtener el arrastre
+     */
+    protected function getArrastreGlobalForDate(string $date): float
+    {
+        $selectedDate = Carbon::parse($date);
+        
+        // Si es domingo, el arrastre es 0 (no se juega)
+        if ($selectedDate->isSunday()) {
+            return 0;
+        }
+        
+        // Verificar cache primero
+        $arrastreCacheKey = 'global_' . $date . '_arrastre';
+        if (isset($this->arrastreCacheGlobal[$arrastreCacheKey]) && $this->arrastreCacheGlobal[$arrastreCacheKey] !== null) {
+            return $this->arrastreCacheGlobal[$arrastreCacheKey];
+        }
+        
+        // Si no está en cache, calcular la liquidación global del día para obtener el arrastre
+        // Guardar la fecha actual temporalmente
+        $originalDate = $this->date;
+        $this->date = $date;
+        
+        // Calcular la liquidación global del día
+        $liquidationData = $this->computeGlobalLiquidationData($selectedDate);
+        $arrastre = $liquidationData['arrastre'] ?? 0;
+        
+        // Restaurar la fecha original
+        $this->date = $originalDate;
+        
+        // Guardar en cache
+        $this->arrastreCacheGlobal[$arrastreCacheKey] = $arrastre;
+        
+        return $arrastre;
     }
 
     /**
@@ -670,7 +783,7 @@ class Liquidations extends Component
         // Si no hay datos, buscar recursivamente
         return $this->getPreviousAnteriorRecursive($user, $previousDate, $depth + 1);
     }
-    
+
     /**
      * ✅ NUEVO: Ordena los resultados por turno (de más temprano a más tarde)
      * Extrae el turno del código de lotería (últimos 4 dígitos) o del campo time
