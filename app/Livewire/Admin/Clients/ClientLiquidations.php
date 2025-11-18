@@ -513,6 +513,57 @@ class ClientLiquidations extends Component
             return $anteri;
         }
         
+        // Si es lunes y no está en cache, el anterior del lunes es el anterior del sábado (con pagos aplicados)
+        // Pero si el cache está vacío, necesitamos calcular el anterior del sábado desde los datos
+        // En este caso, el anterior del sábado es su UD Deja (con pagos aplicados), no el anterior del viernes
+        // Porque si el cache está vacío, no podemos calcular correctamente el anterior del viernes
+        if ($selectedDate->isMonday() && !isset($this->anteriorCache[$cacheKey])) {
+            // Calcular el anterior del sábado desde los datos
+            // El anterior del sábado es su UD Deja (con pagos aplicados)
+            $saturdayResultsQuery = Result::whereDate('date', $previousDate->format('Y-m-d'))->where('user_id', $userId);
+            $saturdayTotalAciert = (float) $saturdayResultsQuery->sum('aciert');
+            
+            $saturdayApusQuery = ApusModel::whereDate('created_at', $previousDate->format('Y-m-d'))
+                                         ->where('user_id', $userId)
+                                         ->whereHas('playsSent', function($query) {
+                                             $query->where('status', '!=', 'I');
+                                         });
+            $saturdayTotalApus = (float) $saturdayApusQuery->sum('import');
+            
+            $commissionPercentage = $this->client->commission_percentage ?? 20.00;
+            $saturdayComision = $saturdayTotalApus * ($commissionPercentage / 100);
+            $saturdayTotalGanaPase = $saturdayTotalApus - $saturdayComision - $saturdayTotalAciert;
+            
+            // Obtener el anterior del viernes (o 0 si no está en cache)
+            $fridayDate = $previousDate->copy()->subDay();
+            $fridayCacheKey = $userId . '_' . $fridayDate->format('Y-m-d') . '_with_payments';
+            $fridayAnteri = isset($this->anteriorCache[$fridayCacheKey]) && $this->anteriorCache[$fridayCacheKey] !== null 
+                ? $this->anteriorCache[$fridayCacheKey] 
+                : 0;
+            
+            // Calcular UD Deja del sábado
+            $weeklyCommissionPercentage = $this->client->weekly_commission_percentage ?? 30.00;
+            if ($weeklyCommissionPercentage > 0) {
+                $comiDejaSem = ($saturdayTotalGanaPase + $fridayAnteri) * ($weeklyCommissionPercentage / 100);
+                $saturdayUdDeja = ($saturdayTotalGanaPase + $fridayAnteri) - $comiDejaSem;
+            } else {
+                $saturdayUdDeja = $saturdayTotalGanaPase + $fridayAnteri;
+            }
+            
+            // El anterior del sábado es su UD Deja (sin pagos aún)
+            $saturdayAnteri = $saturdayUdDeja;
+            
+            // Aplicar pagos del sábado
+            $saturdayPayments = $this->getPaymentsForCurrentDate($previousDate->format('Y-m-d'));
+            $saturdayAnteri = $saturdayAnteri - $saturdayPayments['udDio'] + $saturdayPayments['udRecibe'];
+            
+            // Guardar en cache
+            $this->anteriorCache[$cacheKey] = $saturdayUdDeja;
+            $this->anteriorCache[$cacheKeyWithPayments] = $saturdayAnteri;
+            
+            return $saturdayAnteri;
+        }
+        
         // Si no está en cache, calcularlo desde los datos
         // Primero intentar obtener el anterior del día anterior directamente del cache
         // Si el día anterior no tiene apuestas, su anterior debería estar en cache
@@ -549,22 +600,21 @@ class ClientLiquidations extends Component
         $prevComision = $prevTotalApus * ($commissionPercentage / 100);
         $prevTotalGanaPase = $prevTotalApus - $prevComision - $prevTotalAciert;
         
-        // Calcular udDeja del día anterior
-        $weeklyCommissionPercentage = $this->client->weekly_commission_percentage ?? 30.00;
-        if ($previousDate->isSaturday() && $weeklyCommissionPercentage > 0) {
-            $comiDejaSem = ($prevTotalGanaPase + $prevPrevAnteri) * ($weeklyCommissionPercentage / 100);
-            $prevUdDeja = ($prevTotalGanaPase + $prevPrevAnteri) - $comiDejaSem;
-        } else {
-            $prevUdDeja = $prevTotalGanaPase + $prevPrevAnteri;
-        }
-        
         // El anterior es el udDeja del día anterior (sin pagos aún)
         // PERO: Si el día anterior no tiene apuestas, el anterior debería ser el anterior del día anterior a ese
         if ($prevTotalApus == 0 && $prevTotalAciert == 0) {
             // Si no hay apuestas ni aciertos, el anterior es el anterior del día anterior (ya calculado arriba)
             $anteri = $prevPrevAnteri;
         } else {
-            // Si hay apuestas, el anterior es el udDeja del día anterior
+            // Si hay apuestas, calcular udDeja del día anterior
+            $weeklyCommissionPercentage = $this->client->weekly_commission_percentage ?? 30.00;
+            if ($previousDate->isSaturday() && $weeklyCommissionPercentage > 0) {
+                $comiDejaSem = ($prevTotalGanaPase + $prevPrevAnteri) * ($weeklyCommissionPercentage / 100);
+                $prevUdDeja = ($prevTotalGanaPase + $prevPrevAnteri) - $comiDejaSem;
+            } else {
+                $prevUdDeja = $prevTotalGanaPase + $prevPrevAnteri;
+            }
+            // El anterior es el udDeja del día anterior
             $anteri = $prevUdDeja;
         }
         $this->anteriorCache[$cacheKey] = $anteri;
