@@ -147,12 +147,16 @@ class ClientLiquidations extends Component
                 // Obtener el último día de la semana (hasta hoy) para calcular clienteDeja
                 $lastDateOfWeek = end($weekDates);
                 
-                // Usar siempre el último día de la semana (hasta hoy) para calcular el anterior
-                // Esto asegura que se muestre el anterior del último día con liquidación
-                // computeLiquidationDataForDate calculará el anterior del día anterior con pagos aplicados
-                $dateForClienteDeja = $lastDateOfWeek;
+                // IMPORTANTE: Calcular todos los días de la semana en orden cronológico
+                // para asegurar que el cache tenga todos los valores necesarios
+                // Esto es especialmente importante para que el anterior del último día
+                // use correctamente el anterior del día anterior con pagos aplicados
+                foreach ($weekDates as $weekDate) {
+                    $this->computeLiquidationDataForDate($weekDate, $userId);
+                }
                 
-                $liquidationData = $this->computeLiquidationDataForDate($dateForClienteDeja, $userId);
+                // Ahora obtener el anterior del último día (ya está en cache con todos los cálculos previos)
+                $liquidationData = $this->computeLiquidationDataForDate($lastDateOfWeek, $userId);
                 $anterior = $liquidationData['anteri'] ?? 0;
                 
                 $weeks->push([
