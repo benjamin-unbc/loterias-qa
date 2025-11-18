@@ -410,6 +410,8 @@ class Liquidations extends Component
             'comi_deja_sem'     => $comiDejaSem,
             'udDio'             => $currentPayments['udDio'],
             'udRecibePayment'   => $currentPayments['udRecibe'],
+            'paymentDateDio'    => $currentPayments['paymentDateDio'],
+            'paymentDateRecibe' => $currentPayments['paymentDateRecibe'],
         ];
         
         // Guardar el anterior calculado en cache
@@ -733,40 +735,55 @@ class Liquidations extends Component
             // Obtener el cliente asociado al usuario
             $user = \App\Models\User::find($userId);
             if (!$user) {
-                return ['udDio' => 0.0, 'udRecibe' => 0.0];
+                return ['udDio' => 0.0, 'udRecibe' => 0.0, 'paymentDateDio' => null, 'paymentDateRecibe' => null];
             }
             
             $client = \App\Models\Client::where('correo', $user->email)->first();
             if (!$client) {
-                return ['udDio' => 0.0, 'udRecibe' => 0.0];
+                return ['udDio' => 0.0, 'udRecibe' => 0.0, 'paymentDateDio' => null, 'paymentDateRecibe' => null];
             }
             
             $payments = ClientPayment::where('client_id', $client->id)
                 ->whereDate('payment_date', $date)
+                ->orderBy('created_at', 'desc')
                 ->get();
             
             $udDio = 0.0;
             $udRecibe = 0.0;
+            $paymentDateDio = null;
+            $paymentDateRecibe = null;
             
             foreach ($payments as $payment) {
                 if ($payment->type === 'paid_to_client') {
                     // Si el cliente debe pagar (paid_to_client), se suma a UD.DIO
                     $udDio += (float) $payment->amount;
+                    // Guardar la fecha del último pago UD.DIO
+                    if (!$paymentDateDio) {
+                        $paymentDateDio = $payment->created_at->format('d/m/Y');
+                    }
                 } else {
                     // Si el cliente debe cobrar (received_from_client), se suma a UD.RECIBE
                     $udRecibe += (float) $payment->amount;
+                    // Guardar la fecha del último pago UD.RECIBE
+                    if (!$paymentDateRecibe) {
+                        $paymentDateRecibe = $payment->created_at->format('d/m/Y');
+                    }
                 }
             }
             
             return [
                 'udDio' => $udDio,
                 'udRecibe' => $udRecibe,
+                'paymentDateDio' => $paymentDateDio,
+                'paymentDateRecibe' => $paymentDateRecibe,
             ];
         } catch (\Exception $e) {
             \Log::warning('Error al obtener pagos para fecha actual en Liquidations: ' . $e->getMessage());
             return [
                 'udDio' => 0.0,
                 'udRecibe' => 0.0,
+                'paymentDateDio' => null,
+                'paymentDateRecibe' => null,
             ];
         }
     }

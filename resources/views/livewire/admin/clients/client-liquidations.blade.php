@@ -172,12 +172,22 @@
                                                 <span class="text-gray-400">UD.DIO:</span>
                                                 <span class="font-medium text-red-400">${{ number_format($dayData['udDio'], 2, ',', '.') }}</span>
                                             </div>
+                                            @if(isset($dayData['paymentDateDio']) && $dayData['paymentDateDio'])
+                                                <div class="text-xs text-gray-500 italic pl-2 -mt-1">
+                                                    La fecha de ingreso fue: {{ $dayData['paymentDateDio'] }}. Se verá reflejado en la liquidación del día siguiente.
+                                                </div>
+                                            @endif
                                         @endif
                                         @if(($dayData['udRecibePayment'] ?? 0) > 0)
                                             <div class="flex justify-between text-white">
                                                 <span class="text-gray-400">UD.RECIBE:</span>
                                                 <span class="font-medium text-green-400">${{ number_format($dayData['udRecibePayment'], 2, ',', '.') }}</span>
                                             </div>
+                                            @if(isset($dayData['paymentDateRecibe']) && $dayData['paymentDateRecibe'])
+                                                <div class="text-xs text-gray-500 italic pl-2 -mt-1">
+                                                    La fecha de ingreso fue: {{ $dayData['paymentDateRecibe'] }}. Se verá reflejado en la liquidación del día siguiente.
+                                                </div>
+                                            @endif
                                         @endif
                                         <div class="flex justify-between text-white">
                                             <span class="text-gray-400">UD Deja:</span>
@@ -417,6 +427,28 @@
                                                     <h4 class="font-medium">ANTERI:</h4>
                                                     <p>{{ number_format($liquidationData['anteri'], 2) }}</p>
                                                 </div>
+                                                @if(($liquidationData['udDio'] ?? 0) > 0)
+                                                    <div class="flex justify-between">
+                                                        <h4 class="font-medium">UD.DIO:</h4>
+                                                        <p>{{ number_format($liquidationData['udDio'], 2) }}</p>
+                                                    </div>
+                                                    @if(isset($liquidationData['paymentDateDio']) && $liquidationData['paymentDateDio'])
+                                                        <div class="text-xs text-gray-500 italic pl-2 -mt-1">
+                                                            La fecha de ingreso fue: {{ $liquidationData['paymentDateDio'] }}. Se verá reflejado en la liquidación del día siguiente.
+                                                        </div>
+                                                    @endif
+                                                @endif
+                                                @if(($liquidationData['udRecibePayment'] ?? 0) > 0)
+                                                    <div class="flex justify-between">
+                                                        <h4 class="font-medium">UD.RECIBE:</h4>
+                                                        <p>{{ number_format($liquidationData['udRecibePayment'], 2) }}</p>
+                                                    </div>
+                                                    @if(isset($liquidationData['paymentDateRecibe']) && $liquidationData['paymentDateRecibe'])
+                                                        <div class="text-xs text-gray-500 italic pl-2 -mt-1">
+                                                            La fecha de ingreso fue: {{ $liquidationData['paymentDateRecibe'] }}. Se verá reflejado en la liquidación del día siguiente.
+                                                        </div>
+                                                    @endif
+                                                @endif
                                                 @if(\Carbon\Carbon::parse($fullLiquidationDate)->isSaturday())
                                                     <div class="flex justify-between">
                                                         <h4 class="font-medium">COMI DEJA SEM:</h4>
@@ -427,18 +459,6 @@
                                                     <h4 class="font-medium">UD DEJA:</h4>
                                                     <p>{{ number_format($liquidationData['udDeja'], 2) }}</p>
                                                 </div>
-                                                @if(($liquidationData['udDio'] ?? 0) > 0)
-                                                    <div class="flex justify-between">
-                                                        <h4 class="font-medium">UD.DIO:</h4>
-                                                        <p>{{ number_format($liquidationData['udDio'], 2) }}</p>
-                                                    </div>
-                                                @endif
-                                                @if(($liquidationData['udRecibePayment'] ?? 0) > 0)
-                                                    <div class="flex justify-between">
-                                                        <h4 class="font-medium">UD.RECIBE:</h4>
-                                                        <p>{{ number_format($liquidationData['udRecibePayment'], 2) }}</p>
-                                                    </div>
-                                                @endif
                                             </div>
 
                                             <!-- Arrastre -->

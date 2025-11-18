@@ -466,6 +466,8 @@ class ClientLiquidations extends Component
             'comiDejaSem' => $comiDejaSem ?? 0,
             'udDio' => $currentPayments['udDio'],
             'udRecibePayment' => $currentPayments['udRecibe'],
+            'paymentDateDio' => $currentPayments['paymentDateDio'],
+            'paymentDateRecibe' => $currentPayments['paymentDateRecibe'],
         ];
     }
     
@@ -938,30 +940,45 @@ class ClientLiquidations extends Component
         try {
             $payments = ClientPayment::where('client_id', $this->client->id)
                 ->whereDate('payment_date', $date)
+                ->orderBy('created_at', 'desc')
                 ->get();
             
             $udDio = 0.0;
             $udRecibe = 0.0;
+            $paymentDateDio = null;
+            $paymentDateRecibe = null;
             
             foreach ($payments as $payment) {
                 if ($payment->type === 'paid_to_client') {
                     // Si el cliente debe pagar (paid_to_client), se suma a UD.DIO
                     $udDio += (float) $payment->amount;
+                    // Guardar la fecha del último pago UD.DIO
+                    if (!$paymentDateDio) {
+                        $paymentDateDio = $payment->created_at->format('d/m/Y');
+                    }
                 } else {
                     // Si el cliente debe cobrar (received_from_client), se suma a UD.RECIBE
                     $udRecibe += (float) $payment->amount;
+                    // Guardar la fecha del último pago UD.RECIBE
+                    if (!$paymentDateRecibe) {
+                        $paymentDateRecibe = $payment->created_at->format('d/m/Y');
+                    }
                 }
             }
             
             return [
                 'udDio' => $udDio,
                 'udRecibe' => $udRecibe,
+                'paymentDateDio' => $paymentDateDio,
+                'paymentDateRecibe' => $paymentDateRecibe,
             ];
         } catch (\Exception $e) {
             \Log::warning('Error al obtener pagos para fecha actual: ' . $e->getMessage());
             return [
                 'udDio' => 0.0,
                 'udRecibe' => 0.0,
+                'paymentDateDio' => null,
+                'paymentDateRecibe' => null,
             ];
         }
     }

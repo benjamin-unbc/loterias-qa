@@ -195,6 +195,28 @@
                                         <h4 class="font-medium">ANTERI:</h4>
                                         <p>{{ number_format($anteri, 2) }}</p>
                                     </div>
+                                    @if(($udDio ?? 0) > 0)
+                                        <div class="flex justify-between">
+                                            <h4 class="font-medium">UD.DIO:</h4>
+                                            <p>{{ number_format($udDio, 2) }}</p>
+                                        </div>
+                                        @if(isset($paymentDateDio) && $paymentDateDio)
+                                            <div class="text-xs text-gray-500 italic pl-2 -mt-1">
+                                                La fecha de ingreso fue: {{ $paymentDateDio }}. Se verá reflejado en la liquidación del día siguiente.
+                                            </div>
+                                        @endif
+                                    @endif
+                                    @if(($udRecibePayment ?? 0) > 0)
+                                        <div class="flex justify-between">
+                                            <h4 class="font-medium">UD.RECIBE:</h4>
+                                            <p>{{ number_format($udRecibePayment, 2) }}</p>
+                                        </div>
+                                        @if(isset($paymentDateRecibe) && $paymentDateRecibe)
+                                            <div class="text-xs text-gray-500 italic pl-2 -mt-1">
+                                                La fecha de ingreso fue: {{ $paymentDateRecibe }}. Se verá reflejado en la liquidación del día siguiente.
+                                            </div>
+                                        @endif
+                                    @endif
                                     @if(\Carbon\Carbon::parse($date)->isSaturday())
                                         <div class="flex justify-between">
                                             <h4 class="font-medium">COMI DEJA SEM:</h4>
@@ -205,18 +227,6 @@
                                         <h4 class="font-medium">UD DEJA:</h4>
                                         <p>{{ number_format($udDeja, 2) }}</p>
                                     </div>
-                                    @if(($udDio ?? 0) > 0)
-                                        <div class="flex justify-between">
-                                            <h4 class="font-medium">UD.DIO:</h4>
-                                            <p>{{ number_format($udDio, 2) }}</p>
-                                        </div>
-                                    @endif
-                                    @if(($udRecibePayment ?? 0) > 0)
-                                        <div class="flex justify-between">
-                                            <h4 class="font-medium">UD.RECIBE:</h4>
-                                            <p>{{ number_format($udRecibePayment, 2) }}</p>
-                                        </div>
-                                    @endif
                                 </div>
 
                                 <div class="flex flex-col pt-3 gap-1 w-full text-sm">
