@@ -116,7 +116,8 @@ class ClientLiquidations extends Component
         // Agrupar fechas por semanas (lunes a sábado)
         $weeks = collect();
         
-        // Limpiar el cache antes de calcular todas las semanas para asegurar valores correctos
+        // Limpiar el cache antes de calcular todas las semanas
+        // Las semanas se calcularán en orden cronológico, manteniendo el cache entre ellas
         $this->anteriorCache = [];
         
         // Iterar desde la primera semana hasta la última
@@ -151,13 +152,16 @@ class ClientLiquidations extends Component
                 // para asegurar que el cache tenga todos los valores necesarios
                 // Esto es especialmente importante para que el anterior del último día
                 // use correctamente el anterior del día anterior con pagos aplicados
+                $lastLiquidationData = null;
                 foreach ($weekDates as $weekDate) {
-                    $this->computeLiquidationDataForDate($weekDate, $userId);
+                    $lastLiquidationData = $this->computeLiquidationDataForDate($weekDate, $userId);
                 }
                 
-                // Ahora obtener el anterior del último día (ya está en cache con todos los cálculos previos)
-                $liquidationData = $this->computeLiquidationDataForDate($lastDateOfWeek, $userId);
-                $anterior = $liquidationData['anteri'] ?? 0;
+                // Obtener el anterior del último día
+                // El anterior que se muestra es el anterior del día anterior con pagos aplicados
+                // que es exactamente lo que computeLiquidationDataForDate retorna en 'anteri'
+                // Usamos el último resultado calculado en lugar de recalcular
+                $anterior = $lastLiquidationData['anteri'] ?? 0;
                 
                 $weeks->push([
                     'monday' => $currentMonday->format('Y-m-d'),
