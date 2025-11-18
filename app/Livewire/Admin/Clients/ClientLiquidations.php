@@ -255,7 +255,12 @@ class ClientLiquidations extends Component
         // Obtener el porcentaje semanal del cliente
         $weeklyCommissionPercentage = $this->client->weekly_commission_percentage ?? 30.00;
         
-        if ($selectedDate->isSaturday()) {
+        // Si es lunes y no hay apuestas, todo parte en 0 excepto el anterior
+        if ($selectedDate->isMonday() && $totalApus == 0) {
+            $udDeja = 0; // UD Deja en 0 cuando no hay apuestas
+            $arrastre = 0; // Arrastre en 0 cuando no hay apuestas
+            $comiDejaSem = null;
+        } elseif ($selectedDate->isSaturday()) {
             // Solo aplicar comisión semanal si el porcentaje es positivo
             if ($weeklyCommissionPercentage > 0) {
                 $comiDejaSem = ($totalGanaPase + $prevClientDeja) * ($weeklyCommissionPercentage / 100);
