@@ -166,8 +166,11 @@ class Liquidations extends Component
      */
     protected function computeClientLiquidationData($user, Carbon $selectedDate): array
     {
+        // Usar la fecha del selectedDate en lugar de $this->date para evitar problemas cuando se calcula arrastre
+        $dateStr = $selectedDate->format('Y-m-d');
+        
         // Consulta de resultados filtrada por cliente
-        $baseQuery = Result::query()->whereDate('date', $this->date)->where('user_id', $user->id);
+        $baseQuery = Result::query()->whereDate('date', $dateStr)->where('user_id', $user->id);
         $results = (clone $baseQuery)->get();
         
         // ✅ Ordenar por turno (de más temprano a más tarde)
@@ -177,7 +180,7 @@ class Liquidations extends Component
         // Consulta de apuestas filtrada por cliente
         // ✅ Excluir jugadas anuladas (status != 'I' en plays_sent)
         $apusQuery = \App\Models\ApusModel::query()
-            ->whereDate('created_at', $this->date)
+            ->whereDate('created_at', $dateStr)
             ->where('user_id', $user->id)
             ->whereHas('playsSent', function($query) {
                 $query->where('status', '!=', 'I');
@@ -230,7 +233,7 @@ class Liquidations extends Component
         } else {
             // Para días que no son lunes, obtener el anterior del día anterior
             // Necesitamos el 'anteri' del día anterior, no el 'ud_deja'
-        $previousDate = Carbon::parse($this->date)->subDay();
+            $previousDate = $selectedDate->copy()->subDay();
             // Si el día anterior es domingo, buscar el sábado anterior
             if ($previousDate->isSunday()) {
                 $previousDate = $previousDate->copy()->subDay(); // Sábado anterior
@@ -321,10 +324,10 @@ class Liquidations extends Component
         }
         
         // Obtener los pagos registrados para la fecha actual
-        $currentPayments = $this->getPaymentsForCurrentDate($user->id, $this->date);
+        $currentPayments = $this->getPaymentsForCurrentDate($user->id, $dateStr);
         
         // Guardar el arrastre en cache para uso en días siguientes
-        $arrastreCacheKey = $user->id . '_' . $this->date . '_arrastre';
+        $arrastreCacheKey = $user->id . '_' . $dateStr . '_arrastre';
         $this->arrastreCache[$arrastreCacheKey] = $arrastre;
         
         return [
@@ -348,15 +351,14 @@ class Liquidations extends Component
         ];
         
         // Guardar el anterior calculado en cache (solo si no es null, para evitar sobrescribir valores calculados)
-        $cacheKey = $user->id . '_' . $this->date;
-        $cacheKeyWithPayments = $user->id . '_' . $this->date . '_with_payments';
+        $cacheKey = $user->id . '_' . $dateStr;
+        $cacheKeyWithPayments = $user->id . '_' . $dateStr . '_with_payments';
         
         // Guardar el anterior sin pagos aplicados
         if (!isset($this->anteriorCache[$cacheKey]) || $this->anteriorCache[$cacheKey] === null) {
             // El anterior sin pagos es el prevClientDeja antes de aplicar los pagos del día actual
             // Pero prevClientDeja ya tiene los pagos del día anterior aplicados
             // Necesitamos guardar el anterior con los pagos del día actual aplicados
-            $currentPayments = $this->getPaymentsForCurrentDate($user->id, $this->date);
             $anteriWithPayments = $prevClientDeja - $currentPayments['udDio'] + $currentPayments['udRecibe'];
             $this->anteriorCache[$cacheKeyWithPayments] = $anteriWithPayments;
         }
@@ -503,16 +505,9 @@ class Liquidations extends Component
             return 0;
         }
         
-        // Guardar la fecha actual temporalmente
-        $originalDate = $this->date;
-        $this->date = $date;
-        
-        // Calcular la liquidación del día
+        // Calcular la liquidación del día (ya no necesitamos cambiar $this->date porque computeClientLiquidationData usa $selectedDate)
         $liquidationData = $this->computeClientLiquidationData($user, $selectedDate);
         $arrastre = $liquidationData['arrastre'] ?? 0;
-        
-        // Restaurar la fecha original
-        $this->date = $originalDate;
         
         // Guardar en cache
         $this->arrastreCache[$arrastreCacheKey] = $arrastre;
