@@ -266,6 +266,16 @@ class Liquidations extends Component
                 $this->anteriorCache[$cacheKey] = $prevClientDejaSinPagos;
             }
             // Los pagos ya están aplicados, no aplicar de nuevo
+            
+            // VALIDACIÓN ESPECIAL: Si el anterior es 0 y hay pagos, tomar el valor del pago directamente
+            if ($prevClientDeja == 0) {
+                $saturdayPayments = $this->getPaymentsForCurrentDate($user->id, $saturdayDate->format('Y-m-d'));
+                if ($saturdayPayments['udDio'] > 0 || $saturdayPayments['udRecibe'] > 0) {
+                    $prevClientDeja = -$saturdayPayments['udDio'] + $saturdayPayments['udRecibe'];
+                    // Actualizar cache con el valor correcto
+                    $this->anteriorCache[$cacheKeyWithPayments] = $prevClientDeja;
+                }
+            }
         } else {
             // Para días que no son lunes, obtener el anterior del día anterior
             // Necesitamos el 'anteri' del día anterior, no el 'ud_deja'
@@ -305,6 +315,16 @@ class Liquidations extends Component
                 $this->anteriorCache[$cacheKey] = $prevClientDejaSinPagos;
             }
             // Los pagos ya están aplicados, no aplicar de nuevo
+            
+            // VALIDACIÓN ESPECIAL: Si el anterior es 0 y hay pagos, tomar el valor del pago directamente
+            if ($prevClientDeja == 0) {
+                $previousPayments = $this->getPaymentsForCurrentDate($user->id, $previousDate->format('Y-m-d'));
+                if ($previousPayments['udDio'] > 0 || $previousPayments['udRecibe'] > 0) {
+                    $prevClientDeja = -$previousPayments['udDio'] + $previousPayments['udRecibe'];
+                    // Actualizar cache con el valor correcto
+                    $this->anteriorCache[$cacheKeyWithPayments] = $prevClientDeja;
+                }
+            }
         }
         
         // Calcular arrastre individual del cliente
