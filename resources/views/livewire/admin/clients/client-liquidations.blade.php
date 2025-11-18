@@ -70,18 +70,20 @@
                                         title="Ver semana">
                                         <i class="fa-solid fa-calendar"></i>
                                     </button>
-                                    @if($week['isCurrentWeek'] ?? false)
-                                        @php
-                                            $lastDate = $week['lastDate'] ?? end($week['dates']);
-                                            $anterior = $week['anterior'] ?? $week['clienteDeja'] ?? 0;
-                                        @endphp
-                                        @if($anterior != 0)
-                                            <button wire:click="openPaymentModal('{{ $lastDate }}')"
-                                                class="font-medium text-blue-400 hover:text-blue-300 transition-colors duration-200"
-                                                title="Registrar pago">
-                                                <i class="fa-solid fa-dollar-sign"></i>
-                                            </button>
-                                        @endif
+                                    @php
+                                        $lastDate = $week['lastDate'] ?? end($week['dates']);
+                                        $anterior = $week['anterior'] ?? $week['clienteDeja'] ?? 0;
+                                        $lastDateCarbon = \Carbon\Carbon::parse($lastDate);
+                                        $today = \Carbon\Carbon::today();
+                                        // Permitir pagos en semanas pasadas (hasta hoy, no futuras)
+                                        $canPay = $lastDateCarbon->lte($today) && $anterior != 0;
+                                    @endphp
+                                    @if($canPay)
+                                        <button wire:click="openPaymentModal('{{ $lastDate }}')"
+                                            class="font-medium text-blue-400 hover:text-blue-300 transition-colors duration-200"
+                                            title="Registrar pago">
+                                            <i class="fa-solid fa-dollar-sign"></i>
+                                        </button>
                                     @endif
                                 </div>
                             </td>

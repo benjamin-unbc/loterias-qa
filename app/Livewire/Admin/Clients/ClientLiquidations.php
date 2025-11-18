@@ -1044,10 +1044,11 @@ class ClientLiquidations extends Component
     public function savePayment()
     {
         $this->validate([
-            'paymentDate' => 'required|date',
+            'paymentDate' => 'required|date|before_or_equal:today',
             'paymentAmount' => 'required|numeric|min:0.01',
         ], [
             'paymentDate.required' => 'La fecha es requerida',
+            'paymentDate.before_or_equal' => 'No se pueden registrar pagos en fechas futuras',
             'paymentAmount.required' => 'El monto es requerido',
             'paymentAmount.numeric' => 'El monto debe ser un número',
             'paymentAmount.min' => 'El monto debe ser mayor a 0',
