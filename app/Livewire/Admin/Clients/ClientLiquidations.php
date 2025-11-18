@@ -116,10 +116,6 @@ class ClientLiquidations extends Component
         // Agrupar fechas por semanas (lunes a sábado)
         $weeks = collect();
         
-        // Limpiar el cache antes de calcular todas las semanas
-        // Las semanas se calcularán en orden cronológico, manteniendo el cache entre ellas
-        $this->anteriorCache = [];
-        
         // Iterar desde la primera semana hasta la última
         $currentMonday = $firstMonday->copy();
         
@@ -144,6 +140,12 @@ class ClientLiquidations extends Component
                 // Detectar si es la semana actual
                 $currentWeekMonday = $today->copy()->startOfWeek();
                 $isCurrentWeek = $currentMonday->format('Y-m-d') === $currentWeekMonday->format('Y-m-d');
+                
+                // Para la semana actual, limpiar el cache y calcular solo esa semana
+                // Esto asegura que usamos el mismo método que "ver semana"
+                if ($isCurrentWeek) {
+                    $this->anteriorCache = [];
+                }
                 
                 // Para la semana actual, encontrar el último día que realmente tiene liquidación
                 // No usar el último día hasta hoy si no tiene datos
@@ -171,37 +173,13 @@ class ClientLiquidations extends Component
                 }
                 
                 // Obtener el anterior del último día de la semana (con liquidación)
-                // Para la semana actual, obtener el anterior directamente del cache del día anterior con pagos aplicados
-                // Esto es igual a como funciona en "ver semana"
+                // Para la semana actual, usar el anteri del último día calculado (igual que ver semana)
                 $lastLiquidationData = $weekLiquidations[$lastDateOfWeek] ?? null;
                 
                 if ($lastLiquidationData) {
-                    // Para la semana actual, obtener el anterior del día anterior directamente del cache
-                    // Esto asegura que usamos el mismo método que "ver semana"
-                    if ($isCurrentWeek && $lastDateOfWeek) {
-                        $lastDateCarbon = Carbon::parse($lastDateOfWeek);
-                        // Determinar el día anterior
-                        if ($lastDateCarbon->isMonday()) {
-                            $previousDate = $lastDateCarbon->copy()->subDays(2); // Sábado anterior
-                        } else {
-                            $previousDate = $lastDateCarbon->copy()->subDay();
-                            if ($previousDate->isSunday()) {
-                                $previousDate = $previousDate->copy()->subDay(); // Sábado anterior
-                            }
-                        }
-                        
-                        // Obtener el anterior del día anterior con pagos aplicados del cache
-                        $cacheKeyWithPayments = $userId . '_' . $previousDate->format('Y-m-d') . '_with_payments';
-                        if (isset($this->anteriorCache[$cacheKeyWithPayments]) && $this->anteriorCache[$cacheKeyWithPayments] !== null) {
-                            $anterior = $this->anteriorCache[$cacheKeyWithPayments];
-                        } else {
-                            // Si no está en cache, usar el anteri del último día calculado
-                            $anterior = $lastLiquidationData['anteri'] ?? 0;
-                        }
-                    } else {
-                        // Para semanas anteriores, usar el anteri del último día calculado
-                        $anterior = $lastLiquidationData['anteri'] ?? 0;
-                    }
+                    // Usar el anteri del último día calculado
+                    // El anteri es el anterior del día anterior con pagos aplicados
+                    $anterior = $lastLiquidationData['anteri'] ?? 0;
                 } else {
                     // Si por alguna razón no tenemos el dato, calcularlo
                     $liquidationData = $this->computeLiquidationDataForDate($lastDateOfWeek, $userId);
