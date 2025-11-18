@@ -373,7 +373,7 @@ class Liquidations extends Component
      * Obtiene el anterior para una fecha específica sin recursión
      * Calcula directamente desde los datos sin llamar a computeClientLiquidationData
      */
-    protected function getAnteriorForDate(string $date, int $userId): float
+    protected function getAnteriorForDate(string $date, int $userId, int $depth = 0): float
     {
         $selectedDate = Carbon::parse($date);
         
@@ -382,12 +382,10 @@ class Liquidations extends Component
             return 0;
         }
         
-        // Obtener el cliente
-        $user = \App\Models\User::find($userId);
-        if (!$user) {
+        // Limitar la recursión a máximo 30 días para evitar consultas excesivas
+        if ($depth > 30) {
             return 0;
         }
-        $client = \App\Models\Client::where('correo', $user->email)->first();
         
         // Determinar la fecha del día anterior
         if ($selectedDate->isMonday()) {
@@ -419,49 +417,23 @@ class Liquidations extends Component
             return $anteri;
         }
         
-        // Si no está en cache, obtener el anterior del día anterior recursivamente
-        // El anterior es simplemente el anterior del día anterior, no el UD Deja
-        // Caso base: si la fecha es muy antigua (más de 1 año), retornar 0 para evitar recursión infinita
-        if ($previousDate->lt(Carbon::now()->subYear())) {
+        // Si está marcado como null, significa que está siendo calculado, retornar 0 para evitar recursión
+        if (isset($this->anteriorCache[$cacheKey]) && $this->anteriorCache[$cacheKey] === null) {
             return 0;
         }
         
         // Marcar que estamos calculando para evitar recursión infinita
-        if (!isset($this->anteriorCache[$cacheKey]) && !isset($this->anteriorCache[$cacheKeyWithPayments])) {
-            // Marcar temporalmente para evitar recursión
-            $this->anteriorCache[$cacheKey] = null;
-            
-            // Obtener el anterior del día anterior recursivamente
-            $anteri = $this->getAnteriorForDate($previousDate->format('Y-m-d'), $userId);
-            
-            // Aplicar pagos del día anterior
-            $previousPayments = $this->getPaymentsForCurrentDate($userId, $previousDate->format('Y-m-d'));
-            $anteri = $anteri - $previousPayments['udDio'] + $previousPayments['udRecibe'];
-            
-            // Guardar en cache con pagos aplicados
-            $this->anteriorCache[$cacheKey] = $anteri;
-            $this->anteriorCache[$cacheKeyWithPayments] = $anteri;
-            
-            return $anteri;
-        }
+        $this->anteriorCache[$cacheKey] = null;
         
-        // Si está en cache sin pagos, obtenerlo y aplicar pagos
-        // Si está marcado como null, significa que está siendo calculado, retornar 0 para evitar recursión
-        if (isset($this->anteriorCache[$cacheKey]) && $this->anteriorCache[$cacheKey] !== null) {
-            $anteri = $this->anteriorCache[$cacheKey];
-        } elseif (isset($this->anteriorCache[$cacheKey]) && $this->anteriorCache[$cacheKey] === null) {
-            // Está siendo calculado, retornar 0 para evitar recursión infinita
-            return 0;
-        } else {
-            // Si no está en cache, retornar 0 (caso base)
-            $anteri = 0;
-        }
+        // Obtener el anterior del día anterior recursivamente
+        $anteri = $this->getAnteriorForDate($previousDate->format('Y-m-d'), $userId, $depth + 1);
         
         // Aplicar pagos del día anterior
         $previousPayments = $this->getPaymentsForCurrentDate($userId, $previousDate->format('Y-m-d'));
         $anteri = $anteri - $previousPayments['udDio'] + $previousPayments['udRecibe'];
         
-        // Guardar en cache el anterior CON pagos aplicados
+        // Guardar en cache con pagos aplicados
+        $this->anteriorCache[$cacheKey] = $anteri;
         $this->anteriorCache[$cacheKeyWithPayments] = $anteri;
         
         return $anteri;
