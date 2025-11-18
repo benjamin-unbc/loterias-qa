@@ -255,6 +255,8 @@ class Liquidations extends Component
                 $prevClientDeja = $this->getAnteriorForDate($saturdayDate->format('Y-m-d'), $user->id);
                 // Guardar en cache (getAnteriorForDate ya aplicó los pagos)
                 $this->anteriorCache[$cacheKeyWithPayments] = $prevClientDeja;
+                // También guardar sin pagos para referencia
+                $this->anteriorCache[$cacheKey] = $prevClientDeja;
             }
             // Los pagos ya están aplicados, no aplicar de nuevo
         } else {
@@ -288,6 +290,8 @@ class Liquidations extends Component
                 $prevClientDeja = $this->getAnteriorForDate($previousDate->format('Y-m-d'), $user->id);
                 // Guardar en cache (getAnteriorForDate ya aplicó los pagos)
                 $this->anteriorCache[$cacheKeyWithPayments] = $prevClientDeja;
+                // También guardar sin pagos para referencia
+                $this->anteriorCache[$cacheKey] = $prevClientDeja;
             }
             // Los pagos ya están aplicados, no aplicar de nuevo
         }
