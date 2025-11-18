@@ -171,15 +171,37 @@ class ClientLiquidations extends Component
                 }
                 
                 // Obtener el anterior del último día de la semana (con liquidación)
-                // Usar el resultado del último día calculado, que ya tiene el anterior correcto
-                // El anterior que se muestra es el anterior del día anterior con pagos aplicados
+                // Para la semana actual, obtener el anterior directamente del cache del día anterior con pagos aplicados
+                // Esto es igual a como funciona en "ver semana"
                 $lastLiquidationData = $weekLiquidations[$lastDateOfWeek] ?? null;
                 
                 if ($lastLiquidationData) {
-                    // Asegurarnos de usar el 'anteri', no el 'udDeja'
-                    // El 'anteri' es el anterior del día anterior con pagos aplicados
-                    // El 'udDeja' es el cálculo del día actual y puede ser diferente
-                    $anterior = $lastLiquidationData['anteri'] ?? 0;
+                    // Para la semana actual, obtener el anterior del día anterior directamente del cache
+                    // Esto asegura que usamos el mismo método que "ver semana"
+                    if ($isCurrentWeek && $lastDateOfWeek) {
+                        $lastDateCarbon = Carbon::parse($lastDateOfWeek);
+                        // Determinar el día anterior
+                        if ($lastDateCarbon->isMonday()) {
+                            $previousDate = $lastDateCarbon->copy()->subDays(2); // Sábado anterior
+                        } else {
+                            $previousDate = $lastDateCarbon->copy()->subDay();
+                            if ($previousDate->isSunday()) {
+                                $previousDate = $previousDate->copy()->subDay(); // Sábado anterior
+                            }
+                        }
+                        
+                        // Obtener el anterior del día anterior con pagos aplicados del cache
+                        $cacheKeyWithPayments = $userId . '_' . $previousDate->format('Y-m-d') . '_with_payments';
+                        if (isset($this->anteriorCache[$cacheKeyWithPayments]) && $this->anteriorCache[$cacheKeyWithPayments] !== null) {
+                            $anterior = $this->anteriorCache[$cacheKeyWithPayments];
+                        } else {
+                            // Si no está en cache, usar el anteri del último día calculado
+                            $anterior = $lastLiquidationData['anteri'] ?? 0;
+                        }
+                    } else {
+                        // Para semanas anteriores, usar el anteri del último día calculado
+                        $anterior = $lastLiquidationData['anteri'] ?? 0;
+                    }
                 } else {
                     // Si por alguna razón no tenemos el dato, calcularlo
                     $liquidationData = $this->computeLiquidationDataForDate($lastDateOfWeek, $userId);
