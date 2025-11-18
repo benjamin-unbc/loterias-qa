@@ -152,16 +152,20 @@ class ClientLiquidations extends Component
                 // para asegurar que el cache tenga todos los valores necesarios
                 // Esto es especialmente importante para que el anterior del último día
                 // use correctamente el anterior del día anterior con pagos aplicados
-                $lastLiquidationData = null;
                 foreach ($weekDates as $weekDate) {
-                    $lastLiquidationData = $this->computeLiquidationDataForDate($weekDate, $userId);
+                    $this->computeLiquidationDataForDate($weekDate, $userId);
                 }
                 
-                // Obtener el anterior del último día
+                // Obtener el anterior del último día de la semana
                 // El anterior que se muestra es el anterior del día anterior con pagos aplicados
                 // que es exactamente lo que computeLiquidationDataForDate retorna en 'anteri'
-                // Usamos el último resultado calculado en lugar de recalcular
-                $anterior = $lastLiquidationData['anteri'] ?? 0;
+                // Recalcular el último día para asegurar que tenemos el valor correcto
+                $liquidationData = $this->computeLiquidationDataForDate($lastDateOfWeek, $userId);
+                
+                // Asegurarnos de usar el 'anteri', no el 'udDeja'
+                // El 'anteri' es el anterior del día anterior con pagos aplicados
+                // El 'udDeja' es el cálculo del día actual y puede ser diferente
+                $anterior = $liquidationData['anteri'] ?? 0;
                 
                 $weeks->push([
                     'monday' => $currentMonday->format('Y-m-d'),
