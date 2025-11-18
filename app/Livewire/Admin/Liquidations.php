@@ -256,10 +256,14 @@ class Liquidations extends Component
                 $this->anteriorCache[$cacheKey] = null; // Marcador temporal
                 // Calcular solo el anterior del sábado sin recursión (ya incluye pagos aplicados)
                 $prevClientDeja = $this->getAnteriorForDate($saturdayDate->format('Y-m-d'), $user->id);
-                // Guardar en cache (getAnteriorForDate ya aplicó los pagos)
+                // getAnteriorForDate retorna el anterior CON pagos aplicados del sábado
+                // Guardar en cache con pagos aplicados
                 $this->anteriorCache[$cacheKeyWithPayments] = $prevClientDeja;
-                // También guardar sin pagos para referencia
-                $this->anteriorCache[$cacheKey] = $prevClientDeja;
+                // Para el cache sin pagos, necesitamos el anterior sin los pagos del sábado
+                // Pero como getAnteriorForDate ya aplicó los pagos, necesitamos deshacerlos
+                $saturdayPayments = $this->getPaymentsForCurrentDate($user->id, $saturdayDate->format('Y-m-d'));
+                $prevClientDejaSinPagos = $prevClientDeja + $saturdayPayments['udDio'] - $saturdayPayments['udRecibe'];
+                $this->anteriorCache[$cacheKey] = $prevClientDejaSinPagos;
             }
             // Los pagos ya están aplicados, no aplicar de nuevo
         } else {
@@ -291,10 +295,14 @@ class Liquidations extends Component
                 $this->anteriorCache[$cacheKey] = null; // Marcador temporal
                 // Calcular solo el anterior del día anterior sin recursión (ya incluye pagos aplicados)
                 $prevClientDeja = $this->getAnteriorForDate($previousDate->format('Y-m-d'), $user->id);
-                // Guardar en cache (getAnteriorForDate ya aplicó los pagos)
+                // getAnteriorForDate retorna el anterior CON pagos aplicados del día anterior
+                // Guardar en cache con pagos aplicados
                 $this->anteriorCache[$cacheKeyWithPayments] = $prevClientDeja;
-                // También guardar sin pagos para referencia
-                $this->anteriorCache[$cacheKey] = $prevClientDeja;
+                // Para el cache sin pagos, necesitamos el anterior sin los pagos del día anterior
+                // Pero como getAnteriorForDate ya aplicó los pagos, necesitamos deshacerlos
+                $previousPayments = $this->getPaymentsForCurrentDate($user->id, $previousDate->format('Y-m-d'));
+                $prevClientDejaSinPagos = $prevClientDeja + $previousPayments['udDio'] - $previousPayments['udRecibe'];
+                $this->anteriorCache[$cacheKey] = $prevClientDejaSinPagos;
             }
             // Los pagos ya están aplicados, no aplicar de nuevo
         }
@@ -461,13 +469,13 @@ class Liquidations extends Component
         
         // Aplicar pagos del día anterior
         $previousPayments = $this->getPaymentsForCurrentDate($userId, $previousDate->format('Y-m-d'));
-        $anteri = $anteri - $previousPayments['udDio'] + $previousPayments['udRecibe'];
+        $anteriConPagos = $anteri - $previousPayments['udDio'] + $previousPayments['udRecibe'];
         
-        // Guardar en cache con pagos aplicados
+        // Guardar en cache: sin pagos (anteri) y con pagos aplicados (anteriConPagos)
         $this->anteriorCache[$cacheKey] = $anteri;
-        $this->anteriorCache[$cacheKeyWithPayments] = $anteri;
+        $this->anteriorCache[$cacheKeyWithPayments] = $anteriConPagos;
         
-        return $anteri;
+        return $anteriConPagos;
     }
     
     /**
