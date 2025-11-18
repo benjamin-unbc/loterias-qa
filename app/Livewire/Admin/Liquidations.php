@@ -207,6 +207,9 @@ class Liquidations extends Component
             }
         }
         
+        // Obtener los pagos registrados para la fecha actual
+        $currentPayments = $this->getPaymentsForCurrentDate($user->id, $this->date);
+        
         return [
             'results'           => $results,
             'totalAciert'       => $totalAciert,
@@ -223,6 +226,8 @@ class Liquidations extends Component
             'udDeja'            => $udDeja,
             'arrastre'          => $arrastre,
             'comi_deja_sem'     => $comiDejaSem,
+            'udDio'             => $currentPayments['udDio'],
+            'udRecibePayment'   => $currentPayments['udRecibe'],
         ];
     }
 
@@ -371,6 +376,58 @@ class Liquidations extends Component
             // Si hay algún error, retornar 0
             \Log::warning('Error al obtener pagos para fecha en Liquidations: ' . $e->getMessage());
             return 0.0;
+        }
+    }
+    
+    /**
+     * Obtiene los pagos registrados para una fecha específica y cliente
+     * Retorna un array con udDio y udRecibe según el tipo de pago
+     * 
+     * @param int $userId ID del usuario cliente
+     * @param string $date Fecha de la liquidación
+     * @return array ['udDio' => float, 'udRecibe' => float]
+     */
+    protected function getPaymentsForCurrentDate(int $userId, string $date): array
+    {
+        try {
+            // Obtener el cliente asociado al usuario
+            $user = \App\Models\User::find($userId);
+            if (!$user) {
+                return ['udDio' => 0.0, 'udRecibe' => 0.0];
+            }
+            
+            $client = \App\Models\Client::where('correo', $user->email)->first();
+            if (!$client) {
+                return ['udDio' => 0.0, 'udRecibe' => 0.0];
+            }
+            
+            $payments = ClientPayment::where('client_id', $client->id)
+                ->whereDate('payment_date', $date)
+                ->get();
+            
+            $udDio = 0.0;
+            $udRecibe = 0.0;
+            
+            foreach ($payments as $payment) {
+                if ($payment->type === 'paid_to_client') {
+                    // Si el cliente debe pagar (paid_to_client), se suma a UD.DIO
+                    $udDio += (float) $payment->amount;
+                } else {
+                    // Si el cliente debe cobrar (received_from_client), se suma a UD.RECIBE
+                    $udRecibe += (float) $payment->amount;
+                }
+            }
+            
+            return [
+                'udDio' => $udDio,
+                'udRecibe' => $udRecibe,
+            ];
+        } catch (\Exception $e) {
+            \Log::warning('Error al obtener pagos para fecha actual en Liquidations: ' . $e->getMessage());
+            return [
+                'udDio' => 0.0,
+                'udRecibe' => 0.0,
+            ];
         }
     }
 

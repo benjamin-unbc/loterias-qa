@@ -205,6 +205,18 @@
                                         <h4 class="font-medium">UD DEJA:</h4>
                                         <p>{{ number_format($udDeja, 2) }}</p>
                                     </div>
+                                    @if(($udDio ?? 0) > 0)
+                                        <div class="flex justify-between">
+                                            <h4 class="font-medium">UD.DIO:</h4>
+                                            <p>{{ number_format($udDio, 2) }}</p>
+                                        </div>
+                                    @endif
+                                    @if(($udRecibePayment ?? 0) > 0)
+                                        <div class="flex justify-between">
+                                            <h4 class="font-medium">UD.RECIBE:</h4>
+                                            <p>{{ number_format($udRecibePayment, 2) }}</p>
+                                        </div>
+                                    @endif
                                 </div>
 
                                 <div class="flex flex-col pt-3 gap-1 w-full text-sm">

@@ -205,6 +205,8 @@ class ClientLiquidations extends Component
                 'tardeTotalApus' => 0,
                 'nocheTotalApus' => 0,
                 'comiDejaSem' => 0,
+                'udDio' => 0,
+                'udRecibePayment' => 0,
             ];
         }
         
@@ -280,6 +282,9 @@ class ClientLiquidations extends Component
             }
         }
         
+        // Obtener los pagos registrados para la fecha actual
+        $currentPayments = $this->getPaymentsForCurrentDate($date);
+        
         return [
             'date' => $date,
             'totalApus' => $totalApus,
@@ -296,6 +301,8 @@ class ClientLiquidations extends Component
             'tardeTotalApus' => $tardeTotalApus,
             'nocheTotalApus' => $nocheTotalApus,
             'comiDejaSem' => $comiDejaSem ?? 0,
+            'udDio' => $currentPayments['udDio'],
+            'udRecibePayment' => $currentPayments['udRecibe'],
         ];
     }
     
@@ -597,6 +604,46 @@ class ClientLiquidations extends Component
             // Si hay algún error (tabla no existe, etc.), retornar 0
             \Log::warning('Error al obtener pagos para fecha: ' . $e->getMessage());
             return 0.0;
+        }
+    }
+    
+    /**
+     * Obtiene los pagos registrados para una fecha específica
+     * Retorna un array con udDio y udRecibe según el tipo de pago
+     * 
+     * @param string $date Fecha de la liquidación
+     * @return array ['udDio' => float, 'udRecibe' => float]
+     */
+    protected function getPaymentsForCurrentDate(string $date): array
+    {
+        try {
+            $payments = ClientPayment::where('client_id', $this->client->id)
+                ->whereDate('payment_date', $date)
+                ->get();
+            
+            $udDio = 0.0;
+            $udRecibe = 0.0;
+            
+            foreach ($payments as $payment) {
+                if ($payment->type === 'paid_to_client') {
+                    // Si el cliente debe pagar (paid_to_client), se suma a UD.DIO
+                    $udDio += (float) $payment->amount;
+                } else {
+                    // Si el cliente debe cobrar (received_from_client), se suma a UD.RECIBE
+                    $udRecibe += (float) $payment->amount;
+                }
+            }
+            
+            return [
+                'udDio' => $udDio,
+                'udRecibe' => $udRecibe,
+            ];
+        } catch (\Exception $e) {
+            \Log::warning('Error al obtener pagos para fecha actual: ' . $e->getMessage());
+            return [
+                'udDio' => 0.0,
+                'udRecibe' => 0.0,
+            ];
         }
     }
     

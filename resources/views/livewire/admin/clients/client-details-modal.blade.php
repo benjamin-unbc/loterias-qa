@@ -679,6 +679,18 @@
                                                         <h4 class="font-medium">UD DEJA:</h4>
                                                         <p>{{ number_format($liquidacionData['udDeja'], 2) }}</p>
                                                     </div>
+                                                    @if(($liquidacionData['udDio'] ?? 0) > 0)
+                                                        <div class="flex justify-between">
+                                                            <h4 class="font-medium">UD.DIO:</h4>
+                                                            <p>{{ number_format($liquidacionData['udDio'], 2) }}</p>
+                                                        </div>
+                                                    @endif
+                                                    @if(($liquidacionData['udRecibePayment'] ?? 0) > 0)
+                                                        <div class="flex justify-between">
+                                                            <h4 class="font-medium">UD.RECIBE:</h4>
+                                                            <p>{{ number_format($liquidacionData['udRecibePayment'], 2) }}</p>
+                                                        </div>
+                                                    @endif
                                                 </div>
 
                                                 <!-- Arrastre -->
