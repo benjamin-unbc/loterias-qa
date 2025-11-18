@@ -116,6 +116,9 @@ class ClientLiquidations extends Component
         // Agrupar fechas por semanas (lunes a sábado)
         $weeks = collect();
         
+        // Limpiar el cache antes de calcular todas las semanas para asegurar valores correctos
+        $this->anteriorCache = [];
+        
         // Iterar desde la primera semana hasta la última
         $currentMonday = $firstMonday->copy();
         
@@ -144,17 +147,12 @@ class ClientLiquidations extends Component
                 // Obtener el último día de la semana (hasta hoy) para calcular clienteDeja
                 $lastDateOfWeek = end($weekDates);
                 
-                // Si es la semana actual, calcular el UD Deja del día anterior (ayer)
-                // La liquidación del día actual solo se desbloquea al día siguiente
+                // Si es la semana actual, calcular el anterior del día actual (hoy)
+                // computeLiquidationDataForDate calculará el anterior del día anterior con pagos aplicados
                 if ($isCurrentWeek) {
-                    // Obtener la fecha de ayer (día anterior)
-                    // Si es lunes, el día anterior es el sábado (2 días atrás)
-                    if ($today->isMonday()) {
-                        $previousDate = $today->copy()->subDays(2); // Sábado anterior
-                    } else {
-                        $previousDate = $today->copy()->subDay(); // Día anterior
-                    }
-                    $dateForClienteDeja = $previousDate->format('Y-m-d');
+                    // Usar el día actual para calcular el anterior
+                    // computeLiquidationDataForDate internamente calculará el anterior del día anterior con pagos aplicados
+                    $dateForClienteDeja = $today->format('Y-m-d');
                 } else {
                     // Si no es la semana actual, usar el último día de esa semana
                     $dateForClienteDeja = $lastDateOfWeek;
