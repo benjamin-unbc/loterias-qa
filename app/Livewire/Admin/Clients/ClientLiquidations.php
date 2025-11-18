@@ -378,11 +378,24 @@ class ClientLiquidations extends Component
             $arrastre = 0;
             $comiDejaSem = null;
         }
-        // Si no hay apuestas, todo parte en 0 excepto el anterior
+        // Si no hay apuestas, UD Deja es 0 pero el arrastre mantiene el del día anterior
         elseif ($totalApus == 0) {
             $udDeja = 0; // UD Deja en 0 cuando no hay apuestas
-            $arrastre = 0; // Arrastre en 0 cuando no hay apuestas
             $comiDejaSem = null;
+            
+            // El arrastre mantiene el valor del día anterior (acumulativo)
+            if ($selectedDate->isMonday()) {
+                // Si es lunes y no hay apuestas, arrastre = 0
+                $arrastre = 0;
+            } else {
+                // Para otros días, mantener el arrastre del día anterior
+                $previousDate = $selectedDate->copy()->subDay();
+                if ($previousDate->isSunday()) {
+                    $previousDate = $previousDate->copy()->subDay(); // Sábado anterior
+                }
+                $prevArrastre = $this->getArrastreForDate($previousDate->format('Y-m-d'), $userId);
+                $arrastre = $prevArrastre; // Mantener el arrastre anterior sin sumar nada
+            }
         } elseif ($selectedDate->isSaturday()) {
             // Solo aplicar comisión semanal si el porcentaje es positivo
             if ($weeklyCommissionPercentage > 0) {
@@ -501,24 +514,8 @@ class ClientLiquidations extends Component
         }
         
         // Si no está en cache, calcularlo desde los datos
-        // Calcular el anterior del día anterior directamente desde los datos
-        // Sin llamar a computeLiquidationDataForDate para evitar recursión
-        $prevResultsQuery = Result::whereDate('date', $previousDate->format('Y-m-d'))->where('user_id', $userId);
-        $prevTotalAciert = (float) $prevResultsQuery->sum('aciert');
-        
-        $prevApusQuery = ApusModel::whereDate('created_at', $previousDate->format('Y-m-d'))
-                                 ->where('user_id', $userId)
-                                 ->whereHas('playsSent', function($query) {
-                                     $query->where('status', '!=', 'I');
-                                 });
-        $prevTotalApus = (float) $prevApusQuery->sum('import');
-        
-        $commissionPercentage = $this->client->commission_percentage ?? 20.00;
-        $prevComision = $prevTotalApus * ($commissionPercentage / 100);
-        $prevTotalGanaPase = $prevTotalApus - $prevComision - $prevTotalAciert;
-        
-        // Obtener el anterior del día anterior (sin recursión, usar 0 si no está en cache)
-        // Esto evita la recursión infinita - si no está en cache, asumimos 0
+        // Primero intentar obtener el anterior del día anterior directamente del cache
+        // Si el día anterior no tiene apuestas, su anterior debería estar en cache
         $prevPrevDate = $previousDate->copy()->subDay();
         if ($prevPrevDate->isSunday()) {
             $prevPrevDate = $prevPrevDate->copy()->subDay();
@@ -536,6 +533,22 @@ class ClientLiquidations extends Component
                 ? $this->anteriorCache[$prevPrevCacheKey] 
                 : 0);
         
+        // Calcular el anterior del día anterior directamente desde los datos
+        // Sin llamar a computeLiquidationDataForDate para evitar recursión
+        $prevResultsQuery = Result::whereDate('date', $previousDate->format('Y-m-d'))->where('user_id', $userId);
+        $prevTotalAciert = (float) $prevResultsQuery->sum('aciert');
+        
+        $prevApusQuery = ApusModel::whereDate('created_at', $previousDate->format('Y-m-d'))
+                                 ->where('user_id', $userId)
+                                 ->whereHas('playsSent', function($query) {
+                                     $query->where('status', '!=', 'I');
+                                 });
+        $prevTotalApus = (float) $prevApusQuery->sum('import');
+        
+        $commissionPercentage = $this->client->commission_percentage ?? 20.00;
+        $prevComision = $prevTotalApus * ($commissionPercentage / 100);
+        $prevTotalGanaPase = $prevTotalApus - $prevComision - $prevTotalAciert;
+        
         // Calcular udDeja del día anterior
         $weeklyCommissionPercentage = $this->client->weekly_commission_percentage ?? 30.00;
         if ($previousDate->isSaturday() && $weeklyCommissionPercentage > 0) {
@@ -546,7 +559,14 @@ class ClientLiquidations extends Component
         }
         
         // El anterior es el udDeja del día anterior (sin pagos aún)
-        $anteri = $prevUdDeja;
+        // PERO: Si el día anterior no tiene apuestas, el anterior debería ser el anterior del día anterior a ese
+        if ($prevTotalApus == 0 && $prevTotalAciert == 0) {
+            // Si no hay apuestas ni aciertos, el anterior es el anterior del día anterior (ya calculado arriba)
+            $anteri = $prevPrevAnteri;
+        } else {
+            // Si hay apuestas, el anterior es el udDeja del día anterior
+            $anteri = $prevUdDeja;
+        }
         $this->anteriorCache[$cacheKey] = $anteri;
         
         // Aplicar pagos del día anterior

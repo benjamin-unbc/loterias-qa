@@ -446,11 +446,24 @@ class ClientDetailsModal extends Component
             $arrastre = 0;
             $comiDejaSem = null;
         }
-        // Si no hay apuestas, todo parte en 0 excepto el anterior
+        // Si no hay apuestas, UD Deja es 0 pero el arrastre mantiene el del día anterior
         elseif ($totalApus == 0) {
             $udDeja = 0; // UD Deja en 0 cuando no hay apuestas
-            $arrastre = 0; // Arrastre en 0 cuando no hay apuestas
             $comiDejaSem = null;
+            
+            // El arrastre mantiene el valor del día anterior (acumulativo)
+            if ($selectedDate->isMonday()) {
+                // Si es lunes y no hay apuestas, arrastre = 0
+                $arrastre = 0;
+            } else {
+                // Para otros días, mantener el arrastre del día anterior
+                $previousDate = $selectedDate->copy()->subDay();
+                if ($previousDate->isSunday()) {
+                    $previousDate = $previousDate->copy()->subDay(); // Sábado anterior
+                }
+                $prevArrastre = $this->getArrastreForDate($previousDate->format('Y-m-d'), $userId);
+                $arrastre = $prevArrastre; // Mantener el arrastre anterior sin sumar nada
+            }
         } elseif ($selectedDate->isSaturday()) {
             // Solo aplicar comisión semanal si el porcentaje es positivo
             if ($weeklyCommissionPercentage > 0) {
@@ -607,7 +620,14 @@ class ClientDetailsModal extends Component
             }
             
             // El anterior es el udDeja del día anterior (sin pagos aún)
-            $anteri = $prevUdDeja;
+            // PERO: Si el día anterior no tiene apuestas, el anterior debería ser el anterior del día anterior a ese
+            if ($prevTotalApus == 0 && $prevTotalAciert == 0) {
+                // Si no hay apuestas ni aciertos, el anterior es el anterior del día anterior (ya calculado arriba)
+                $anteri = $prevPrevAnteri;
+            } else {
+                // Si hay apuestas, el anterior es el udDeja del día anterior
+                $anteri = $prevUdDeja;
+            }
             $this->anteriorCache[$cacheKey] = $anteri;
         }
         
