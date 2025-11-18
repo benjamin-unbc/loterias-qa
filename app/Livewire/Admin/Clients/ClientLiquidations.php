@@ -145,8 +145,21 @@ class ClientLiquidations extends Component
                 $currentWeekMonday = $today->copy()->startOfWeek();
                 $isCurrentWeek = $currentMonday->format('Y-m-d') === $currentWeekMonday->format('Y-m-d');
                 
-                // Obtener el último día de la semana (hasta hoy) para calcular clienteDeja
+                // Para la semana actual, encontrar el último día que realmente tiene liquidación
+                // No usar el último día hasta hoy si no tiene datos
                 $lastDateOfWeek = end($weekDates);
+                if ($isCurrentWeek) {
+                    // Buscar el último día de la semana que tiene datos (Result o ApusModel)
+                    $weekDatesWithData = $allDatesWithData->filter(function($date) use ($currentMonday, $saturday) {
+                        $dateCarbon = Carbon::parse($date);
+                        return $dateCarbon->gte($currentMonday) && $dateCarbon->lte($saturday);
+                    })->sort()->values();
+                    
+                    if ($weekDatesWithData->isNotEmpty()) {
+                        // Usar el último día con datos, no el último día hasta hoy
+                        $lastDateOfWeek = $weekDatesWithData->last();
+                    }
+                }
                 
                 // IMPORTANTE: Calcular todos los días de la semana en orden cronológico
                 // para asegurar que el cache tenga todos los valores necesarios
@@ -157,7 +170,7 @@ class ClientLiquidations extends Component
                     $weekLiquidations[$weekDate] = $this->computeLiquidationDataForDate($weekDate, $userId);
                 }
                 
-                // Obtener el anterior del último día de la semana
+                // Obtener el anterior del último día de la semana (con liquidación)
                 // Usar el resultado del último día calculado, que ya tiene el anterior correcto
                 // El anterior que se muestra es el anterior del día anterior con pagos aplicados
                 $lastLiquidationData = $weekLiquidations[$lastDateOfWeek] ?? null;
