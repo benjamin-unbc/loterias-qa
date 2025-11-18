@@ -1037,8 +1037,28 @@ class ClientLiquidations extends Component
             'created_by' => Auth::id(),
         ]);
         
+        // Limpiar el cache de anteriores para el día del pago y días siguientes
+        // Esto asegura que el pago se refleje correctamente en el anterior del día siguiente
+        $paymentDateCarbon = Carbon::parse($this->paymentDate);
+        $userId = $this->client->associatedUser->id ?? null;
+        
+        if ($userId) {
+            // Limpiar cache del día del pago y días siguientes (hasta 30 días)
+            for ($i = 0; $i <= 30; $i++) {
+                $dateToClear = $paymentDateCarbon->copy()->addDays($i);
+                $cacheKey = $userId . '_' . $dateToClear->format('Y-m-d');
+                $cacheKeyWithPayments = $userId . '_' . $dateToClear->format('Y-m-d') . '_with_payments';
+                
+                unset($this->anteriorCache[$cacheKey]);
+                unset($this->anteriorCache[$cacheKeyWithPayments]);
+            }
+        }
+        
         // Cerrar el modal
         $this->closePaymentModal();
+        
+        // Disparar evento para que otros componentes (como Liquidations.php) limpien su cache
+        $this->dispatch('paymentSaved', userId: $userId, paymentDate: $this->paymentDate);
         
         // Mostrar mensaje de éxito con SweetAlert
         $this->dispatch('payment-saved', message: 'Pago registrado correctamente. Se verá reflejado en la siguiente liquidación.');

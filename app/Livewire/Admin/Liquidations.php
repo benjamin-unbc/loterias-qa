@@ -34,9 +34,36 @@ class Liquidations extends Component
      */
     protected $arrastreCache = [];
 
+    protected $listeners = ['paymentSaved' => 'clearCacheOnPayment'];
+    
     public function mount()
     {
         $this->date = Carbon::yesterday()->format('Y-m-d');
+    }
+    
+    /**
+     * Limpia el cache cuando se guarda un pago desde otro componente
+     */
+    public function clearCacheOnPayment($userId, $paymentDate)
+    {
+        // Limpiar cache del día del pago y días siguientes (hasta 30 días)
+        $paymentDateCarbon = Carbon::parse($paymentDate);
+        
+        for ($i = 0; $i <= 30; $i++) {
+            $dateToClear = $paymentDateCarbon->copy()->addDays($i);
+            $cacheKey = $userId . '_' . $dateToClear->format('Y-m-d');
+            $cacheKeyWithPayments = $userId . '_' . $dateToClear->format('Y-m-d') . '_with_payments';
+            
+            unset($this->anteriorCache[$cacheKey]);
+            unset($this->anteriorCache[$cacheKeyWithPayments]);
+        }
+        
+        // También limpiar cache de arrastre
+        for ($i = 0; $i <= 30; $i++) {
+            $dateToClear = $paymentDateCarbon->copy()->addDays($i);
+            $arrastreCacheKey = $userId . '_' . $dateToClear->format('Y-m-d') . '_arrastre';
+            unset($this->arrastreCache[$arrastreCacheKey]);
+        }
     }
 
     public function printPDF()
