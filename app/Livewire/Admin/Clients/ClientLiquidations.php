@@ -34,6 +34,10 @@ class ClientLiquidations extends Component
     public $paymentNotes = '';
     public $currentUdDeja = 0;
     
+    // Cache para semanas de liquidación (evita recalcular en cada render)
+    protected $weeksCache = null;
+    protected $weeksCacheKey = null;
+    
     public function mount($id)
     {
         $this->clientId = $id;
@@ -59,6 +63,7 @@ class ClientLiquidations extends Component
     /**
      * Obtiene todas las fechas únicas con liquidaciones del cliente agrupadas por semanas
      * Ahora incluye TODOS los días hasta hoy, incluso sin jugadas
+     * OPTIMIZADO: Usa cache para evitar recalcular en cada render
      */
     public function getLiquidationWeeksProperty()
     {
@@ -67,12 +72,17 @@ class ClientLiquidations extends Component
         }
         
         $userId = $this->client->associatedUser->id;
+        $cacheKey = 'liquidation_weeks_' . $userId . '_' . Carbon::today()->format('Y-m-d');
         
-        // Obtener todas las fechas que tienen datos (Result o ApusModel)
+        // Si el cache existe y es válido, retornarlo
+        if ($this->weeksCache !== null && $this->weeksCacheKey === $cacheKey) {
+            return $this->weeksCache;
+        }
+        
+        // OPTIMIZADO: Obtener todas las fechas que tienen datos usando consultas más eficientes
+        // Usar selectRaw con DISTINCT directamente en SQL en lugar de procesar en memoria
         $resultDates = Result::where('user_id', $userId)
-            ->select('date')
-            ->distinct()
-            ->get()
+            ->selectRaw('DISTINCT DATE(date) as date')
             ->pluck('date')
             ->map(function($date) {
                 return Carbon::parse($date)->format('Y-m-d');
@@ -80,10 +90,11 @@ class ClientLiquidations extends Component
             ->unique()
             ->values();
         
-        $apusDates = ApusModel::where('user_id', $userId)
-            ->selectRaw('DATE(created_at) as date')
-            ->distinct()
-            ->get()
+        // OPTIMIZADO: Usar JOIN para filtrar solo apuestas con plays_sent válidos
+        $apusDates = ApusModel::where('apus.user_id', $userId)
+            ->join('plays_sent', 'apus.ticket', '=', 'plays_sent.ticket')
+            ->where('plays_sent.status', '!=', 'I')
+            ->selectRaw('DISTINCT DATE(apus.created_at) as date')
             ->pluck('date')
             ->map(function($date) {
                 return Carbon::parse($date)->format('Y-m-d');
@@ -164,27 +175,19 @@ class ClientLiquidations extends Component
                     }
                 }
                 
-                // IMPORTANTE: Calcular todos los días de la semana en orden cronológico
-                // para asegurar que el cache tenga todos los valores necesarios
-                // Esto es especialmente importante para que el anterior del último día
-                // use correctamente el anterior del día anterior con pagos aplicados
-                $weekLiquidations = [];
-                foreach ($weekDates as $weekDate) {
-                    $weekLiquidations[$weekDate] = $this->computeLiquidationDataForDate($weekDate, $userId);
-                }
+                // OPTIMIZADO: Solo calcular el anterior del último día de la semana
+                // No necesitamos calcular la liquidación completa de todos los días para la lista
+                // Solo calculamos el anterior del último día que es lo que se muestra en la tabla
+                // getAnteriorForDate calculará recursivamente si no hay cache, lo cual es más eficiente
+                // que calcular toda la liquidación completa de cada día
+                $anterior = 0;
                 
-                // Obtener el anterior del último día de la semana (con liquidación)
-                // Para la semana actual, usar el anteri del último día calculado (igual que ver semana)
-                $lastLiquidationData = $weekLiquidations[$lastDateOfWeek] ?? null;
-                
-                if ($lastLiquidationData) {
-                    // Usar el anteri del último día calculado
-                    // El anteri es el anterior del día anterior con pagos aplicados
-                    $anterior = $lastLiquidationData['anteri'] ?? 0;
-                } else {
-                    // Si por alguna razón no tenemos el dato, calcularlo
-                    $liquidationData = $this->computeLiquidationDataForDate($lastDateOfWeek, $userId);
-                    $anterior = $liquidationData['anteri'] ?? 0;
+                // Si es la semana actual o necesitamos el anterior, calcularlo de forma optimizada
+                if ($isCurrentWeek || !empty($weekDates)) {
+                    // Calcular solo el anterior del último día de la semana
+                    // getAnteriorForDate es recursivo y calculará desde los datos si no hay cache
+                    // Esto es mucho más rápido que calcular toda la liquidación completa
+                    $anterior = $this->getAnteriorForDate($lastDateOfWeek, $userId);
                 }
                 
                 $weeks->push([
@@ -205,7 +208,13 @@ class ClientLiquidations extends Component
             $currentMonday->addWeek();
         }
         
-        return $weeks->sortByDesc('monday')->values();
+        $result = $weeks->sortByDesc('monday')->values();
+        
+        // Guardar en cache
+        $this->weeksCache = $result;
+        $this->weeksCacheKey = $cacheKey;
+        
+        return $result;
     }
     
     /**
@@ -252,27 +261,33 @@ class ClientLiquidations extends Component
         // Si la fecha es hoy, la liquidación aún no está liberada
         $isLiquidationReleased = $selectedDate->lt($today);
         
-        // Consulta de resultados filtrada por cliente
-        $resultsQuery = Result::whereDate('date', $date)
-                             ->where('user_id', $userId);
-        $allResults = $resultsQuery->get();
-        $totalAciert = (float) $allResults->sum('aciert');
-        
-        // Consulta de apuestas filtrada por cliente
-        $apusQuery = ApusModel::whereDate('created_at', $date)
+        // Consulta de resultados filtrada por cliente - Optimizado con agregación SQL
+        $totalAciert = (float) Result::whereDate('date', $date)
                              ->where('user_id', $userId)
-                             ->whereHas('playsSent', function($query) {
-                                 $query->where('status', '!=', 'I');
-                             });
-        $allApus = $apusQuery->get();
+                             ->sum('aciert');
         
-        $previaTotalApus = (float) $allApus->where('timeApu', '10:15')->sum('import');
-        $mananaTotalApus = (float) $allApus->where('timeApu', '12:00')->sum('import');
-        $matutinaTotalApus = (float) $allApus->where('timeApu', '15:00')->sum('import');
-        $tardeTotalApus = (float) $allApus->where('timeApu', '18:00')->sum('import');
-        $nocheTotalApus = (float) $allApus->where('timeApu', '21:00')->sum('import');
+        // Consulta de apuestas filtrada por cliente - Optimizado con JOIN y agregaciones SQL
+        // Usar JOIN directo en lugar de whereHas para mejor rendimiento
+        $apusTotals = ApusModel::whereDate('apus.created_at', $date)
+                             ->where('apus.user_id', $userId)
+                             ->join('plays_sent', 'apus.ticket', '=', 'plays_sent.ticket')
+                             ->where('plays_sent.status', '!=', 'I')
+                             ->selectRaw('
+                                 COALESCE(SUM(CASE WHEN apus.timeApu = "10:15" THEN apus.import ELSE 0 END), 0) as previa,
+                                 COALESCE(SUM(CASE WHEN apus.timeApu = "12:00" THEN apus.import ELSE 0 END), 0) as manana,
+                                 COALESCE(SUM(CASE WHEN apus.timeApu = "15:00" THEN apus.import ELSE 0 END), 0) as matutina,
+                                 COALESCE(SUM(CASE WHEN apus.timeApu = "18:00" THEN apus.import ELSE 0 END), 0) as tarde,
+                                 COALESCE(SUM(CASE WHEN apus.timeApu = "21:00" THEN apus.import ELSE 0 END), 0) as noche,
+                                 COALESCE(SUM(apus.import), 0) as total
+                             ')
+                             ->first();
         
-        $totalApus = $previaTotalApus + $mananaTotalApus + $matutinaTotalApus + $tardeTotalApus + $nocheTotalApus;
+        $previaTotalApus = (float) ($apusTotals->previa ?? 0);
+        $mananaTotalApus = (float) ($apusTotals->manana ?? 0);
+        $matutinaTotalApus = (float) ($apusTotals->matutina ?? 0);
+        $tardeTotalApus = (float) ($apusTotals->tarde ?? 0);
+        $nocheTotalApus = (float) ($apusTotals->noche ?? 0);
+        $totalApus = (float) ($apusTotals->total ?? 0);
         
         // Si la liquidación no está liberada (es el día actual), todo en 0 excepto el anterior
         if (!$isLiquidationReleased) {
@@ -676,6 +691,7 @@ class ClientLiquidations extends Component
         // Limpiar el cache antes de calcular la semana para asegurar cálculos correctos
         $this->anteriorCache = [];
         $this->arrastreCache = [];
+        // No limpiar weeksCache aquí porque solo se usa para la lista, no para el modal
         
         // Generar fechas de lunes a sábado, solo hasta hoy
         $this->weekDates = [];
@@ -1067,6 +1083,10 @@ class ClientLiquidations extends Component
                 unset($this->anteriorCache[$cacheKey]);
                 unset($this->anteriorCache[$cacheKeyWithPayments]);
             }
+            
+            // Limpiar cache de semanas para forzar recálculo
+            $this->weeksCache = null;
+            $this->weeksCacheKey = null;
         }
         
         // Cerrar el modal
