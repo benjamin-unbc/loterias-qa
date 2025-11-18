@@ -261,14 +261,36 @@ class Liquidations extends Component
             });
         $prevTotalApus = (float) $prevApusQuery->sum('import');
         
-        if ($prevTotalApus == 0) {
-            return null; // No hay datos del cliente en la fecha anterior
-        }
-        
         // Obtener la comisión personalizada del cliente para el cálculo anterior
         $user = \App\Models\User::find($userId);
         $client = \App\Models\Client::where('correo', $user->email)->first();
         $commissionPercentage = $client ? $client->commission_percentage : 20.00;
+        
+        // Si el día anterior no tiene apuestas, buscar recursivamente hacia atrás
+        // hasta encontrar el último día con datos y usar su udDeja como arrastre
+        if ($prevTotalApus == 0) {
+            // Si skipRecursion es true, no buscar más hacia atrás
+            if ($skipRecursion) {
+                return null;
+            }
+            
+            // Buscar recursivamente el último día con datos
+            $prevPrevLiquidation = $this->getClientPreviousLiquidation($userId, $prevDateStr, false);
+            
+            // Si encontramos un día anterior con datos, usar su udDeja como arrastre
+            if ($prevPrevLiquidation) {
+                return [
+                    'ud_deja' => (float) $prevPrevLiquidation['ud_deja'],
+                    'total_apus' => 0,
+                    'total_aciert' => 0,
+                    'total_gana_pase' => 0,
+                ];
+            }
+            
+            // Si no hay ningún día anterior con datos, retornar null
+            return null;
+        }
+        
         $prevComision = $prevTotalApus * ($commissionPercentage / 100);
         $prevTotalGanaPase = $prevTotalApus - $prevComision - $prevTotalAciert;
         
