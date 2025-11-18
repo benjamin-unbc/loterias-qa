@@ -88,6 +88,7 @@ class Liquidations extends Component
         $totalGanaPase = $totalApus - $comision - $totalAciert;
         
         // Buscar la liquidación diaria global más reciente anterior a la fecha actual
+        // Para la liquidación global, usar el ud_deja del día anterior como anterior
         $prevLiquidation = DailyLiquidation::where('date', '<', $this->date)
                                            ->orderBy('date', 'desc')
                                            ->first();
@@ -182,18 +183,23 @@ class Liquidations extends Component
             // UD.RECIBE se suma al anterior (admin pagó, aumenta lo que debe el cliente)
             $prevClientDeja = $prevClientDeja - $saturdayPayments['udDio'] + $saturdayPayments['udRecibe'];
         } else {
-            // Buscar la última liquidación del cliente (si existe)
-            $clientPrevLiquidation = $this->getClientPreviousLiquidation($user->id, $this->date);
-            $prevClientDeja = $clientPrevLiquidation ? (float) $clientPrevLiquidation['ud_deja'] : 0;
-            
-            // Aplicar los pagos registrados del día anterior (solo para días que no son lunes ni domingo)
+            // Para días que no son lunes, obtener el anterior del día anterior
+            // Necesitamos el 'anteri' del día anterior, no el 'ud_deja'
             $previousDate = Carbon::parse($this->date)->subDay();
             // Si el día anterior es domingo, buscar el sábado anterior
             if ($previousDate->isSunday()) {
                 $previousDate = $previousDate->copy()->subDay(); // Sábado anterior
             }
-            $paymentsAdjustment = $this->getPaymentsForDate($user->id, $previousDate->format('Y-m-d'));
-            $prevClientDeja += $paymentsAdjustment; // Sumar el ajuste (puede ser positivo o negativo)
+            
+            // Obtener la liquidación completa del día anterior para obtener su 'anteri'
+            $previousLiquidation = $this->computeClientLiquidationData($user, $previousDate);
+            $prevClientDeja = $previousLiquidation['anteri'] ?? 0;
+            
+            // Aplicar los pagos registrados del día anterior
+            // UD.DIO se resta del anterior (cliente pagó, reduce deuda)
+            // UD.RECIBE se suma al anterior (admin pagó, aumenta lo que debe el cliente)
+            $previousPayments = $this->getPaymentsForCurrentDate($user->id, $previousDate->format('Y-m-d'));
+            $prevClientDeja = $prevClientDeja - $previousPayments['udDio'] + $previousPayments['udRecibe'];
         }
         
         // Calcular arrastre individual del cliente
@@ -463,6 +469,53 @@ class Liquidations extends Component
         }
     }
 
+    /**
+     * Busca recursivamente el anterior de días anteriores hasta encontrar uno con valores
+     * 
+     * @param \App\Models\User $user
+     * @param Carbon $date
+     * @param int $depth Profundidad de recursión (máximo 30 días)
+     * @return float
+     */
+    protected function getPreviousAnteriorRecursive($user, Carbon $date, int $depth = 0): float
+    {
+        // Límite de recursión para evitar bucles infinitos
+        if ($depth >= 30) {
+            return 0;
+        }
+        
+        // Ir un día atrás
+        $previousDate = $date->copy()->subDay();
+        
+        // Si es domingo, saltar al sábado
+        if ($previousDate->isSunday()) {
+            $previousDate = $previousDate->copy()->subDay();
+        }
+        
+        // Si es lunes, ir al sábado anterior
+        if ($previousDate->isMonday()) {
+            $previousDate = $previousDate->copy()->subDays(2);
+        }
+        
+        // Calcular la liquidación del día anterior
+        $previousLiquidation = $this->computeClientLiquidationData($user, $previousDate);
+        $anteri = $previousLiquidation['anteri'] ?? 0;
+        
+        // Verificar si el día anterior tiene datos
+        $hasData = ($previousLiquidation['totalApus'] ?? 0) > 0 || 
+                   ($previousLiquidation['totalAciert'] ?? 0) > 0 ||
+                   isset($previousLiquidation['anteri']);
+        
+        // Si encontramos datos (aunque el anterior sea 0), retornar el anterior
+        // Si el anterior es 0 pero hay datos, significa que se pagó todo, retornar 0
+        if ($hasData) {
+            return $anteri;
+        }
+        
+        // Si no hay datos, buscar recursivamente
+        return $this->getPreviousAnteriorRecursive($user, $previousDate, $depth + 1);
+    }
+    
     /**
      * ✅ NUEVO: Ordena los resultados por turno (de más temprano a más tarde)
      * Extrae el turno del código de lotería (últimos 4 dígitos) o del campo time

@@ -281,17 +281,23 @@ class ClientLiquidations extends Component
             // UD.RECIBE se suma al anterior (admin pagó, aumenta lo que debe el cliente)
             $prevClientDeja = $prevClientDeja - $saturdayPayments['udDio'] + $saturdayPayments['udRecibe'];
         } else {
-            $clientPrevLiquidation = $this->getClientPreviousLiquidation($userId, $date);
-            $prevClientDeja = $clientPrevLiquidation ? (float) $clientPrevLiquidation['ud_deja'] : 0;
-            
-            // Aplicar los pagos registrados del día anterior (solo para días que no son lunes ni domingo)
+            // Para días que no son lunes, obtener el anterior del día anterior
+            // Necesitamos el 'anteri' del día anterior, no el 'ud_deja'
             $previousDate = Carbon::parse($date)->subDay();
             // Si el día anterior es domingo, buscar el sábado anterior
-            if (Carbon::parse($previousDate)->isSunday()) {
+            if ($previousDate->isSunday()) {
                 $previousDate = $previousDate->copy()->subDay(); // Sábado anterior
             }
-            $paymentsAdjustment = $this->getPaymentsForDate($previousDate->format('Y-m-d'));
-            $prevClientDeja += $paymentsAdjustment; // Sumar el ajuste (puede ser positivo o negativo)
+            
+            // Obtener la liquidación completa del día anterior para obtener su 'anteri'
+            $previousLiquidation = $this->computeLiquidationDataForDate($previousDate->format('Y-m-d'), $userId);
+            $prevClientDeja = $previousLiquidation['anteri'] ?? 0;
+            
+            // Aplicar los pagos registrados del día anterior
+            // UD.DIO se resta del anterior (cliente pagó, reduce deuda)
+            // UD.RECIBE se suma al anterior (admin pagó, aumenta lo que debe el cliente)
+            $previousPayments = $this->getPaymentsForCurrentDate($previousDate->format('Y-m-d'));
+            $prevClientDeja = $prevClientDeja - $previousPayments['udDio'] + $previousPayments['udRecibe'];
         }
         
         // Obtener el porcentaje semanal del cliente
@@ -665,6 +671,53 @@ class ClientLiquidations extends Component
             \Log::warning('Error al obtener pagos para fecha: ' . $e->getMessage());
             return 0.0;
         }
+    }
+    
+    /**
+     * Busca recursivamente el anterior de días anteriores hasta encontrar uno con valores
+     * 
+     * @param int $userId
+     * @param Carbon $date
+     * @param int $depth Profundidad de recursión (máximo 30 días)
+     * @return float
+     */
+    protected function getPreviousAnteriorRecursive(int $userId, Carbon $date, int $depth = 0): float
+    {
+        // Límite de recursión para evitar bucles infinitos
+        if ($depth >= 30) {
+            return 0;
+        }
+        
+        // Ir un día atrás
+        $previousDate = $date->copy()->subDay();
+        
+        // Si es domingo, saltar al sábado
+        if ($previousDate->isSunday()) {
+            $previousDate = $previousDate->copy()->subDay();
+        }
+        
+        // Si es lunes, ir al sábado anterior
+        if ($previousDate->isMonday()) {
+            $previousDate = $previousDate->copy()->subDays(2);
+        }
+        
+        // Calcular la liquidación del día anterior
+        $previousLiquidation = $this->computeLiquidationDataForDate($previousDate->format('Y-m-d'), $userId);
+        $anteri = $previousLiquidation['anteri'] ?? 0;
+        
+        // Verificar si el día anterior tiene datos
+        $hasData = ($previousLiquidation['totalApus'] ?? 0) > 0 || 
+                   ($previousLiquidation['totalAciert'] ?? 0) > 0 ||
+                   isset($previousLiquidation['anteri']);
+        
+        // Si encontramos datos (aunque el anterior sea 0), retornar el anterior
+        // Si el anterior es 0 pero hay datos, significa que se pagó todo, retornar 0
+        if ($hasData) {
+            return $anteri;
+        }
+        
+        // Si no hay datos, buscar recursivamente
+        return $this->getPreviousAnteriorRecursive($userId, $previousDate, $depth + 1);
     }
     
     /**
