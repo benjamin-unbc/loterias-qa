@@ -161,7 +161,7 @@ class ClientLiquidations extends Component
                 }
                 
                 $liquidationData = $this->computeLiquidationDataForDate($dateForClienteDeja, $userId);
-                $clienteDeja = $liquidationData['udDeja'] ?? 0;
+                $anterior = $liquidationData['anteri'] ?? 0;
                 
                 $weeks->push([
                     'monday' => $currentMonday->format('Y-m-d'),
@@ -171,7 +171,8 @@ class ClientLiquidations extends Component
                     'dates' => $weekDates,
                     'label' => "Semana {$currentMonday->format('d-m-Y')} hasta {$saturday->format('d-m-Y')}",
                     'lastDate' => $lastDateOfWeek,
-                    'clienteDeja' => $clienteDeja,
+                    'clienteDeja' => $anterior, // Mantener el nombre de la clave para compatibilidad, pero ahora contiene el anterior
+                    'anterior' => $anterior,
                     'isCurrentWeek' => $isCurrentWeek
                 ]);
             }
@@ -654,7 +655,8 @@ class ClientLiquidations extends Component
     {
         $this->paymentDate = $date;
         $liquidationData = $this->computeLiquidationDataForDate($date, $this->client->associatedUser->id ?? null);
-        $this->currentUdDeja = $liquidationData['udDeja'] ?? 0;
+        // Usar el anterior en lugar del udDeja para determinar el tipo de pago
+        $this->currentUdDeja = $liquidationData['anteri'] ?? 0;
         $this->paymentAmount = 0;
         $this->paymentNotes = '';
         $this->showPaymentModal = true;

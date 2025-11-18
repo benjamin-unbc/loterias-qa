@@ -26,7 +26,7 @@
                             Semana
                         </th>
                         <th scope="col" class="px-6 py-3">
-                            Cliente Deja
+                            Anterior
                         </th>
                         <th scope="col" class="px-6 py-3">
                             Acciones
@@ -53,10 +53,10 @@
                             </td>
                             <td class="px-6 py-4">
                                 <div class="flex items-center gap-2">
-                                    <span class="font-semibold {{ ($week['clienteDeja'] ?? 0) >= 0 ? 'text-green-400' : 'text-red-400' }}">
-                                        ${{ number_format($week['clienteDeja'] ?? 0, 2, ',', '.') }}
+                                    <span class="font-semibold {{ ($week['anterior'] ?? $week['clienteDeja'] ?? 0) >= 0 ? 'text-green-400' : 'text-red-400' }}">
+                                        ${{ number_format($week['anterior'] ?? $week['clienteDeja'] ?? 0, 2, ',', '.') }}
                                     </span>
-                                    @if(($week['clienteDeja'] ?? 0) >= 0)
+                                    @if(($week['anterior'] ?? $week['clienteDeja'] ?? 0) >= 0)
                                         <span class="text-xs text-gray-400">(Debe pagar)</span>
                                     @else
                                         <span class="text-xs text-gray-400">(Debe cobrar)</span>
@@ -76,9 +76,9 @@
                                             $hasPayment = \App\Models\ClientPayment::where('client_id', $client->id)
                                                 ->whereDate('payment_date', $lastDate)
                                                 ->exists();
-                                            $clienteDeja = $week['clienteDeja'] ?? 0;
+                                            $anterior = $week['anterior'] ?? $week['clienteDeja'] ?? 0;
                                         @endphp
-                                        @if(!$hasPayment && $clienteDeja != 0)
+                                        @if(!$hasPayment && $anterior != 0)
                                             <button wire:click="openPaymentModal('{{ $lastDate }}')"
                                                 class="font-medium text-blue-400 hover:text-blue-300 transition-colors duration-200"
                                                 title="Registrar pago">
@@ -476,10 +476,10 @@
 
                 <!-- Content -->
                 <div class="bg-[#1b1f22] px-6 py-4">
-                    <!-- Cliente Deja Actual -->
+                    <!-- Anterior Actual -->
                     <div class="mb-4 p-3 rounded-lg {{ $currentUdDeja >= 0 ? 'bg-green-900/30 border border-green-700' : 'bg-red-900/30 border border-red-700' }}">
                         <div class="flex justify-between items-center">
-                            <span class="text-gray-300 text-sm">Cliente Deja:</span>
+                            <span class="text-gray-300 text-sm">Anterior:</span>
                             <span class="font-semibold text-lg {{ $currentUdDeja >= 0 ? 'text-green-400' : 'text-red-400' }}">
                                 ${{ number_format($currentUdDeja, 2, ',', '.') }}
                             </span>
