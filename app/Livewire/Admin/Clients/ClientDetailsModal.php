@@ -690,6 +690,10 @@ class ClientDetailsModal extends Component
             ];
         }
 
+        // Limpiar el cache antes de calcular la liquidación para asegurar cálculos correctos
+        $this->anteriorCache = [];
+        $this->arrastreCache = [];
+
         $userId = $this->client->associatedUser->id;
         return $this->computeClientLiquidationDataForDate($this->liquidacionesDate, $userId);
     }

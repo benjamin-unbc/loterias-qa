@@ -839,6 +839,11 @@ class Liquidations extends Component
      */
     public function search()
     {
+        // Limpiar el cache cuando se cambia la fecha para asegurar cálculos correctos
+        $this->anteriorCache = [];
+        $this->arrastreCache = [];
+        $this->arrastreCacheGlobal = [];
+        
         $this->resetPage();
         // Los datos se calculan en tiempo real para cada usuario individual
         // No se guardan liquidaciones globales ya que cada usuario ve solo sus datos

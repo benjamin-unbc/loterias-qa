@@ -793,6 +793,10 @@ class ClientLiquidations extends Component
      */
     public function openFullLiquidationModal($date)
     {
+        // Limpiar el cache antes de calcular la liquidación completa para asegurar cálculos correctos
+        $this->anteriorCache = [];
+        $this->arrastreCache = [];
+        
         $this->fullLiquidationDate = $date;
         $this->showFullLiquidationModal = true;
     }
