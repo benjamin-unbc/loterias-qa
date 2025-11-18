@@ -385,6 +385,21 @@ class ClientLiquidations extends Component
         // Obtener los pagos registrados para la fecha actual
         $currentPayments = $this->getPaymentsForCurrentDate($date);
         
+        // Guardar el anterior calculado en cache ANTES del return
+        // Esto asegura que cuando se calcule el siguiente día, tenga el anterior con pagos aplicados
+        $cacheKey = $userId . '_' . $date;
+        $cacheKeyWithPayments = $userId . '_' . $date . '_with_payments';
+        
+        // Guardar el anterior sin pagos aplicados (el anterior que viene del día anterior)
+        if (!isset($this->anteriorCache[$cacheKey]) || $this->anteriorCache[$cacheKey] === null) {
+            $this->anteriorCache[$cacheKey] = $prevClientDeja;
+        }
+        
+        // Guardar el anterior CON los pagos del día actual aplicados
+        // Este es el valor que se usará como anterior para el día siguiente
+        $anteriWithPayments = $prevClientDeja - $currentPayments['udDio'] + $currentPayments['udRecibe'];
+        $this->anteriorCache[$cacheKeyWithPayments] = $anteriWithPayments;
+        
         return [
             'date' => $date,
             'totalApus' => $totalApus,
@@ -404,25 +419,6 @@ class ClientLiquidations extends Component
             'udDio' => $currentPayments['udDio'],
             'udRecibePayment' => $currentPayments['udRecibe'],
         ];
-        
-        // Guardar el anterior calculado en cache (solo si no es null, para evitar sobrescribir valores calculados)
-        $cacheKey = $userId . '_' . $date;
-        $cacheKeyWithPayments = $userId . '_' . $date . '_with_payments';
-        
-        // Guardar el anterior sin pagos aplicados
-        if (!isset($this->anteriorCache[$cacheKey]) || $this->anteriorCache[$cacheKey] === null) {
-            // El anterior sin pagos es el prevClientDeja antes de aplicar los pagos del día actual
-            // Pero prevClientDeja ya tiene los pagos del día anterior aplicados
-            // Necesitamos guardar el anterior con los pagos del día actual aplicados
-            $currentPayments = $this->getPaymentsForCurrentDate($date);
-            $anteriWithPayments = $prevClientDeja - $currentPayments['udDio'] + $currentPayments['udRecibe'];
-            $this->anteriorCache[$cacheKeyWithPayments] = $anteriWithPayments;
-        }
-        
-        // También guardar el anterior sin pagos (para referencia)
-        if (!isset($this->anteriorCache[$cacheKey]) || $this->anteriorCache[$cacheKey] === null) {
-            $this->anteriorCache[$cacheKey] = $prevClientDeja;
-        }
     }
     
     /**
@@ -453,62 +449,70 @@ class ClientLiquidations extends Component
         $cacheKeyWithPayments = $userId . '_' . $previousDate->format('Y-m-d') . '_with_payments';
         
         // Primero verificar si tenemos el anterior con pagos aplicados en cache
+        // Este es el valor que se guardó cuando se calculó el día anterior
         if (isset($this->anteriorCache[$cacheKeyWithPayments]) && $this->anteriorCache[$cacheKeyWithPayments] !== null) {
             return $this->anteriorCache[$cacheKeyWithPayments];
         }
         
-        // Si no está en cache, calcularlo
+        // Si no está en cache con pagos, pero sí está en cache sin pagos, calcular los pagos y guardarlos
         if (isset($this->anteriorCache[$cacheKey]) && $this->anteriorCache[$cacheKey] !== null) {
             $anteri = $this->anteriorCache[$cacheKey];
-        } else {
-            // Calcular el anterior del día anterior directamente desde los datos
-            // Sin llamar a computeLiquidationDataForDate para evitar recursión
-            $prevResultsQuery = Result::whereDate('date', $previousDate->format('Y-m-d'))->where('user_id', $userId);
-            $prevTotalAciert = (float) $prevResultsQuery->sum('aciert');
-            
-            $prevApusQuery = ApusModel::whereDate('created_at', $previousDate->format('Y-m-d'))
-                                     ->where('user_id', $userId)
-                                     ->whereHas('playsSent', function($query) {
-                                         $query->where('status', '!=', 'I');
-                                     });
-            $prevTotalApus = (float) $prevApusQuery->sum('import');
-            
-            $commissionPercentage = $this->client->commission_percentage ?? 20.00;
-            $prevComision = $prevTotalApus * ($commissionPercentage / 100);
-            $prevTotalGanaPase = $prevTotalApus - $prevComision - $prevTotalAciert;
-            
-            // Obtener el anterior del día anterior (sin recursión, usar 0 si no está en cache)
-            // Esto evita la recursión infinita - si no está en cache, asumimos 0
-            $prevPrevDate = $previousDate->copy()->subDay();
-            if ($prevPrevDate->isSunday()) {
-                $prevPrevDate = $prevPrevDate->copy()->subDay();
-            }
-            if ($previousDate->isMonday()) {
-                $prevPrevDate = $previousDate->copy()->subDays(2);
-            }
-            
-            $prevPrevCacheKey = $userId . '_' . $prevPrevDate->format('Y-m-d');
-            $prevPrevCacheKeyWithPayments = $userId . '_' . $prevPrevDate->format('Y-m-d') . '_with_payments';
-            // Usar el anterior con pagos aplicados si está disponible
-            $prevPrevAnteri = isset($this->anteriorCache[$prevPrevCacheKeyWithPayments]) && $this->anteriorCache[$prevPrevCacheKeyWithPayments] !== null 
-                ? $this->anteriorCache[$prevPrevCacheKeyWithPayments] 
-                : (isset($this->anteriorCache[$prevPrevCacheKey]) && $this->anteriorCache[$prevPrevCacheKey] !== null 
-                    ? $this->anteriorCache[$prevPrevCacheKey] 
-                    : 0);
-            
-            // Calcular udDeja del día anterior
-            $weeklyCommissionPercentage = $this->client->weekly_commission_percentage ?? 30.00;
-            if ($previousDate->isSaturday() && $weeklyCommissionPercentage > 0) {
-                $comiDejaSem = ($prevTotalGanaPase + $prevPrevAnteri) * ($weeklyCommissionPercentage / 100);
-                $prevUdDeja = ($prevTotalGanaPase + $prevPrevAnteri) - $comiDejaSem;
-            } else {
-                $prevUdDeja = $prevTotalGanaPase + $prevPrevAnteri;
-            }
-            
-            // El anterior es el udDeja del día anterior (sin pagos aún)
-            $anteri = $prevUdDeja;
-            $this->anteriorCache[$cacheKey] = $anteri;
+            // Aplicar pagos del día anterior
+            $previousPayments = $this->getPaymentsForCurrentDate($previousDate->format('Y-m-d'));
+            $anteri = $anteri - $previousPayments['udDio'] + $previousPayments['udRecibe'];
+            // Guardar en cache con pagos aplicados
+            $this->anteriorCache[$cacheKeyWithPayments] = $anteri;
+            return $anteri;
         }
+        
+        // Si no está en cache, calcularlo desde los datos
+        // Calcular el anterior del día anterior directamente desde los datos
+        // Sin llamar a computeLiquidationDataForDate para evitar recursión
+        $prevResultsQuery = Result::whereDate('date', $previousDate->format('Y-m-d'))->where('user_id', $userId);
+        $prevTotalAciert = (float) $prevResultsQuery->sum('aciert');
+        
+        $prevApusQuery = ApusModel::whereDate('created_at', $previousDate->format('Y-m-d'))
+                                 ->where('user_id', $userId)
+                                 ->whereHas('playsSent', function($query) {
+                                     $query->where('status', '!=', 'I');
+                                 });
+        $prevTotalApus = (float) $prevApusQuery->sum('import');
+        
+        $commissionPercentage = $this->client->commission_percentage ?? 20.00;
+        $prevComision = $prevTotalApus * ($commissionPercentage / 100);
+        $prevTotalGanaPase = $prevTotalApus - $prevComision - $prevTotalAciert;
+        
+        // Obtener el anterior del día anterior (sin recursión, usar 0 si no está en cache)
+        // Esto evita la recursión infinita - si no está en cache, asumimos 0
+        $prevPrevDate = $previousDate->copy()->subDay();
+        if ($prevPrevDate->isSunday()) {
+            $prevPrevDate = $prevPrevDate->copy()->subDay();
+        }
+        if ($previousDate->isMonday()) {
+            $prevPrevDate = $previousDate->copy()->subDays(2);
+        }
+        
+        $prevPrevCacheKey = $userId . '_' . $prevPrevDate->format('Y-m-d');
+        $prevPrevCacheKeyWithPayments = $userId . '_' . $prevPrevDate->format('Y-m-d') . '_with_payments';
+        // Usar el anterior con pagos aplicados si está disponible
+        $prevPrevAnteri = isset($this->anteriorCache[$prevPrevCacheKeyWithPayments]) && $this->anteriorCache[$prevPrevCacheKeyWithPayments] !== null 
+            ? $this->anteriorCache[$prevPrevCacheKeyWithPayments] 
+            : (isset($this->anteriorCache[$prevPrevCacheKey]) && $this->anteriorCache[$prevPrevCacheKey] !== null 
+                ? $this->anteriorCache[$prevPrevCacheKey] 
+                : 0);
+        
+        // Calcular udDeja del día anterior
+        $weeklyCommissionPercentage = $this->client->weekly_commission_percentage ?? 30.00;
+        if ($previousDate->isSaturday() && $weeklyCommissionPercentage > 0) {
+            $comiDejaSem = ($prevTotalGanaPase + $prevPrevAnteri) * ($weeklyCommissionPercentage / 100);
+            $prevUdDeja = ($prevTotalGanaPase + $prevPrevAnteri) - $comiDejaSem;
+        } else {
+            $prevUdDeja = $prevTotalGanaPase + $prevPrevAnteri;
+        }
+        
+        // El anterior es el udDeja del día anterior (sin pagos aún)
+        $anteri = $prevUdDeja;
+        $this->anteriorCache[$cacheKey] = $anteri;
         
         // Aplicar pagos del día anterior
         $previousPayments = $this->getPaymentsForCurrentDate($previousDate->format('Y-m-d'));
@@ -619,6 +623,9 @@ class ClientLiquidations extends Component
         $monday = Carbon::parse($mondayDate);
         $today = Carbon::today();
         
+        // Limpiar el cache antes de calcular la semana para asegurar cálculos correctos
+        $this->anteriorCache = [];
+        
         // Generar fechas de lunes a sábado, solo hasta hoy
         $this->weekDates = [];
         for ($i = 0; $i < 6; $i++) {
@@ -636,6 +643,7 @@ class ClientLiquidations extends Component
         }
         
         // Calcular liquidaciones para cada día de la semana (incluso sin jugadas)
+        // IMPORTANTE: Calcular en orden cronológico para que el cache se inicialice correctamente
         $this->weekLiquidations = [];
         if ($this->client && $this->client->associatedUser) {
             foreach ($this->weekDates as $weekDay) {
