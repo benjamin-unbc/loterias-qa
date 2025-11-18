@@ -468,6 +468,9 @@ class ClientLiquidations extends Component
             'udRecibePayment' => $currentPayments['udRecibe'],
             'paymentDateDio' => $currentPayments['paymentDateDio'],
             'paymentDateRecibe' => $currentPayments['paymentDateRecibe'],
+            'paymentsListDio' => $currentPayments['paymentsListDio'] ?? [],
+            'paymentsListRecibe' => $currentPayments['paymentsListRecibe'] ?? [],
+            'totalPayments' => $currentPayments['totalPayments'] ?? 0,
         ];
     }
     
@@ -930,47 +933,54 @@ class ClientLiquidations extends Component
     
     /**
      * Obtiene los pagos registrados para una fecha específica
-     * Retorna un array con udDio y udRecibe según el tipo de pago
+     * Retorna un array con udDio, udRecibe, lista de pagos individuales y totales
      * 
      * @param string $date Fecha de la liquidación
-     * @return array ['udDio' => float, 'udRecibe' => float]
+     * @return array ['udDio' => float, 'udRecibe' => float, 'paymentsList' => array, 'totalPayments' => int]
      */
     protected function getPaymentsForCurrentDate(string $date): array
     {
         try {
             $payments = ClientPayment::where('client_id', $this->client->id)
                 ->whereDate('payment_date', $date)
-                ->orderBy('created_at', 'desc')
+                ->orderBy('created_at', 'asc')
                 ->get();
             
             $udDio = 0.0;
             $udRecibe = 0.0;
-            $paymentDateDio = null;
-            $paymentDateRecibe = null;
+            $paymentsListDio = [];
+            $paymentsListRecibe = [];
             
             foreach ($payments as $payment) {
+                $paymentData = [
+                    'amount' => (float) $payment->amount,
+                    'date' => $payment->created_at->format('d/m/Y H:i'),
+                    'notes' => $payment->notes,
+                ];
+                
                 if ($payment->type === 'paid_to_client') {
                     // Si el cliente debe pagar (paid_to_client), se suma a UD.DIO
                     $udDio += (float) $payment->amount;
-                    // Guardar la fecha del último pago UD.DIO
-                    if (!$paymentDateDio) {
-                        $paymentDateDio = $payment->created_at->format('d/m/Y');
-                    }
+                    $paymentsListDio[] = $paymentData;
                 } else {
                     // Si el cliente debe cobrar (received_from_client), se suma a UD.RECIBE
                     $udRecibe += (float) $payment->amount;
-                    // Guardar la fecha del último pago UD.RECIBE
-                    if (!$paymentDateRecibe) {
-                        $paymentDateRecibe = $payment->created_at->format('d/m/Y');
-                    }
+                    $paymentsListRecibe[] = $paymentData;
                 }
             }
+            
+            // Obtener la fecha del primer pago de cada tipo para compatibilidad
+            $paymentDateDio = !empty($paymentsListDio) ? $paymentsListDio[0]['date'] : null;
+            $paymentDateRecibe = !empty($paymentsListRecibe) ? $paymentsListRecibe[0]['date'] : null;
             
             return [
                 'udDio' => $udDio,
                 'udRecibe' => $udRecibe,
                 'paymentDateDio' => $paymentDateDio,
                 'paymentDateRecibe' => $paymentDateRecibe,
+                'paymentsListDio' => $paymentsListDio,
+                'paymentsListRecibe' => $paymentsListRecibe,
+                'totalPayments' => count($payments),
             ];
         } catch (\Exception $e) {
             \Log::warning('Error al obtener pagos para fecha actual: ' . $e->getMessage());
@@ -979,6 +989,9 @@ class ClientLiquidations extends Component
                 'udRecibe' => 0.0,
                 'paymentDateDio' => null,
                 'paymentDateRecibe' => null,
+                'paymentsListDio' => [],
+                'paymentsListRecibe' => [],
+                'totalPayments' => 0,
             ];
         }
     }
@@ -1024,22 +1037,7 @@ class ClientLiquidations extends Component
             'paymentAmount.min' => 'El monto debe ser mayor a 0',
         ]);
         
-        // Verificar si ya existe un pago registrado HOY (fecha actual)
-        // Solo se permite un pago por día natural, y el siguiente solo se puede hacer a las 00:00 del día siguiente
-        // Usamos la fecha actual del servidor para evitar problemas de zona horaria
-        $today = Carbon::today();
-        $existingPaymentToday = ClientPayment::where('client_id', $this->client->id)
-            ->whereDate('created_at', $today->format('Y-m-d'))
-            ->first();
-        
-        if ($existingPaymentToday) {
-            // Cerrar el modal
-            $this->closePaymentModal();
-            
-            // Mostrar mensaje de error
-            $this->dispatch('payment-error', message: 'Ya se registró un pago hoy. Debe esperar hasta las 00:00 del día siguiente para registrar otro pago.');
-            return;
-        }
+        // Ya no hay restricción de un pago por día - se pueden ingresar múltiples pagos diarios
         
         // Determinar el tipo de pago basado en el UD Deja actual
         $type = $this->currentUdDeja >= 0 ? 'paid_to_client' : 'received_from_client';

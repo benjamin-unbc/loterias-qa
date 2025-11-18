@@ -73,21 +73,14 @@
                                     @if($week['isCurrentWeek'] ?? false)
                                         @php
                                             $lastDate = $week['lastDate'] ?? end($week['dates']);
-                                            $hasPayment = \App\Models\ClientPayment::where('client_id', $client->id)
-                                                ->whereDate('payment_date', $lastDate)
-                                                ->exists();
                                             $anterior = $week['anterior'] ?? $week['clienteDeja'] ?? 0;
                                         @endphp
-                                        @if(!$hasPayment && $anterior != 0)
+                                        @if($anterior != 0)
                                             <button wire:click="openPaymentModal('{{ $lastDate }}')"
                                                 class="font-medium text-blue-400 hover:text-blue-300 transition-colors duration-200"
                                                 title="Registrar pago">
                                                 <i class="fa-solid fa-dollar-sign"></i>
                                             </button>
-                                        @elseif($hasPayment)
-                                            <span class="text-gray-500 text-xs" title="Ya se registró un pago para este día. Debe esperar al siguiente día para registrar otro.">
-                                                <i class="fa-solid fa-check-circle text-green-400"></i>
-                                            </span>
                                         @endif
                                     @endif
                                 </div>
@@ -172,9 +165,21 @@
                                                 <span class="text-gray-400">UD.DIO:</span>
                                                 <span class="font-medium text-red-400">${{ number_format($dayData['udDio'], 2, ',', '.') }}</span>
                                             </div>
-                                            @if(isset($dayData['paymentDateDio']) && $dayData['paymentDateDio'])
-                                                <div class="text-xs text-gray-500 italic pl-2 -mt-1">
-                                                    La fecha de ingreso fue: {{ $dayData['paymentDateDio'] }}. Se verá reflejado en la liquidación del día siguiente.
+                                            @if(isset($dayData['paymentsListDio']) && count($dayData['paymentsListDio']) > 0)
+                                                <div class="text-xs text-gray-400 pl-2 -mt-1 space-y-0.5">
+                                                    @foreach($dayData['paymentsListDio'] as $payment)
+                                                        <div class="flex justify-between items-center">
+                                                            <span class="text-gray-500 italic">${{ number_format($payment['amount'], 2, ',', '.') }} - {{ $payment['date'] }}</span>
+                                                        </div>
+                                                    @endforeach
+                                                    @if(count($dayData['paymentsListDio']) > 1)
+                                                        <div class="text-gray-500 italic pt-1 border-t border-gray-600">
+                                                            Total: {{ count($dayData['paymentsListDio']) }} pago(s)
+                                                        </div>
+                                                    @endif
+                                                    <div class="text-gray-500 italic text-[10px] pt-0.5">
+                                                        Se verá reflejado en la liquidación del día siguiente.
+                                                    </div>
                                                 </div>
                                             @endif
                                         @endif
@@ -183,9 +188,21 @@
                                                 <span class="text-gray-400">UD.RECIBE:</span>
                                                 <span class="font-medium text-green-400">${{ number_format($dayData['udRecibePayment'], 2, ',', '.') }}</span>
                                             </div>
-                                            @if(isset($dayData['paymentDateRecibe']) && $dayData['paymentDateRecibe'])
-                                                <div class="text-xs text-gray-500 italic pl-2 -mt-1">
-                                                    La fecha de ingreso fue: {{ $dayData['paymentDateRecibe'] }}. Se verá reflejado en la liquidación del día siguiente.
+                                            @if(isset($dayData['paymentsListRecibe']) && count($dayData['paymentsListRecibe']) > 0)
+                                                <div class="text-xs text-gray-400 pl-2 -mt-1 space-y-0.5">
+                                                    @foreach($dayData['paymentsListRecibe'] as $payment)
+                                                        <div class="flex justify-between items-center">
+                                                            <span class="text-gray-500 italic">${{ number_format($payment['amount'], 2, ',', '.') }} - {{ $payment['date'] }}</span>
+                                                        </div>
+                                                    @endforeach
+                                                    @if(count($dayData['paymentsListRecibe']) > 1)
+                                                        <div class="text-gray-500 italic pt-1 border-t border-gray-600">
+                                                            Total: {{ count($dayData['paymentsListRecibe']) }} pago(s)
+                                                        </div>
+                                                    @endif
+                                                    <div class="text-gray-500 italic text-[10px] pt-0.5">
+                                                        Se verá reflejado en la liquidación del día siguiente.
+                                                    </div>
                                                 </div>
                                             @endif
                                         @endif
@@ -432,9 +449,21 @@
                                                         <h4 class="font-medium">UD.DIO:</h4>
                                                         <p>{{ number_format($liquidationData['udDio'], 2) }}</p>
                                                     </div>
-                                                    @if(isset($liquidationData['paymentDateDio']) && $liquidationData['paymentDateDio'])
-                                                        <div class="text-xs text-gray-500 italic pl-2 -mt-1">
-                                                            La fecha de ingreso fue: {{ $liquidationData['paymentDateDio'] }}. Se verá reflejado en la liquidación del día siguiente.
+                                                    @if(isset($liquidationData['paymentsListDio']) && count($liquidationData['paymentsListDio']) > 0)
+                                                        <div class="text-xs text-gray-500 pl-2 -mt-1 space-y-0.5">
+                                                            @foreach($liquidationData['paymentsListDio'] as $payment)
+                                                                <div class="flex justify-between items-center">
+                                                                    <span class="italic">${{ number_format($payment['amount'], 2) }} - {{ $payment['date'] }}</span>
+                                                                </div>
+                                                            @endforeach
+                                                            @if(count($liquidationData['paymentsListDio']) > 1)
+                                                                <div class="text-gray-500 italic pt-1 border-t border-gray-400">
+                                                                    Total: {{ count($liquidationData['paymentsListDio']) }} pago(s)
+                                                                </div>
+                                                            @endif
+                                                            <div class="text-gray-500 italic text-[10px] pt-0.5">
+                                                                Se verá reflejado en la liquidación del día siguiente.
+                                                            </div>
                                                         </div>
                                                     @endif
                                                 @endif
@@ -443,9 +472,21 @@
                                                         <h4 class="font-medium">UD.RECIBE:</h4>
                                                         <p>{{ number_format($liquidationData['udRecibePayment'], 2) }}</p>
                                                     </div>
-                                                    @if(isset($liquidationData['paymentDateRecibe']) && $liquidationData['paymentDateRecibe'])
-                                                        <div class="text-xs text-gray-500 italic pl-2 -mt-1">
-                                                            La fecha de ingreso fue: {{ $liquidationData['paymentDateRecibe'] }}. Se verá reflejado en la liquidación del día siguiente.
+                                                    @if(isset($liquidationData['paymentsListRecibe']) && count($liquidationData['paymentsListRecibe']) > 0)
+                                                        <div class="text-xs text-gray-500 pl-2 -mt-1 space-y-0.5">
+                                                            @foreach($liquidationData['paymentsListRecibe'] as $payment)
+                                                                <div class="flex justify-between items-center">
+                                                                    <span class="italic">${{ number_format($payment['amount'], 2) }} - {{ $payment['date'] }}</span>
+                                                                </div>
+                                                            @endforeach
+                                                            @if(count($liquidationData['paymentsListRecibe']) > 1)
+                                                                <div class="text-gray-500 italic pt-1 border-t border-gray-400">
+                                                                    Total: {{ count($liquidationData['paymentsListRecibe']) }} pago(s)
+                                                                </div>
+                                                            @endif
+                                                            <div class="text-gray-500 italic text-[10px] pt-0.5">
+                                                                Se verá reflejado en la liquidación del día siguiente.
+                                                            </div>
                                                         </div>
                                                     @endif
                                                 @endif
