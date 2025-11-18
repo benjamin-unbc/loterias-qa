@@ -163,17 +163,30 @@ class Liquidations extends Component
         $totalGanaPase = $totalApus - $comision - $totalAciert;
         
         // Para clientes, calcular arrastre basado en sus datos históricos
-        // Buscar la última liquidación del cliente (si existe)
-        $clientPrevLiquidation = $this->getClientPreviousLiquidation($user->id, $this->date);
-        $prevClientDeja = $clientPrevLiquidation ? (float) $clientPrevLiquidation['ud_deja'] : 0;
-        
-        // Aplicar los pagos registrados del día anterior
-        $previousDate = Carbon::parse($this->date)->subDay();
+        // Si es lunes, obtener el anterior del sábado anterior y aplicar los pagos del sábado
         if ($selectedDate->isMonday()) {
-            $previousDate = $selectedDate->copy()->subDays(2); // Sábado anterior
+            $saturdayDate = $selectedDate->copy()->subDays(2); // Sábado anterior
+            // Calcular la liquidación completa del sábado para obtener su anterior
+            $saturdayLiquidation = $this->computeClientLiquidationData($user, $saturdayDate);
+            // El anterior del lunes es el anterior del sábado
+            $prevClientDeja = $saturdayLiquidation['anteri'] ?? 0; // Tomar el anterior del sábado, no el ud_deja
+            
+            // Aplicar los pagos registrados del sábado al anterior del lunes
+            // Si es UD.DIO (paid_to_client) se resta, si es UD.RECIBE (received_from_client) se suma
+            $saturdayPayments = $this->getPaymentsForCurrentDate($user->id, $saturdayDate->format('Y-m-d'));
+            // UD.DIO se resta del anterior (cliente pagó, reduce deuda)
+            // UD.RECIBE se suma al anterior (admin pagó, aumenta lo que debe el cliente)
+            $prevClientDeja = $prevClientDeja - $saturdayPayments['udDio'] + $saturdayPayments['udRecibe'];
+        } else {
+            // Buscar la última liquidación del cliente (si existe)
+            $clientPrevLiquidation = $this->getClientPreviousLiquidation($user->id, $this->date);
+            $prevClientDeja = $clientPrevLiquidation ? (float) $clientPrevLiquidation['ud_deja'] : 0;
+            
+            // Aplicar los pagos registrados del día anterior (solo para días que no son lunes)
+            $previousDate = Carbon::parse($this->date)->subDay();
+            $paymentsAdjustment = $this->getPaymentsForDate($user->id, $previousDate->format('Y-m-d'));
+            $prevClientDeja += $paymentsAdjustment; // Sumar el ajuste (puede ser positivo o negativo)
         }
-        $paymentsAdjustment = $this->getPaymentsForDate($user->id, $previousDate->format('Y-m-d'));
-        $prevClientDeja += $paymentsAdjustment; // Sumar el ajuste (puede ser positivo o negativo)
         
         // Calcular arrastre individual del cliente
         // Obtener el porcentaje semanal del cliente
