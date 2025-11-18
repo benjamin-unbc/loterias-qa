@@ -518,8 +518,20 @@ class Liquidations extends Component
             // El anterior es el udDeja del día anterior (sin pagos aún)
             // PERO: Si el día anterior no tiene apuestas, el anterior debería ser el anterior del día anterior a ese
             if ($prevTotalApus == 0 && $prevTotalAciert == 0) {
-                // Si no hay apuestas ni aciertos, el anterior es el anterior del día anterior (ya calculado arriba)
-                $anteri = $prevPrevAnteri;
+                // Si no hay apuestas ni aciertos, necesitamos obtener el anterior del día anterior recursivamente
+                // Pero solo si no está en cache, para evitar recursión infinita
+                if ($prevPrevAnteri === 0 && !isset($this->anteriorCache[$prevPrevCacheKey]) && !isset($this->anteriorCache[$prevPrevCacheKeyWithPayments])) {
+                    // Si el anterior del día anterior no está en cache, calcularlo recursivamente
+                    // Pero solo si no es lunes (para lunes ya tenemos lógica especial arriba)
+                    if (!$previousDate->isMonday()) {
+                        $anteri = $this->getAnteriorForDate($prevPrevDate->format('Y-m-d'), $userId);
+                    } else {
+                        $anteri = 0; // Si es lunes y no está en cache, asumir 0
+                    }
+                } else {
+                    // Si está en cache o ya fue calculado, usar ese valor
+                    $anteri = $prevPrevAnteri;
+                }
             } else {
                 // Si hay apuestas, el anterior es el udDeja del día anterior
                 $anteri = $prevUdDeja;
