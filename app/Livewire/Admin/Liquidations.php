@@ -64,6 +64,9 @@ class Liquidations extends Component
             $arrastreCacheKey = $userId . '_' . $dateToClear->format('Y-m-d') . '_arrastre';
             unset($this->arrastreCache[$arrastreCacheKey]);
         }
+        
+        // Forzar recarga del componente para que se recalculen los valores
+        $this->dispatch('$refresh');
     }
 
     public function printPDF()
@@ -381,23 +384,20 @@ class Liquidations extends Component
             'udRecibePayment'   => $currentPayments['udRecibe'],
         ];
         
-        // Guardar el anterior calculado en cache (solo si no es null, para evitar sobrescribir valores calculados)
+        // Guardar el anterior calculado en cache
+        // El anterior que se muestra es prevClientDeja (ya tiene pagos del día anterior aplicados)
+        // Para el día siguiente, necesitamos el anterior CON los pagos del día actual aplicados
         $cacheKey = $user->id . '_' . $dateStr;
         $cacheKeyWithPayments = $user->id . '_' . $dateStr . '_with_payments';
         
-        // Guardar el anterior sin pagos aplicados
-        if (!isset($this->anteriorCache[$cacheKey]) || $this->anteriorCache[$cacheKey] === null) {
-            // El anterior sin pagos es el prevClientDeja antes de aplicar los pagos del día actual
-            // Pero prevClientDeja ya tiene los pagos del día anterior aplicados
-            // Necesitamos guardar el anterior con los pagos del día actual aplicados
-            $anteriWithPayments = $prevClientDeja - $currentPayments['udDio'] + $currentPayments['udRecibe'];
-            $this->anteriorCache[$cacheKeyWithPayments] = $anteriWithPayments;
-        }
+        // Calcular el anterior con pagos del día actual aplicados (para el día siguiente)
+        $anteriWithPayments = $prevClientDeja - $currentPayments['udDio'] + $currentPayments['udRecibe'];
         
-        // También guardar el anterior sin pagos (para referencia)
-        if (!isset($this->anteriorCache[$cacheKey]) || $this->anteriorCache[$cacheKey] === null) {
-            $this->anteriorCache[$cacheKey] = $prevClientDeja;
-        }
+        // Guardar siempre el anterior con pagos aplicados (para que el día siguiente lo use)
+        $this->anteriorCache[$cacheKeyWithPayments] = $anteriWithPayments;
+        
+        // También guardar el anterior sin pagos del día actual (prevClientDeja) para referencia
+        $this->anteriorCache[$cacheKey] = $prevClientDeja;
     }
     
     /**
