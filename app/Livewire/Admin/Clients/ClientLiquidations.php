@@ -147,16 +147,10 @@ class ClientLiquidations extends Component
                 // Obtener el último día de la semana (hasta hoy) para calcular clienteDeja
                 $lastDateOfWeek = end($weekDates);
                 
-                // Si es la semana actual, calcular el anterior del día actual (hoy)
+                // Usar siempre el último día de la semana (hasta hoy) para calcular el anterior
+                // Esto asegura que se muestre el anterior del último día con liquidación
                 // computeLiquidationDataForDate calculará el anterior del día anterior con pagos aplicados
-                if ($isCurrentWeek) {
-                    // Usar el día actual para calcular el anterior
-                    // computeLiquidationDataForDate internamente calculará el anterior del día anterior con pagos aplicados
-                    $dateForClienteDeja = $today->format('Y-m-d');
-                } else {
-                    // Si no es la semana actual, usar el último día de esa semana
-                    $dateForClienteDeja = $lastDateOfWeek;
-                }
+                $dateForClienteDeja = $lastDateOfWeek;
                 
                 $liquidationData = $this->computeLiquidationDataForDate($dateForClienteDeja, $userId);
                 $anterior = $liquidationData['anteri'] ?? 0;
