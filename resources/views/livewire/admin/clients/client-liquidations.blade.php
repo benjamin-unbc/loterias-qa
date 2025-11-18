@@ -163,10 +163,20 @@
                                             <span class="text-gray-400">Total Aciertos:</span>
                                             <span class="font-medium text-green-400">${{ number_format($dayData['totalAciert'], 2, ',', '.') }}</span>
                                         </div>
-                                        @if($weekDay['carbon']->isMonday())
+                                        <div class="flex justify-between text-white">
+                                            <span class="text-gray-400">Anterior:</span>
+                                            <span class="font-medium">${{ number_format($dayData['anteri'] ?? 0, 2, ',', '.') }}</span>
+                                        </div>
+                                        @if(($dayData['udDio'] ?? 0) > 0)
                                             <div class="flex justify-between text-white">
-                                                <span class="text-gray-400">Anterior:</span>
-                                                <span class="font-medium">${{ number_format($dayData['anteri'] ?? 0, 2, ',', '.') }}</span>
+                                                <span class="text-gray-400">UD.DIO:</span>
+                                                <span class="font-medium text-red-400">${{ number_format($dayData['udDio'], 2, ',', '.') }}</span>
+                                            </div>
+                                        @endif
+                                        @if(($dayData['udRecibePayment'] ?? 0) > 0)
+                                            <div class="flex justify-between text-white">
+                                                <span class="text-gray-400">UD.RECIBE:</span>
+                                                <span class="font-medium text-green-400">${{ number_format($dayData['udRecibePayment'], 2, ',', '.') }}</span>
                                             </div>
                                         @endif
                                         <div class="flex justify-between text-white">

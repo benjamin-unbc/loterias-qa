@@ -360,8 +360,12 @@ class ClientDetailsModal extends Component
         $totalGanaPase = $totalApus - $comision - $totalAciert;
         
         // Para clientes, calcular arrastre basado en sus datos históricos
+        // Si es domingo, el anterior es 0 (no se juega)
+        if ($selectedDate->isSunday()) {
+            $prevClientDeja = 0;
+        }
         // Si es lunes, obtener el anterior del sábado anterior y aplicar los pagos del sábado
-        if ($selectedDate->isMonday()) {
+        elseif ($selectedDate->isMonday()) {
             $saturdayDate = $selectedDate->copy()->subDays(2); // Sábado anterior
             $saturdayLiquidation = $this->computeClientLiquidationDataForDate($saturdayDate->format('Y-m-d'), $userId);
             // El anterior del lunes es el anterior del sábado
@@ -377,8 +381,12 @@ class ClientDetailsModal extends Component
             $clientPrevLiquidation = $this->getClientPreviousLiquidation($userId, $date);
             $prevClientDeja = $clientPrevLiquidation ? (float) $clientPrevLiquidation['ud_deja'] : 0;
             
-            // Aplicar los pagos registrados del día anterior (solo para días que no son lunes)
+            // Aplicar los pagos registrados del día anterior (solo para días que no son lunes ni domingo)
             $previousDate = \Carbon\Carbon::parse($date)->subDay();
+            // Si el día anterior es domingo, buscar el sábado anterior
+            if ($previousDate->isSunday()) {
+                $previousDate = $previousDate->copy()->subDay(); // Sábado anterior
+            }
             $paymentsAdjustment = $this->getPaymentsForDate($previousDate->format('Y-m-d'));
             $prevClientDeja += $paymentsAdjustment; // Sumar el ajuste (puede ser positivo o negativo)
         }
@@ -387,8 +395,14 @@ class ClientDetailsModal extends Component
         // Obtener el porcentaje semanal del cliente
         $weeklyCommissionPercentage = $this->client->weekly_commission_percentage ?? 30.00;
         
-        // Si es lunes y no hay apuestas, todo parte en 0 excepto el anterior
-        if ($selectedDate->isMonday() && $totalApus == 0) {
+        // Si es domingo, todo en 0 (no se juega)
+        if ($selectedDate->isSunday()) {
+            $udDeja = 0;
+            $arrastre = 0;
+            $comiDejaSem = null;
+        }
+        // Si no hay apuestas, todo parte en 0 excepto el anterior
+        elseif ($totalApus == 0) {
             $udDeja = 0; // UD Deja en 0 cuando no hay apuestas
             $arrastre = 0; // Arrastre en 0 cuando no hay apuestas
             $comiDejaSem = null;

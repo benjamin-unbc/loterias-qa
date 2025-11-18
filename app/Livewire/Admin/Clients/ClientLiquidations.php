@@ -212,6 +212,11 @@ class ClientLiquidations extends Component
         }
         
         $selectedDate = Carbon::parse($date);
+        $today = Carbon::today();
+        
+        // Verificar si la liquidación está liberada (se libera a las 00:00 del día siguiente)
+        // Si la fecha es hoy, la liquidación aún no está liberada
+        $isLiquidationReleased = $selectedDate->lt($today);
         
         // Consulta de resultados filtrada por cliente
         $resultsQuery = Result::whereDate('date', $date)
@@ -235,14 +240,35 @@ class ClientLiquidations extends Component
         
         $totalApus = $previaTotalApus + $mananaTotalApus + $matutinaTotalApus + $tardeTotalApus + $nocheTotalApus;
         
+        // Si la liquidación no está liberada (es el día actual), todo en 0 excepto el anterior
+        if (!$isLiquidationReleased) {
+            $totalApus = 0;
+            $previaTotalApus = 0;
+            $mananaTotalApus = 0;
+            $matutinaTotalApus = 0;
+            $tardeTotalApus = 0;
+            $nocheTotalApus = 0;
+            $totalAciert = 0;
+        }
+        
         // Obtener la comisión personalizada del cliente
         $commissionPercentage = $this->client->commission_percentage ?? 20.00;
         $comision = $totalApus * ($commissionPercentage / 100);
         $totalGanaPase = $totalApus - $comision - $totalAciert;
         
+        // Si la liquidación no está liberada, también poner comisión y totalGanaPase en 0
+        if (!$isLiquidationReleased) {
+            $comision = 0;
+            $totalGanaPase = 0;
+        }
+        
         // Calcular arrastre
+        // Si es domingo, el anterior es 0 (no se juega)
+        if ($selectedDate->isSunday()) {
+            $prevClientDeja = 0;
+        }
         // Si es lunes, obtener el anterior del sábado anterior y aplicar los pagos del sábado
-        if ($selectedDate->isMonday()) {
+        elseif ($selectedDate->isMonday()) {
             $saturdayDate = $selectedDate->copy()->subDays(2); // Sábado anterior
             $saturdayLiquidation = $this->computeLiquidationDataForDate($saturdayDate->format('Y-m-d'), $userId);
             // El anterior del lunes es el anterior del sábado
@@ -258,8 +284,12 @@ class ClientLiquidations extends Component
             $clientPrevLiquidation = $this->getClientPreviousLiquidation($userId, $date);
             $prevClientDeja = $clientPrevLiquidation ? (float) $clientPrevLiquidation['ud_deja'] : 0;
             
-            // Aplicar los pagos registrados del día anterior (solo para días que no son lunes)
+            // Aplicar los pagos registrados del día anterior (solo para días que no son lunes ni domingo)
             $previousDate = Carbon::parse($date)->subDay();
+            // Si el día anterior es domingo, buscar el sábado anterior
+            if (Carbon::parse($previousDate)->isSunday()) {
+                $previousDate = $previousDate->copy()->subDay(); // Sábado anterior
+            }
             $paymentsAdjustment = $this->getPaymentsForDate($previousDate->format('Y-m-d'));
             $prevClientDeja += $paymentsAdjustment; // Sumar el ajuste (puede ser positivo o negativo)
         }
@@ -267,8 +297,20 @@ class ClientLiquidations extends Component
         // Obtener el porcentaje semanal del cliente
         $weeklyCommissionPercentage = $this->client->weekly_commission_percentage ?? 30.00;
         
-        // Si es lunes y no hay apuestas, todo parte en 0 excepto el anterior
-        if ($selectedDate->isMonday() && $totalApus == 0) {
+        // Si la liquidación no está liberada (es el día actual), todo en 0 excepto el anterior
+        if (!$isLiquidationReleased) {
+            $udDeja = 0;
+            $arrastre = 0;
+            $comiDejaSem = null;
+        }
+        // Si es domingo, todo en 0 (no se juega)
+        elseif ($selectedDate->isSunday()) {
+            $udDeja = 0;
+            $arrastre = 0;
+            $comiDejaSem = null;
+        }
+        // Si no hay apuestas, todo parte en 0 excepto el anterior
+        elseif ($totalApus == 0) {
             $udDeja = 0; // UD Deja en 0 cuando no hay apuestas
             $arrastre = 0; // Arrastre en 0 cuando no hay apuestas
             $comiDejaSem = null;
