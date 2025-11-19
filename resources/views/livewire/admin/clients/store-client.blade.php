@@ -1,6 +1,6 @@
 <div class="bg-[#1b1f22] w-full h-full min-h-screen p-4 flex flex-col gap-3">
     <div class="flex items-center gap-3 pb-3">
-        <a href="{{ route('clients.show') }}" class="bg-gray-600 shadow-lg hover:bg-gray-700 duration-75 transition-all ease-in-out text-white hover:text-gray-300 rounded-full px-2 py-1"><i class="fa-solid fa-arrow-left"></i></a>
+        <a href="{{ route('clients.show') }}" class="bg-gray-600 shadow-lg hover:bg-gray-700 duration-75 transition-all ease-in-out text-white hover:text-gray-300 rounded-full px-3 py-1">Volver</a>
         <h2 class="font-semibold text-xl text-white leading-tight">
             {{ $action === 'edit' ? 'Editar cliente' : 'Agregar nuevo cliente' }}
         </h2>

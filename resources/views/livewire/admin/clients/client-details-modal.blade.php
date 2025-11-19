@@ -1,12 +1,12 @@
 <div>
 @if($showModal && $client)
 <div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+    <div class="flex items-center justify-center min-h-screen p-0 text-center sm:block sm:p-0">
         <!-- Background overlay -->
         <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" wire:click="closeModal"></div>
 
         <!-- Modal panel -->
-        <div class="inline-block align-bottom bg-[#1b1f22] rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-4 sm:align-middle sm:max-w-[95vw] sm:w-full sm:h-[90vh]">
+        <div class="inline-block align-middle bg-[#1b1f22] rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-0 sm:align-middle sm:max-w-[100vw] sm:w-full sm:h-[100vh] sm:max-h-[100vh] sm:rounded-none">
             <!-- Header -->
                         <div class="bg-[#22272b] px-6 py-4 border-b border-gray-600">
                 <div class="flex items-center justify-between">
@@ -59,7 +59,7 @@
             </div>
 
             <!-- Content -->
-            <div class="bg-[#1b1f22] p-6 overflow-y-auto" style="max-height: calc(90vh - 200px);">
+            <div class="bg-[#1b1f22] p-6 overflow-y-auto" style="max-height: calc(100vh - 200px); height: calc(100vh - 200px);">
                 @if($activeTab === 'jugadas')
                     <!-- Jugadas Enviadas Tab -->
                     <div class="space-y-4">
