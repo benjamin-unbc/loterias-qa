@@ -2356,7 +2356,16 @@ public function addRow()
                 'user_id' => auth()->id(),
                 'plays_count' => $plays->count()
             ]);
-            $this->dispatch('notify', message: 'Error al guardar apuestas. Verifica tu conexión.', type: 'error');
+            
+            // Mostrar mensaje de error específico al usuario
+            $errorMessage = 'Error al enviar jugadas. ';
+            if (strpos($e->getMessage(), 'Duplicate entry') !== false && strpos($e->getMessage(), 'tickets_ticket_unique') !== false) {
+                $errorMessage .= 'El ticket ya existe. Por favor, intenta nuevamente.';
+            } else {
+                $errorMessage .= 'Error de base de datos. Verifica tu conexión e intenta nuevamente.';
+            }
+            
+            $this->dispatch('notify', message: $errorMessage, type: 'error');
         } catch (\Exception $e) {
             DB::rollBack();
             \Log::error('Error al enviar jugadas: ' . $e->getMessage(), [
@@ -2364,7 +2373,16 @@ public function addRow()
                 'plays_count' => $plays->count(),
                 'trace' => $e->getTraceAsString()
             ]);
-            $this->dispatch('notify', message: 'Error al guardar apuestas: ' . $e->getMessage(), type: 'error');
+            
+            // Mostrar mensaje de error específico al usuario
+            $errorMessage = 'Error al enviar jugadas. ';
+            if (strpos($e->getMessage(), 'ticket único') !== false) {
+                $errorMessage .= 'No se pudo generar un ticket único. Por favor, intenta nuevamente.';
+            } else {
+                $errorMessage .= 'Verifica tu conexión e intenta nuevamente.';
+            }
+            
+            $this->dispatch('notify', message: $errorMessage, type: 'error');
         }
     }
 
@@ -2900,30 +2918,32 @@ public function addRow()
      */
     private function generateUniqueOldUserTicket(): string
     {
-        $maxAttempts = 100;
+        // ✅ SOLUCIÓN: Obtener el máximo ticket numérico de 5 dígitos UNA SOLA VEZ
+        // Filtrar solo tickets que sean numéricos de 5 dígitos (formato antiguo)
+        // Usar lockForUpdate() dentro de la transacción para evitar condiciones de carrera
+        $maxTicketResult = DB::table('tickets')
+            ->lockForUpdate()
+            ->whereRaw("ticket REGEXP '^[0-9]{5}$'") // Solo tickets numéricos de 5 dígitos
+            ->selectRaw("MAX(CAST(ticket AS UNSIGNED)) as max_num")
+            ->first();
+        
+        $maxTicket = $maxTicketResult ? (int)$maxTicketResult->max_num : 0;
+        
+        // Empezar desde el máximo + 1
+        $nextTicketNumber = $maxTicket + 1;
+        
+        // ✅ SOLUCIÓN: Buscar el primer número disponible (que no exista)
+        // Esto maneja casos donde hay "huecos" en la secuencia o tickets duplicados
+        $maxAttempts = 1000;
         $attempt = 0;
         
         while ($attempt < $maxAttempts) {
-            // ✅ SOLUCIÓN: Obtener el último ticket de la tabla tickets (más confiable)
-            // Usar lockForUpdate() para evitar condiciones de carrera
-            $lastTicket = DB::table('tickets')
-                ->lockForUpdate()
-                ->orderBy('id', 'desc')
-                ->value('ticket');
-            
-            if ($lastTicket) {
-                // Convertir a número y sumar 1
-                // Si el ticket tiene formato numérico (ej: "00068"), convertir a int
-                $nextTicketNumber = (int)$lastTicket + 1;
-            } else {
-                // Si no hay tickets, empezar desde 1
-                $nextTicketNumber = 1;
-            }
-            
             $ticket = str_pad($nextTicketNumber, 5, '0', STR_PAD_LEFT);
             
-            // ✅ SOLUCIÓN: Verificar que el ticket no exista antes de retornarlo
-            $exists = Ticket::where('ticket', $ticket)->exists();
+            // Verificar que el ticket no exista
+            $exists = DB::table('tickets')
+                ->where('ticket', $ticket)
+                ->exists();
             
             if (!$exists) {
                 return $ticket;
@@ -2934,8 +2954,8 @@ public function addRow()
             $nextTicketNumber++;
         }
         
-        // Si después de 100 intentos no se encontró un ticket único, lanzar excepción
-        throw new \Exception('No se pudo generar un ticket único después de ' . $maxAttempts . ' intentos');
+        // Si después de muchos intentos no se encontró un ticket único, lanzar excepción
+        throw new \Exception('No se pudo generar un ticket único después de ' . $maxAttempts . ' intentos. Último número intentado: ' . str_pad($nextTicketNumber - 1, 5, '0', STR_PAD_LEFT));
     }
 
 
