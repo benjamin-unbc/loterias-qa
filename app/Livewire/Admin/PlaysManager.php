@@ -2230,18 +2230,10 @@ public function addRow()
         try {
             $playsCount = $plays->count();
             
-            // Determinar el sistema de numeración basado en si el usuario es nuevo o existente
+            // ✅ SOLUCIÓN: Todos los usuarios usan formato ID-XXXX (ej: 25-0001, 25-0002)
+            // Cada usuario tiene su propia correlatividad de tickets
             $currentUser = auth()->user();
-            $isNewUser = $this->isNewUser($currentUser);
-            
-            if ($isNewUser) {
-                // Sistema nuevo: ID-XXXX (ej: 23-0001, 23-0002)
-                $ticket = $this->generateNewUserTicket($currentUser->id);
-            } else {
-                // ✅ SOLUCIÓN: Generar ticket thread-safe para evitar duplicados
-                // Sistema actual: XXXX (ej: 00001, 00002)
-                $ticket = $this->generateUniqueOldUserTicket();
-            }
+            $ticket = $this->generateNewUserTicket($currentUser->id);
 
             $uniqueCodeForTicket = $this->generateUniqueCode();
 
@@ -2264,11 +2256,8 @@ public function addRow()
                     // Si es error de duplicado de ticket, generar uno nuevo
                     if ($e->getCode() == 23000 && strpos($e->getMessage(), 'tickets_ticket_unique') !== false) {
                         $retryCount++;
-                        if ($isNewUser) {
-                            $ticket = $this->generateNewUserTicket($currentUser->id);
-                        } else {
-                            $ticket = $this->generateUniqueOldUserTicket();
-                        }
+                        // ✅ SOLUCIÓN: Todos los usuarios usan formato ID-XXXX
+                        $ticket = $this->generateNewUserTicket($currentUser->id);
                         $uniqueCodeForTicket = $this->generateUniqueCode();
                         continue; // Intentar de nuevo
                     }
@@ -2867,36 +2856,38 @@ public function addRow()
     }
 
     /**
-     * Genera un número de ticket para usuarios nuevos con formato ID-XXXX
+     * Genera un número de ticket con formato ID-XXXX para todos los usuarios
      * Thread-safe: verifica que el ticket no exista antes de retornarlo
-     * Ejemplo: 23-0001, 23-0002, etc.
+     * Ejemplo: 25-0001, 25-0002, etc.
+     * Cada usuario tiene su propia correlatividad de tickets
      */
     private function generateNewUserTicket($userId): string
     {
-        $maxAttempts = 100;
+        // ✅ SOLUCIÓN: Obtener el máximo ticket del usuario UNA SOLA VEZ
+        // Filtrar solo tickets que tengan formato "ID-XXXX" para este usuario
+        $maxTicketResult = DB::table('tickets')
+            ->lockForUpdate()
+            ->where('ticket', 'like', "{$userId}-%")
+            ->selectRaw("MAX(CAST(SUBSTRING_INDEX(ticket, '-', -1) AS UNSIGNED)) as max_num")
+            ->first();
+        
+        $maxNumber = $maxTicketResult ? (int)$maxTicketResult->max_num : 0;
+        
+        // Empezar desde el máximo + 1
+        $nextNumber = $maxNumber + 1;
+        
+        // ✅ SOLUCIÓN: Buscar el primer número disponible (que no exista)
+        // Esto maneja casos donde hay "huecos" en la secuencia o tickets duplicados
+        $maxAttempts = 1000;
         $attempt = 0;
         
         while ($attempt < $maxAttempts) {
-            // ✅ SOLUCIÓN: Buscar el último ticket del usuario en la tabla tickets (más confiable)
-            $lastTicket = DB::table('tickets')
-                ->lockForUpdate()
-                ->where('ticket', 'like', "{$userId}-%")
-                ->orderByRaw("CAST(SUBSTRING_INDEX(ticket, '-', -1) AS UNSIGNED) DESC")
-                ->value('ticket');
-
-            if ($lastTicket) {
-                // Extraer el número secuencial del último ticket
-                $lastNumber = (int) substr($lastTicket, strpos($lastTicket, '-') + 1);
-                $nextNumber = $lastNumber + 1;
-            } else {
-                // Primer ticket del usuario
-                $nextNumber = 1;
-            }
-
             $ticket = $userId . '-' . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
             
-            // ✅ SOLUCIÓN: Verificar que el ticket no exista antes de retornarlo
-            $exists = Ticket::where('ticket', $ticket)->exists();
+            // Verificar que el ticket no exista
+            $exists = DB::table('tickets')
+                ->where('ticket', $ticket)
+                ->exists();
             
             if (!$exists) {
                 return $ticket;
@@ -2907,8 +2898,8 @@ public function addRow()
             $nextNumber++;
         }
         
-        // Si después de 100 intentos no se encontró un ticket único, lanzar excepción
-        throw new \Exception('No se pudo generar un ticket único para el usuario ' . $userId . ' después de ' . $maxAttempts . ' intentos');
+        // Si después de muchos intentos no se encontró un ticket único, lanzar excepción
+        throw new \Exception('No se pudo generar un ticket único para el usuario ' . $userId . ' después de ' . $maxAttempts . ' intentos. Último número intentado: ' . str_pad($nextNumber - 1, 4, '0', STR_PAD_LEFT));
     }
 
     /**
