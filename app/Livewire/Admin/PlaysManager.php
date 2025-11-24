@@ -671,31 +671,38 @@ class PlaysManager extends Component
             return collect();
         }
 
-        $plays = Play::where('user_id', $currentUserId)
-            ->select(['id', 'user_id', 'type', 'number', 'position', 'import', 'lottery', 'numberR', 'positionR', 'isChecked'])
-            ->orderBy('id', 'asc')
-            ->get()
-            ->values();
+        try {
+            $plays = Play::where('user_id', $currentUserId)
+                ->select(['id', 'user_id', 'type', 'number', 'position', 'import', 'lottery', 'numberR', 'positionR', 'isChecked'])
+                ->orderBy('id', 'asc')
+                ->get()
+                ->values();
+                
+            // MEJORA: Validar que todas las jugadas pertenecen al usuario actual
+            $invalidPlays = $plays->filter(function($play) use ($currentUserId) {
+                return $play->user_id !== $currentUserId;
+            });
             
-        // MEJORA: Validar que todas las jugadas pertenecen al usuario actual
-        $invalidPlays = $plays->filter(function($play) use ($currentUserId) {
-            return $play->user_id !== $currentUserId;
-        });
-        
-        if ($invalidPlays->isNotEmpty()) {
-            \Log::error("Jugadas de otros usuarios encontradas", [
-                'current_user_id' => $currentUserId,
-                'invalid_play_ids' => $invalidPlays->pluck('id')->toArray(),
-                'invalid_user_ids' => $invalidPlays->pluck('user_id')->unique()->toArray()
+            if ($invalidPlays->isNotEmpty()) {
+                \Log::error("Jugadas de otros usuarios encontradas", [
+                    'current_user_id' => $currentUserId,
+                    'invalid_play_ids' => $invalidPlays->pluck('id')->toArray(),
+                    'invalid_user_ids' => $invalidPlays->pluck('user_id')->unique()->toArray()
+                ]);
+                
+                // Filtrar solo las jugadas válidas
+                $plays = $plays->filter(function($play) use ($currentUserId) {
+                    return $play->user_id === $currentUserId;
+                })->values();
+            }
+            
+            return $plays;
+        } catch (\Exception $e) {
+            \Log::error("Error al obtener jugadas: " . $e->getMessage(), [
+                'user_id' => $currentUserId
             ]);
-            
-            // Filtrar solo las jugadas válidas
-            $plays = $plays->filter(function($play) use ($currentUserId) {
-                return $play->user_id === $currentUserId;
-            })->values();
+            return collect();
         }
-        
-        return $plays;
     }
 
 
@@ -1452,10 +1459,25 @@ public function addRow()
 
         // ✅ OPTIMIZADO: Eliminados bloqueos de tiempo y verificaciones de duplicados con límites temporales
         // Crear la nueva jugada directamente
-        $newPlay = Play::create($playDataToCreate);
+        try {
+            $newPlay = Play::create($playDataToCreate);
+            
+            // ✅ SOLUCIÓN: Verificar que la jugada se creó correctamente
+            if (!$newPlay || !$newPlay->id) {
+                throw new \Exception('No se pudo crear la jugada en la base de datos');
+            }
+        } catch (\Exception $e) {
+            \Log::error('Error al crear jugada: ' . $e->getMessage(), [
+                'user_id' => auth()->id(),
+                'play_data' => $playDataToCreate
+            ]);
+            $this->dispatch('notify', message: 'Error al guardar la jugada. Intenta nuevamente.', type: 'error');
+            return;
+        }
 
-        // ✅ OPTIMIZADO: Agregar jugada y limpiar formulario de forma más eficiente
-        $this->rows->push($newPlay);
+        // ✅ SOLUCIÓN: Recargar rows desde BD después de crear para asegurar sincronización
+        // Esto evita problemas de desincronización entre memoria y BD
+        $this->rows = $this->getAndSortPlays();
         $this->lastImportValue = $importeAGuardar;
         
         // ✅ OPTIMIZADO: Limpiar solo los campos necesarios sin resetFormAdd completo
@@ -2186,13 +2208,19 @@ public function addRow()
     public function sendPlays()
 
     {
+        // ✅ SOLUCIÓN: Validar que el usuario esté autenticado
+        if (!auth()->check()) {
+            $this->dispatch('notify', message: 'Sesión expirada. Por favor, recarga la página.', type: 'error');
+            return;
+        }
 
+        // ✅ SOLUCIÓN: Recargar jugadas desde BD antes de enviar para asegurar sincronización
+        // Esto soluciona el problema cuando $this->rows está desincronizado con la BD
+        $this->rows = $this->getAndSortPlays();
         $plays = $this->rows;
 
         if ($plays->isEmpty()) {
-
             $this->dispatch('notify', message: 'No hay jugadas para enviar.', type: 'info');
-
             return;
         }
 
@@ -2302,9 +2330,21 @@ public function addRow()
                 return;
             }
             DB::commit();
+        } catch (\Illuminate\Database\QueryException $e) {
+            DB::rollBack();
+            \Log::error('Error de base de datos al enviar jugadas: ' . $e->getMessage(), [
+                'user_id' => auth()->id(),
+                'plays_count' => $plays->count()
+            ]);
+            $this->dispatch('notify', message: 'Error al guardar apuestas. Verifica tu conexión.', type: 'error');
         } catch (\Exception $e) {
             DB::rollBack();
-            $this->dispatch('notify', message: 'Error al guardar apuestas.', type: 'error');
+            \Log::error('Error al enviar jugadas: ' . $e->getMessage(), [
+                'user_id' => auth()->id(),
+                'plays_count' => $plays->count(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            $this->dispatch('notify', message: 'Error al guardar apuestas: ' . $e->getMessage(), type: 'error');
         }
     }
 
