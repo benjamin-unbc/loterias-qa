@@ -2238,28 +2238,48 @@ public function addRow()
                 // Sistema nuevo: ID-XXXX (ej: 23-0001, 23-0002)
                 $ticket = $this->generateNewUserTicket($currentUser->id);
             } else {
-                // ✅ OPTIMIZADO: Usar consulta más eficiente - obtener solo el último ticket sin CAST
+                // ✅ SOLUCIÓN: Generar ticket thread-safe para evitar duplicados
                 // Sistema actual: XXXX (ej: 00001, 00002)
-                $lastTicket = PlaysSentModel::orderBy('id', 'desc')->value('ticket');
-                if ($lastTicket) {
-                    // Convertir a número y sumar 1
-                    $nextTicketNumber = (int)$lastTicket + 1;
-                } else {
-                    $nextTicketNumber = 1;
-                }
-                $ticket = str_pad($nextTicketNumber, 5, '0', STR_PAD_LEFT);
+                $ticket = $this->generateUniqueOldUserTicket();
             }
 
             $uniqueCodeForTicket = $this->generateUniqueCode();
 
-            // Crear ticket y plays_sent en paralelo
-            $ticketCreated = Ticket::create([
-                'ticket' => $ticket,
-                'code' => $uniqueCodeForTicket,
-                'date' => now()->toDateString(),
-                'time' => now()->format('H:i:s'),
-                'user_id' => auth()->id()
-            ]);
+            // ✅ SOLUCIÓN: Intentar crear el ticket con retry en caso de duplicado
+            $maxRetries = 10;
+            $retryCount = 0;
+            $ticketCreated = null;
+            
+            while ($retryCount < $maxRetries) {
+                try {
+                    $ticketCreated = Ticket::create([
+                        'ticket' => $ticket,
+                        'code' => $uniqueCodeForTicket,
+                        'date' => now()->toDateString(),
+                        'time' => now()->format('H:i:s'),
+                        'user_id' => auth()->id()
+                    ]);
+                    break; // Éxito, salir del loop
+                } catch (\Illuminate\Database\QueryException $e) {
+                    // Si es error de duplicado de ticket, generar uno nuevo
+                    if ($e->getCode() == 23000 && strpos($e->getMessage(), 'tickets_ticket_unique') !== false) {
+                        $retryCount++;
+                        if ($isNewUser) {
+                            $ticket = $this->generateNewUserTicket($currentUser->id);
+                        } else {
+                            $ticket = $this->generateUniqueOldUserTicket();
+                        }
+                        $uniqueCodeForTicket = $this->generateUniqueCode();
+                        continue; // Intentar de nuevo
+                    }
+                    // Si es otro error, relanzar la excepción
+                    throw $e;
+                }
+            }
+            
+            if (!$ticketCreated) {
+                throw new \Exception('No se pudo generar un ticket único después de ' . $maxRetries . ' intentos');
+            }
 
             $this->totalAmount = $this->calculateTotal();
             
@@ -2830,31 +2850,93 @@ public function addRow()
 
     /**
      * Genera un número de ticket para usuarios nuevos con formato ID-XXXX
+     * Thread-safe: verifica que el ticket no exista antes de retornarlo
      * Ejemplo: 23-0001, 23-0002, etc.
      */
     private function generateNewUserTicket($userId): string
     {
-        // Buscar el último ticket del usuario con formato ID-XXXX
-        $lastTicket = DB::select("
-            SELECT ticket 
-            FROM plays_sent 
-            WHERE ticket LIKE ? 
-            ORDER BY CAST(SUBSTRING_INDEX(ticket, '-', -1) AS UNSIGNED) DESC 
-            LIMIT 1
-        ", ["{$userId}-%"])[0] ?? null;
+        $maxAttempts = 100;
+        $attempt = 0;
+        
+        while ($attempt < $maxAttempts) {
+            // ✅ SOLUCIÓN: Buscar el último ticket del usuario en la tabla tickets (más confiable)
+            $lastTicket = DB::table('tickets')
+                ->lockForUpdate()
+                ->where('ticket', 'like', "{$userId}-%")
+                ->orderByRaw("CAST(SUBSTRING_INDEX(ticket, '-', -1) AS UNSIGNED) DESC")
+                ->value('ticket');
 
-        if ($lastTicket) {
-            // Extraer el número secuencial del último ticket
-            $lastNumber = (int) substr($lastTicket->ticket, strpos($lastTicket->ticket, '-') + 1);
-            $nextNumber = $lastNumber + 1;
-        } else {
-            // Primer ticket del usuario
-            $nextNumber = 1;
+            if ($lastTicket) {
+                // Extraer el número secuencial del último ticket
+                $lastNumber = (int) substr($lastTicket, strpos($lastTicket, '-') + 1);
+                $nextNumber = $lastNumber + 1;
+            } else {
+                // Primer ticket del usuario
+                $nextNumber = 1;
+            }
+
+            $ticket = $userId . '-' . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
+            
+            // ✅ SOLUCIÓN: Verificar que el ticket no exista antes de retornarlo
+            $exists = Ticket::where('ticket', $ticket)->exists();
+            
+            if (!$exists) {
+                return $ticket;
+            }
+            
+            // Si existe, intentar con el siguiente número
+            $attempt++;
+            $nextNumber++;
         }
-
-        return $userId . '-' . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
+        
+        // Si después de 100 intentos no se encontró un ticket único, lanzar excepción
+        throw new \Exception('No se pudo generar un ticket único para el usuario ' . $userId . ' después de ' . $maxAttempts . ' intentos');
     }
 
+    /**
+     * Genera un número de ticket único para usuarios antiguos (formato XXXX)
+     * Thread-safe: verifica que el ticket no exista antes de retornarlo
+     * Ejemplo: 00001, 00002, etc.
+     */
+    private function generateUniqueOldUserTicket(): string
+    {
+        $maxAttempts = 100;
+        $attempt = 0;
+        
+        while ($attempt < $maxAttempts) {
+            // ✅ SOLUCIÓN: Obtener el último ticket de la tabla tickets (más confiable)
+            // Usar lockForUpdate() para evitar condiciones de carrera
+            $lastTicket = DB::table('tickets')
+                ->lockForUpdate()
+                ->orderBy('id', 'desc')
+                ->value('ticket');
+            
+            if ($lastTicket) {
+                // Convertir a número y sumar 1
+                // Si el ticket tiene formato numérico (ej: "00068"), convertir a int
+                $nextTicketNumber = (int)$lastTicket + 1;
+            } else {
+                // Si no hay tickets, empezar desde 1
+                $nextTicketNumber = 1;
+            }
+            
+            $ticket = str_pad($nextTicketNumber, 5, '0', STR_PAD_LEFT);
+            
+            // ✅ SOLUCIÓN: Verificar que el ticket no exista antes de retornarlo
+            $exists = Ticket::where('ticket', $ticket)->exists();
+            
+            if (!$exists) {
+                return $ticket;
+            }
+            
+            // Si existe, intentar con el siguiente número
+            $attempt++;
+            $nextTicketNumber++;
+        }
+        
+        // Si después de 100 intentos no se encontró un ticket único, lanzar excepción
+        throw new \Exception('No se pudo generar un ticket único después de ' . $maxAttempts . ' intentos');
+    }
 
 
     public function nuevoTicket()
