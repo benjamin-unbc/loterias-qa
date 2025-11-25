@@ -398,16 +398,14 @@ class Liquidations extends Component
             $saturdayDate = $selectedDate->copy()->subDays(2);
             $saturdayDateStr = $saturdayDate->format('Y-m-d');
             
-            // Limpiar el cache del sábado para forzar recálculo con valores correctos
+            // Usar getUdDejaForDate para obtener el UD DEJA del sábado sin causar recursión
+            // Este método calcula directamente el UD DEJA usando la misma lógica que computeClientLiquidationData
+            // Limpiar el cache primero para asegurar que se recalcula
             $udDejaCacheKey = $user->id . '_' . $saturdayDateStr . '_uddeja';
             unset($this->udDejaCache[$udDejaCacheKey]);
             
-            // Crear una nueva instancia para calcular la liquidación del sábado sin causar recursión
-            // Esto asegura que usamos exactamente el mismo cálculo que se muestra en la liquidación del sábado
-            $tempLiquidations = new self();
-            $tempLiquidations->date = $saturdayDateStr; // Establecer la fecha para el cálculo
-            $saturdayLiquidation = $tempLiquidations->computeClientLiquidationData($user, $saturdayDate);
-            $anteriForDisplay = $saturdayLiquidation['udDeja'] ?? 0;
+            // Calcular el UD DEJA del sábado
+            $anteriForDisplay = $this->getUdDejaForDate($saturdayDateStr, $user->id);
             
             // Guardar en cache para futuras referencias
             $this->udDejaCache[$udDejaCacheKey] = $anteriForDisplay;
@@ -653,14 +651,19 @@ class Liquidations extends Component
     
     /**
      * Obtiene el arrastre para una fecha específica
-     * Si está en cache, lo retorna. Si no, calcula la liquidación del día para obtener el arrastre
+     * Calcula directamente el arrastre sin llamar a computeClientLiquidationData para evitar recursión
      */
-    public function getArrastreForDate(string $date, int $userId): float
+    public function getArrastreForDate(string $date, int $userId, int $depth = 0): float
     {
         $selectedDate = Carbon::parse($date);
         
         // Si es domingo, el arrastre es 0 (no se juega)
         if ($selectedDate->isSunday()) {
+            return 0;
+        }
+        
+        // Limitar la recursión a máximo 30 días para evitar consultas excesivas
+        if ($depth > 30) {
             return 0;
         }
         
@@ -670,16 +673,85 @@ class Liquidations extends Component
             return $this->arrastreCache[$arrastreCacheKey];
         }
         
-        // Si no está en cache, calcular la liquidación del día para obtener el arrastre
-        // Necesitamos obtener el usuario y calcular su liquidación
-        $user = \App\Models\User::find($userId);
-        if (!$user) {
+        // Si está marcado como null, significa que está siendo calculado, retornar 0 para evitar recursión
+        if (isset($this->arrastreCache[$arrastreCacheKey]) && $this->arrastreCache[$arrastreCacheKey] === null) {
             return 0;
         }
         
-        // Calcular la liquidación del día (ya no necesitamos cambiar $this->date porque computeClientLiquidationData usa $selectedDate)
-        $liquidationData = $this->computeClientLiquidationData($user, $selectedDate);
-        $arrastre = $liquidationData['arrastre'] ?? 0;
+        // Marcar que estamos calculando para evitar recursión infinita
+        $this->arrastreCache[$arrastreCacheKey] = null;
+        
+        // Calcular arrastre directamente sin llamar a computeClientLiquidationData
+        $user = \App\Models\User::find($userId);
+        if (!$user) {
+            $this->arrastreCache[$arrastreCacheKey] = 0;
+            return 0;
+        }
+        
+        $dateStr = $selectedDate->format('Y-m-d');
+        
+        // Calcular totalAciert
+        $totalAciert = (float) Result::query()->whereDate('date', $dateStr)->where('user_id', $userId)->sum('aciert');
+        
+        // Calcular totalApus (excluyendo jugadas anuladas)
+        $apusQuery = \App\Models\ApusModel::query()
+            ->whereDate('created_at', $dateStr)
+            ->where('user_id', $userId)
+            ->whereHas('playsSent', function($query) {
+                $query->where('status', '!=', 'I');
+            });
+        $totalApus = (float) $apusQuery->sum('import');
+        
+        // Obtener comisión del cliente
+        $client = \App\Models\Client::where('correo', $user->email)->first();
+        $commissionPercentage = $client ? $client->commission_percentage : 20.00;
+        $comision = $totalApus * ($commissionPercentage / 100);
+        $totalGanaPase = $totalApus - $comision - $totalAciert;
+        
+        // Obtener el anterior del día
+        $prevClientDeja = 0;
+        if ($selectedDate->isMonday()) {
+            $prevDate = $selectedDate->copy()->subDays(2);
+            $prevClientDeja = $this->getAnteriorForDate($prevDate->format('Y-m-d'), $userId, $depth + 1);
+        } else {
+            $prevDate = $selectedDate->copy()->subDay();
+            if ($prevDate->isSunday()) {
+                $prevDate = $prevDate->copy()->subDay();
+            }
+            $prevClientDeja = $this->getAnteriorForDate($prevDate->format('Y-m-d'), $userId, $depth + 1);
+        }
+        
+        // Calcular arrastre según el día
+        if ($totalApus == 0) {
+            // Si no hay apuestas, mantener el arrastre del día anterior
+            if ($selectedDate->isMonday()) {
+                $arrastre = 0;
+            } else {
+                $previousDate = $selectedDate->copy()->subDay();
+                if ($previousDate->isSunday()) {
+                    $previousDate = $previousDate->copy()->subDay();
+                }
+                $arrastre = $this->getArrastreForDate($previousDate->format('Y-m-d'), $userId, $depth + 1);
+            }
+        } elseif ($selectedDate->isSaturday()) {
+            // Calcular arrastre del viernes
+            $fridayDate = $selectedDate->copy()->subDay();
+            $prevArrastre = $this->getArrastreForDate($fridayDate->format('Y-m-d'), $userId, $depth + 1);
+            
+            // Calcular arrastre del sábado
+            $udDejaTemp = $totalGanaPase + $prevClientDeja;
+            $arrastre = $prevArrastre + $udDejaTemp;
+        } elseif ($selectedDate->isMonday()) {
+            // Lunes: Arrastre = UD Deja
+            $udDeja = $totalGanaPase + $prevClientDeja;
+            $arrastre = $udDeja;
+        } else {
+            // Martes a Viernes: Arrastre = Arrastre del día anterior + UD Deja del día actual
+            $previousDate = $selectedDate->copy()->subDay();
+            $prevArrastre = $this->getArrastreForDate($previousDate->format('Y-m-d'), $userId, $depth + 1);
+            $udDeja = $totalGanaPase + $prevClientDeja;
+            $arrastre = $prevArrastre + $udDeja;
+        }
         
         // Guardar en cache
         $this->arrastreCache[$arrastreCacheKey] = $arrastre;
