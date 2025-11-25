@@ -55,6 +55,11 @@ class ClientDetailsModal extends Component
      * Cache de instancia para almacenar arrastres calculados
      */
     protected $arrastreCache = [];
+    
+    /**
+     * Cache de instancia para almacenar UD DEJA calculados
+     */
+    protected $udDejaCache = [];
 
     protected $listeners = ['openClientDetails'];
 
@@ -374,33 +379,22 @@ class ClientDetailsModal extends Component
         if ($selectedDate->isSunday()) {
             $prevClientDeja = 0;
         }
-        // Si es lunes, obtener el anterior del sábado anterior y aplicar los pagos del sábado
+        // Si es lunes, obtener el UD DEJA del sábado anterior (no el anterior del sábado)
         elseif ($selectedDate->isMonday()) {
             $saturdayDate = $selectedDate->copy()->subDays(2); // Sábado anterior
-            // Usar cache para evitar recursión infinita
-            // Buscar primero el anterior con pagos aplicados del sábado
+            
+            // Obtener el UD DEJA del sábado anterior directamente
+            $saturdayUdDeja = $this->getUdDejaForDate($saturdayDate->format('Y-m-d'), $userId);
+            
+            // Aplicar los pagos del sábado al UD DEJA del sábado
+            $saturdayPayments = $this->getPaymentsForCurrentDate($saturdayDate->format('Y-m-d'));
+            $prevClientDeja = $saturdayUdDeja - $saturdayPayments['udDio'] + $saturdayPayments['udRecibe'];
+            
+            // Guardar en cache para referencia futura
             $cacheKey = $userId . '_' . $saturdayDate->format('Y-m-d');
             $cacheKeyWithPayments = $userId . '_' . $saturdayDate->format('Y-m-d') . '_with_payments';
-            
-            // Primero verificar si tenemos el anterior con pagos aplicados en cache
-            if (isset($this->anteriorCache[$cacheKeyWithPayments]) && $this->anteriorCache[$cacheKeyWithPayments] !== null) {
-                $prevClientDeja = $this->anteriorCache[$cacheKeyWithPayments];
-            } elseif (isset($this->anteriorCache[$cacheKey]) && $this->anteriorCache[$cacheKey] !== null) {
-                // Si no está con pagos, usar el sin pagos y aplicar los pagos del sábado
-                $prevClientDeja = $this->anteriorCache[$cacheKey];
-                $saturdayPayments = $this->getPaymentsForCurrentDate($saturdayDate->format('Y-m-d'));
-                $prevClientDeja = $prevClientDeja - $saturdayPayments['udDio'] + $saturdayPayments['udRecibe'];
-                // Guardar en cache con pagos aplicados
-                $this->anteriorCache[$cacheKeyWithPayments] = $prevClientDeja;
-            } else {
-                // Marcar que estamos calculando para evitar recursión
-                $this->anteriorCache[$cacheKey] = null; // Marcador temporal
-                // Calcular solo el anterior del sábado sin recursión (ya incluye pagos aplicados)
-                $prevClientDeja = $this->getAnteriorForDate($saturdayDate->format('Y-m-d'), $userId);
-                // Guardar en cache (getAnteriorForDate ya aplicó los pagos)
-                $this->anteriorCache[$cacheKeyWithPayments] = $prevClientDeja;
-            }
-            // Los pagos ya están aplicados, no aplicar de nuevo
+            $this->anteriorCache[$cacheKey] = $saturdayUdDeja; // UD DEJA sin pagos
+            $this->anteriorCache[$cacheKeyWithPayments] = $prevClientDeja; // UD DEJA con pagos aplicados
         } else {
             // Para días que no son lunes, obtener el anterior del día anterior
             // Necesitamos el 'anteri' del día anterior, no el 'ud_deja'
@@ -748,6 +742,35 @@ class ClientDetailsModal extends Component
      * Obtiene el arrastre para una fecha específica
      * Si está en cache, lo retorna. Si no, calcula la liquidación del día para obtener el arrastre
      */
+    /**
+     * Obtiene el UD DEJA para una fecha específica
+     * Calcula la liquidación del día para obtener el UD DEJA
+     */
+    protected function getUdDejaForDate(string $date, int $userId): float
+    {
+        $selectedDate = \Carbon\Carbon::parse($date);
+        
+        // Si es domingo, el UD DEJA es 0 (no se juega)
+        if ($selectedDate->isSunday()) {
+            return 0;
+        }
+        
+        // Verificar cache primero
+        $udDejaCacheKey = $userId . '_' . $date . '_uddeja';
+        if (isset($this->udDejaCache[$udDejaCacheKey]) && $this->udDejaCache[$udDejaCacheKey] !== null) {
+            return $this->udDejaCache[$udDejaCacheKey];
+        }
+        
+        // Si no está en cache, calcular la liquidación del día para obtener el UD DEJA
+        $liquidationData = $this->computeClientLiquidationDataForDate($date, $userId);
+        $udDeja = $liquidationData['udDeja'] ?? 0;
+        
+        // Guardar en cache
+        $this->udDejaCache[$udDejaCacheKey] = $udDeja;
+        
+        return $udDeja;
+    }
+    
     protected function getArrastreForDate(string $date, int $userId): float
     {
         $selectedDate = \Carbon\Carbon::parse($date);
