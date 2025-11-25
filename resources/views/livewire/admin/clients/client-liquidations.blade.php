@@ -140,26 +140,6 @@
                                 $dayDate = $weekDay['date'];
                                 $dayCarbon = \Carbon\Carbon::parse($dayDate);
                                 $isToday = $dayCarbon->isToday();
-                                
-                                // Obtener resultados para este día
-                                $dayResults = \App\Models\Result::whereDate('date', $dayDate)
-                                    ->where('user_id', $client->associatedUser->id ?? null)
-                                    ->get();
-                                
-                                // Ordenar resultados por turno
-                                $dayResults = $dayResults->sortBy(function ($result) {
-                                    $lotteryCode = trim(explode(',', $result->lottery)[0] ?? '');
-                                    $turn = null;
-                                    if (preg_match('/(\d{4})$/', $lotteryCode, $matches)) {
-                                        $turn = (int)$matches[1];
-                                    } elseif ($result->time) {
-                                        $timeParts = explode(':', $result->time);
-                                        if (count($timeParts) >= 2) {
-                                            $turn = (int)($timeParts[0] . $timeParts[1]);
-                                        }
-                                    }
-                                    return $turn ?? 9999;
-                                })->values();
                             @endphp
                             
                             @if($dayData && !$isToday)
@@ -188,7 +168,7 @@
                                                     </div>
                                                 </div>
 
-                                                <!-- Detalle de resultados -->
+                                                <!-- Detalle de resultados - IGUAL AL MÓDULO PRINCIPAL -->
                                                 <div class="container text-sm mt-2">
                                                     <div class="flex flex-col items-center w-full">
                                                         <div class="grid grid-cols-6 font-bold w-full justify-around">
@@ -199,68 +179,13 @@
                                                             <div class="text-end pr-4">GANO</div>
                                                         </div>
                                                         <div class="w-full pb-2 border-b">
+                                                            @php
+                                                                $dayResults = $dayData['results'] ?? collect();
+                                                            @endphp
                                                             @forelse ($dayResults as $result)
                                                                 <div class="grid grid-cols-6 w-full justify-around text-sm">
                                                                     <div class="text-start text-nowrap pl-4">
-                                                                        @php
-                                                                            // Convertir códigos de lotería a formato legible para liquidaciones
-                                                                            $lotteryCodes = !empty($result->lottery) ? explode(',', $result->lottery) : [];
-                                                                            $displayCodes = [];
-                                                                            
-                                                                            $codes = [
-                                                                                'AB' => 'NAC1015', 'CH1' => 'CHA1015', 'QW' => 'PRO1015', 'M10' => 'MZA1015', '!' => 'CTE1015',
-                                                                                'ER' => 'SFE1015', 'SD' => 'COR1015', 'RT' => 'RIO1015', 'Q' => 'NAC1200', 'CH2' => 'CHA1200',
-                                                                                'W' => 'PRO1200', 'M1' => 'MZA1200', 'M' => 'CTE1200', 'R' => 'SFE1200', 'T' => 'COR1200',
-                                                                                'K' => 'RIO1200', 'A' => 'NAC1500', 'CH3' => 'CHA1500', 'E' => 'PRO1500', 'M2' => 'MZA1500',
-                                                                                'Ct3' => 'CTE1500', 'D' => 'SFE1500', 'L' => 'COR1500', 'J' => 'RIO1500', 'S' => 'ORO1800',
-                                                                                'ORO1500' => 'ORO1800', 'ORO1800' => 'ORO1800',
-                                                                                'F' => 'NAC1800', 'CH4' => 'CHA1800', 'B' => 'PRO1800', 'M3' => 'MZA1800', 'Z' => 'CTE1800',
-                                                                                'V' => 'SFE1800', 'H' => 'COR1800', 'U' => 'RIO1800', 'N' => 'NAC2100', 'CH5' => 'CHA2100',
-                                                                                'P' => 'PRO2100', 'M4' => 'MZA2100', 'G' => 'CTE2100', 'I' => 'SFE2100', 'C' => 'COR2100',
-                                                                                'Y' => 'RIO2100', 'O' => 'ORO2100',
-                                                                                'NQN1015' => 'NQN1015', 'MIS1030' => 'MIS1030', 'Rio1015' => 'Rio1015', 'Tucu1130' => 'Tucu1130', 'San1015' => 'San1015',
-                                                                                'NQN1200' => 'NQN1200', 'MIS1215' => 'MIS1215', 'JUJ1200' => 'JUJ1200', 'Salt1130' => 'Salt1130', 'Rio1200' => 'Rio1200',
-                                                                                'Tucu1430' => 'Tucu1430', 'San1200' => 'San1200', 'NQN1500' => 'NQN1500', 'MIS1500' => 'MIS1500', 'JUJ1500' => 'JUJ1500',
-                                                                                'Salt1400' => 'Salt1400', 'Rio1500' => 'Rio1500', 'Tucu1730' => 'Tucu1730', 'San1500' => 'San1500', 'NQN1800' => 'NQN1800',
-                                                                                'MIS1800' => 'MIS1800', 'JUJ1800' => 'JUJ1800', 'Salt1730' => 'Salt1730', 'Rio1800' => 'Rio1800', 'Tucu1930' => 'Tucu1930',
-                                                                                'San1945' => 'San1945', 'NQN2100' => 'NQN2100', 'JUJ2100' => 'JUJ2100', 'Rio2100' => 'Rio2100', 'Salt2100' => 'Salt2100',
-                                                                                'Tucu2200' => 'Tucu2200', 'MIS2115' => 'MIS2115', 'San2200' => 'San2200'
-                                                                            ];
-                                                                            
-                                                                            foreach ($lotteryCodes as $code) {
-                                                                                $code = trim($code);
-                                                                                
-                                                                                if (preg_match('/^[A-Za-z]+\d{4}$/', $code)) {
-                                                                                    $prefix = substr($code, 0, -4);
-                                                                                    preg_match('/\d{4}$/', $code, $matches);
-                                                                                    $timeSuffix = isset($matches[0]) ? substr($matches[0], 0, 2) : '';
-                                                                                    $displayCodes[] = $prefix . $timeSuffix;
-                                                                                } elseif (isset($codes[$code])) {
-                                                                                    $systemCode = $codes[$code];
-                                                                                    $prefix = substr($systemCode, 0, -4);
-                                                                                    preg_match('/\d{4}$/', $systemCode, $matches);
-                                                                                    $timeSuffix = isset($matches[0]) ? substr($matches[0], 0, 2) : '';
-                                                                                    $displayCodes[] = $prefix . $timeSuffix;
-                                                                                }
-                                                                            }
-                                                                            
-                                                                            $desiredOrder = ['NAC', 'CHA', 'PRO', 'MZA', 'CTE', 'SFE', 'COR', 'RIO', 'ORO', 'NQN', 'MIS', 'JUJ', 'Salt', 'Rio', 'Tucu', 'San'];
-                                                                            $uniqueDisplayCodes = array_unique($displayCodes);
-                                                                            
-                                                                            usort($uniqueDisplayCodes, function ($a, $b) use ($desiredOrder) {
-                                                                                $prefixA = substr($a, 0, -2);
-                                                                                $prefixB = substr($b, 0, -2);
-                                                                                $posA = array_search($prefixA, $desiredOrder);
-                                                                                $posB = array_search($prefixB, $desiredOrder);
-                                                                                if ($posA === false) $posA = 999;
-                                                                                if ($posB === false) $posB = 999;
-                                                                                return $posA - $posB;
-                                                                            });
-                                                                            
-                                                                            // Para liquidaciones, mostrar solo la primera lotería (como en el original)
-                                                                            $firstLottery = !empty($uniqueDisplayCodes) ? $uniqueDisplayCodes[0] : '';
-                                                                        @endphp
-                                                                        {{ $firstLottery }}
+                                                                        {{ collect(explode(',', $result->lottery))->last() }}
                                                                     </div>
                                                                     <div class="text-center text-nowrap px-4">{{ $result->number }}</div>
                                                                     <div class="text-center text-nowrap px-4">{{ $result->position }}</div>
@@ -318,6 +243,14 @@
                                                             </div>
                                                         </div>
 
+                                                        <!-- TOTAL DEJA - IGUAL AL MÓDULO PRINCIPAL -->
+                                                        <div class="flex flex-col pt-3 gap-1 border-b pb-2 w-full text-sm">
+                                                            <div class="flex justify-between">
+                                                                <h4 class="font-medium">TOTAL DEJA:</h4>
+                                                                <p>{{ number_format($dayData['totalGanaPase'], 2) }}</p>
+                                                            </div>
+                                                        </div>
+
                                                         <!-- Gener. deja y arrastre -->
                                                         <div class="flex flex-col pt-3 gap-1 border-b pb-2 w-full text-sm">
                                                             <div class="flex justify-between">
@@ -339,21 +272,9 @@
                                                                     <h4 class="font-medium">UD.DIO:</h4>
                                                                     <p>{{ number_format($dayData['udDio'], 2) }}</p>
                                                                 </div>
-                                                                @if(isset($dayData['paymentsListDio']) && count($dayData['paymentsListDio']) > 0)
-                                                                    <div class="text-xs text-gray-500 pl-2 -mt-1 space-y-0.5">
-                                                                        @foreach($dayData['paymentsListDio'] as $payment)
-                                                                            <div class="flex justify-between items-center">
-                                                                                <span class="italic">${{ number_format($payment['amount'], 2) }} - {{ $payment['date'] }}</span>
-                                                                            </div>
-                                                                        @endforeach
-                                                                        @if(count($dayData['paymentsListDio']) > 1)
-                                                                            <div class="text-gray-500 italic pt-1 border-t border-gray-400">
-                                                                                Total: {{ count($dayData['paymentsListDio']) }} pago(s)
-                                                                            </div>
-                                                                        @endif
-                                                                        <div class="text-gray-500 italic text-[10px] pt-0.5">
-                                                                            Se verá reflejado en la liquidación del día siguiente.
-                                                                        </div>
+                                                                @if(isset($dayData['paymentDateDio']) && $dayData['paymentDateDio'])
+                                                                    <div class="text-xs text-gray-500 italic pl-2 -mt-1">
+                                                                        La fecha de ingreso fue: {{ $dayData['paymentDateDio'] }}. Se verá reflejado en la liquidación del día siguiente.
                                                                     </div>
                                                                 @endif
                                                             @endif
@@ -362,21 +283,9 @@
                                                                     <h4 class="font-medium">UD.RECIBE:</h4>
                                                                     <p>{{ number_format($dayData['udRecibePayment'], 2) }}</p>
                                                                 </div>
-                                                                @if(isset($dayData['paymentsListRecibe']) && count($dayData['paymentsListRecibe']) > 0)
-                                                                    <div class="text-xs text-gray-500 pl-2 -mt-1 space-y-0.5">
-                                                                        @foreach($dayData['paymentsListRecibe'] as $payment)
-                                                                            <div class="flex justify-between items-center">
-                                                                                <span class="italic">${{ number_format($payment['amount'], 2) }} - {{ $payment['date'] }}</span>
-                                                                            </div>
-                                                                        @endforeach
-                                                                        @if(count($dayData['paymentsListRecibe']) > 1)
-                                                                            <div class="text-gray-500 italic pt-1 border-t border-gray-400">
-                                                                                Total: {{ count($dayData['paymentsListRecibe']) }} pago(s)
-                                                                            </div>
-                                                                        @endif
-                                                                        <div class="text-gray-500 italic text-[10px] pt-0.5">
-                                                                            Se verá reflejado en la liquidación del día siguiente.
-                                                                        </div>
+                                                                @if(isset($dayData['paymentDateRecibe']) && $dayData['paymentDateRecibe'])
+                                                                    <div class="text-xs text-gray-500 italic pl-2 -mt-1">
+                                                                        La fecha de ingreso fue: {{ $dayData['paymentDateRecibe'] }}. Se verá reflejado en la liquidación del día siguiente.
                                                                     </div>
                                                                 @endif
                                                             @endif

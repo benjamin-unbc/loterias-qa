@@ -241,6 +241,7 @@ class ClientLiquidations extends Component
         if (!$userId) {
             return [
                 'date' => $date,
+                'results' => collect(), // Resultados vacíos
                 'totalApus' => 0,
                 'comision' => 0,
                 'totalAciert' => 0,
@@ -267,10 +268,13 @@ class ClientLiquidations extends Component
         // Si la fecha es hoy, la liquidación aún no está liberada
         $isLiquidationReleased = $selectedDate->lt($today);
         
-        // Consulta de resultados filtrada por cliente - Optimizado con agregación SQL
-        $totalAciert = (float) Result::whereDate('date', $date)
-                             ->where('user_id', $userId)
-                             ->sum('aciert');
+        // Consulta de resultados filtrada por cliente - Obtener resultados completos y ordenados
+        $baseQuery = Result::query()->whereDate('date', $date)->where('user_id', $userId);
+        $results = (clone $baseQuery)->get();
+        
+        // Ordenar por turno (de más temprano a más tarde) - igual que en el módulo principal
+        $results = $this->sortResultsByTurn($results);
+        $totalAciert = (float) (clone $baseQuery)->sum('aciert');
         
         // Consulta de apuestas filtrada por cliente - Optimizado con JOIN y agregaciones SQL
         // Usar JOIN directo en lugar de whereHas para mejor rendimiento
@@ -490,6 +494,7 @@ class ClientLiquidations extends Component
         
         return [
             'date' => $date,
+            'results' => $results, // Resultados ordenados por turno - igual que en el módulo principal
             'totalApus' => $totalApus,
             'comision' => $comision,
             'totalAciert' => $totalAciert,
