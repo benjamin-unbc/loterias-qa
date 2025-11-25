@@ -292,7 +292,7 @@
                                                             @if($dayCarbon->isSaturday())
                                                                 <div class="flex justify-between">
                                                                     <h4 class="font-medium">COMI DEJA SEM:</h4>
-                                                                    <p>{{ number_format($dayData['comiDejaSem'] ?? 0, 2) }}</p>
+                                                                    <p>{{ number_format($dayData['comi_deja_sem'] ?? 0, 2) }}</p>
                                                                 </div>
                                                             @endif
                                                             <div class="flex justify-between">
@@ -361,8 +361,14 @@
                 <!-- Content -->
                 <div class="bg-[#1b1f22] p-6 overflow-y-auto" style="max-height: calc(90vh - 200px);">
                     @php
-                        $liquidationData = $this->computeLiquidationDataForDate($fullLiquidationDate, $client->associatedUser->id ?? null);
-                        $liquidaciones = $this->fullLiquidationResults;
+                        // Usar el mismo método que el módulo principal de liquidaciones
+                        $liquidationsComponent = new \App\Livewire\Admin\Liquidations();
+                        $selectedDate = \Carbon\Carbon::parse($fullLiquidationDate);
+                        $liquidationData = $liquidationsComponent->computeClientLiquidationData(
+                            $client->associatedUser ?? null,
+                            $selectedDate
+                        );
+                        $liquidaciones = $liquidationData['results'] ?? collect();
                     @endphp
 
                     @if($fullLiquidationDate && !\Carbon\Carbon::parse($fullLiquidationDate)->isToday())
@@ -580,7 +586,7 @@
                                                 @if(\Carbon\Carbon::parse($fullLiquidationDate)->isSaturday())
                                                     <div class="flex justify-between">
                                                         <h4 class="font-medium">COMI DEJA SEM:</h4>
-                                                        <p>{{ number_format($liquidationData['comiDejaSem'], 2) }}</p>
+                                                        <p>{{ number_format($liquidationData['comi_deja_sem'] ?? 0, 2) }}</p>
                                                     </div>
                                                 @endif
                                                 <div class="flex justify-between">
