@@ -209,7 +209,7 @@ class Liquidations extends Component
      * @param Carbon $selectedDate Fecha seleccionada
      * @return array Datos de liquidación del cliente
      */
-    protected function computeClientLiquidationData($user, Carbon $selectedDate): array
+    public function computeClientLiquidationData($user, Carbon $selectedDate): array
     {
         // Usar la fecha del selectedDate en lugar de $this->date para evitar problemas cuando se calcula arrastre
         $dateStr = $selectedDate->format('Y-m-d');
@@ -456,7 +456,7 @@ class Liquidations extends Component
      * Obtiene el anterior para una fecha específica sin recursión
      * Calcula directamente desde los datos sin llamar a computeClientLiquidationData
      */
-    protected function getAnteriorForDate(string $date, int $userId, int $depth = 0): float
+    public function getAnteriorForDate(string $date, int $userId, int $depth = 0): float
     {
         $selectedDate = Carbon::parse($date);
         
@@ -526,7 +526,7 @@ class Liquidations extends Component
      * Obtiene el UD DEJA para una fecha específica
      * Calcula directamente el UD DEJA sin llamar a computeClientLiquidationData para evitar recursión
      */
-    protected function getUdDejaForDate(string $date, int $userId, int $depth = 0): float
+    public function getUdDejaForDate(string $date, int $userId, int $depth = 0): float
     {
         $selectedDate = Carbon::parse($date);
         
@@ -639,7 +639,7 @@ class Liquidations extends Component
      * Obtiene el arrastre para una fecha específica
      * Si está en cache, lo retorna. Si no, calcula la liquidación del día para obtener el arrastre
      */
-    protected function getArrastreForDate(string $date, int $userId): float
+    public function getArrastreForDate(string $date, int $userId): float
     {
         $selectedDate = Carbon::parse($date);
         
@@ -877,7 +877,7 @@ class Liquidations extends Component
      * @param string $date Fecha de la liquidación
      * @return array ['udDio' => float, 'udRecibe' => float]
      */
-    protected function getPaymentsForCurrentDate(int $userId, string $date): array
+    public function getPaymentsForCurrentDate(int $userId, string $date): array
     {
         try {
             // Obtener el cliente asociado al usuario
@@ -990,7 +990,7 @@ class Liquidations extends Component
      * @param \Illuminate\Database\Eloquent\Collection $results
      * @return \Illuminate\Database\Eloquent\Collection
      */
-    protected function sortResultsByTurn($results)
+    public function sortResultsByTurn($results)
     {
         return $results->sortBy(function ($result) {
             // Extraer el turno del código de lotería (ej: NAC1800 -> 1800)

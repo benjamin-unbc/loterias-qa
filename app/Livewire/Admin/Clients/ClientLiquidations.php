@@ -857,15 +857,20 @@ class ClientLiquidations extends Component
             }
         }
         
-        // Calcular liquidaciones para cada día de la semana (incluso sin jugadas)
+        // Calcular liquidaciones para cada día de la semana usando el mismo método que el módulo principal
         // IMPORTANTE: Calcular en orden cronológico para que el cache se inicialice correctamente
         $this->weekLiquidations = [];
         if ($this->client && $this->client->associatedUser) {
+            // Crear una instancia temporal de Liquidations para usar su método computeClientLiquidationData
+            $liquidationsComponent = new \App\Livewire\Admin\Liquidations();
             foreach ($this->weekDates as $weekDay) {
-                $this->weekLiquidations[$weekDay['date']] = $this->computeLiquidationDataForDate(
-                    $weekDay['date'],
-                    $this->client->associatedUser->id
+                $selectedDate = Carbon::parse($weekDay['date']);
+                // Usar exactamente el mismo método que usa el módulo principal
+                $liquidationData = $liquidationsComponent->computeClientLiquidationData(
+                    $this->client->associatedUser,
+                    $selectedDate
                 );
+                $this->weekLiquidations[$weekDay['date']] = $liquidationData;
             }
         }
         
