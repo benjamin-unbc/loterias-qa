@@ -141,12 +141,19 @@ class Liquidations extends Component
         
         // Calcular arrastre global según día de la semana
         if ($selectedDate->isSaturday()) {
-            $comiDejaSem = ($totalGanaPase + $prevGenerDeja) * 0.30;
-            $udDeja = ($totalGanaPase + $prevGenerDeja) - $comiDejaSem;
-            // Arrastre del sábado = Arrastre del viernes + UD Deja del sábado
+            // Calcular arrastre del viernes
             $previousDate = $selectedDate->copy()->subDay();
             $prevArrastre = $this->getArrastreGlobalForDate($previousDate->format('Y-m-d'));
-            $arrastre = $prevArrastre + $udDeja;
+            
+            // Calcular UD Deja temporal del sábado (sin comisión)
+            $udDejaTemp = $totalGanaPase + $prevGenerDeja;
+            
+            // Calcular arrastre del sábado (arrastre del viernes + UD Deja temporal del sábado)
+            $arrastre = $prevArrastre + $udDejaTemp;
+            
+            // Calcular comisión semanal basada en el arrastre del sábado (30% fijo para liquidación global)
+            $comiDejaSem = $arrastre * 0.30;
+            $udDeja = $arrastre - $comiDejaSem;
         } else {
             $comiDejaSem = null;
             $udDeja = $totalGanaPase + $prevGenerDeja;
@@ -356,18 +363,25 @@ class Liquidations extends Component
                 $arrastre = $prevArrastre; // Mantener el arrastre anterior sin sumar nada
             }
         } elseif ($selectedDate->isSaturday()) {
-            // Solo aplicar comisión semanal si el porcentaje es positivo
-            if ($weeklyCommissionPercentage > 0) {
-                $comiDejaSem = ($totalGanaPase + $prevClientDeja) * ($weeklyCommissionPercentage / 100);
-                $udDeja = ($totalGanaPase + $prevClientDeja) - $comiDejaSem;
-            } else {
-                $comiDejaSem = 0;
-                $udDeja = $totalGanaPase + $prevClientDeja;
-            }
-            // Arrastre del sábado = Arrastre del viernes + UD Deja del sábado
+            // Calcular arrastre del viernes
             $previousDate = $selectedDate->copy()->subDay();
             $prevArrastre = $this->getArrastreForDate($previousDate->format('Y-m-d'), $user->id);
-            $arrastre = $prevArrastre + $udDeja;
+            
+            // Calcular UD Deja temporal del sábado (sin comisión)
+            $udDejaTemp = $totalGanaPase + $prevClientDeja;
+            
+            // Calcular arrastre del sábado (arrastre del viernes + UD Deja temporal del sábado)
+            $arrastre = $prevArrastre + $udDejaTemp;
+            
+            // Calcular comisión semanal basada en el arrastre del sábado
+            // Solo aplicar comisión semanal si el porcentaje es positivo
+            if ($weeklyCommissionPercentage > 0) {
+                $comiDejaSem = $arrastre * ($weeklyCommissionPercentage / 100);
+                $udDeja = $arrastre - $comiDejaSem;
+            } else {
+                $comiDejaSem = 0;
+                $udDeja = $arrastre;
+            }
         } else {
             $comiDejaSem = null;
             // Calcular UD Deja
@@ -655,12 +669,23 @@ class Liquidations extends Component
             $prevWeeklyCommissionPercentage = $client ? ($client->weekly_commission_percentage ?? 30.00) : 30.00;
             
             if ($previousDate->isSaturday()) {
+                // Calcular arrastre del viernes anterior
+                $fridayDate = $previousDate->copy()->subDay();
+                $prevArrastre = $this->getArrastreForDate($fridayDate->format('Y-m-d'), $userId);
+                
+                // Calcular UD Deja temporal del sábado (sin comisión)
+                $udDejaTemp = $prevTotalGanaPase + $prevPrevDeja;
+                
+                // Calcular arrastre del sábado (arrastre del viernes + UD Deja temporal del sábado)
+                $arrastreSabado = $prevArrastre + $udDejaTemp;
+                
+                // Calcular comisión semanal basada en el arrastre del sábado
                 // Solo aplicar comisión semanal si el porcentaje es positivo
                 if ($prevWeeklyCommissionPercentage > 0) {
-                    $comiDejaSem = ($prevTotalGanaPase + $prevPrevDeja) * ($prevWeeklyCommissionPercentage / 100);
-                    $prevUdDeja = ($prevTotalGanaPase + $prevPrevDeja) - $comiDejaSem;
+                    $comiDejaSem = $arrastreSabado * ($prevWeeklyCommissionPercentage / 100);
+                    $prevUdDeja = $arrastreSabado - $comiDejaSem;
                 } else {
-                    $prevUdDeja = $prevTotalGanaPase + $prevPrevDeja;
+                    $prevUdDeja = $arrastreSabado;
                 }
             } else {
                 $prevUdDeja = $prevTotalGanaPase + $prevPrevDeja;

@@ -465,18 +465,25 @@ class ClientDetailsModal extends Component
                 $arrastre = $prevArrastre; // Mantener el arrastre anterior sin sumar nada
             }
         } elseif ($selectedDate->isSaturday()) {
-            // Solo aplicar comisión semanal si el porcentaje es positivo
-            if ($weeklyCommissionPercentage > 0) {
-                $comiDejaSem = ($totalGanaPase + $prevClientDeja) * ($weeklyCommissionPercentage / 100);
-                $udDeja = ($totalGanaPase + $prevClientDeja) - $comiDejaSem;
-            } else {
-                $comiDejaSem = 0;
-                $udDeja = $totalGanaPase + $prevClientDeja;
-            }
-            // Arrastre del sábado = Arrastre del viernes + UD Deja del sábado
+            // Calcular arrastre del viernes
             $previousDate = $selectedDate->copy()->subDay();
             $prevArrastre = $this->getArrastreForDate($previousDate->format('Y-m-d'), $userId);
-            $arrastre = $prevArrastre + $udDeja;
+            
+            // Calcular UD Deja temporal del sábado (sin comisión)
+            $udDejaTemp = $totalGanaPase + $prevClientDeja;
+            
+            // Calcular arrastre del sábado (arrastre del viernes + UD Deja temporal del sábado)
+            $arrastre = $prevArrastre + $udDejaTemp;
+            
+            // Calcular comisión semanal basada en el arrastre del sábado
+            // Solo aplicar comisión semanal si el porcentaje es positivo
+            if ($weeklyCommissionPercentage > 0) {
+                $comiDejaSem = $arrastre * ($weeklyCommissionPercentage / 100);
+                $udDeja = $arrastre - $comiDejaSem;
+            } else {
+                $comiDejaSem = 0;
+                $udDeja = $arrastre;
+            }
         } else {
             $comiDejaSem = null;
             // Calcular UD Deja
@@ -606,13 +613,23 @@ class ClientDetailsModal extends Component
                 ? $this->anteriorCache[$fridayCacheKey] 
                 : 0;
             
+            // Calcular arrastre del viernes
+            $prevArrastre = $this->getArrastreForDate($fridayDate->format('Y-m-d'), $userId);
+            
+            // Calcular UD Deja temporal del sábado (sin comisión)
+            $udDejaTemp = $saturdayTotalGanaPase + $fridayAnteri;
+            
+            // Calcular arrastre del sábado (arrastre del viernes + UD Deja temporal del sábado)
+            $arrastreSabado = $prevArrastre + $udDejaTemp;
+            
             // Calcular UD Deja del sábado
             $weeklyCommissionPercentage = $this->client->weekly_commission_percentage ?? 30.00;
             if ($weeklyCommissionPercentage > 0) {
-                $comiDejaSem = ($saturdayTotalGanaPase + $fridayAnteri) * ($weeklyCommissionPercentage / 100);
-                $saturdayUdDeja = ($saturdayTotalGanaPase + $fridayAnteri) - $comiDejaSem;
+                // Calcular comisión semanal basada en el arrastre del sábado
+                $comiDejaSem = $arrastreSabado * ($weeklyCommissionPercentage / 100);
+                $saturdayUdDeja = $arrastreSabado - $comiDejaSem;
             } else {
-                $saturdayUdDeja = $saturdayTotalGanaPase + $fridayAnteri;
+                $saturdayUdDeja = $arrastreSabado;
             }
             
             // El anterior del sábado es su UD Deja (sin pagos aún)
@@ -671,8 +688,19 @@ class ClientDetailsModal extends Component
             // Calcular udDeja del día anterior
             $weeklyCommissionPercentage = $this->client->weekly_commission_percentage ?? 30.00;
             if ($previousDate->isSaturday() && $weeklyCommissionPercentage > 0) {
-                $comiDejaSem = ($prevTotalGanaPase + $prevPrevAnteri) * ($weeklyCommissionPercentage / 100);
-                $prevUdDeja = ($prevTotalGanaPase + $prevPrevAnteri) - $comiDejaSem;
+                // Calcular arrastre del viernes anterior
+                $fridayDate = $previousDate->copy()->subDay();
+                $prevArrastre = $this->getArrastreForDate($fridayDate->format('Y-m-d'), $userId);
+                
+                // Calcular UD Deja temporal del sábado (sin comisión)
+                $udDejaTemp = $prevTotalGanaPase + $prevPrevAnteri;
+                
+                // Calcular arrastre del sábado (arrastre del viernes + UD Deja temporal del sábado)
+                $arrastreSabado = $prevArrastre + $udDejaTemp;
+                
+                // Calcular comisión semanal basada en el arrastre del sábado
+                $comiDejaSem = $arrastreSabado * ($weeklyCommissionPercentage / 100);
+                $prevUdDeja = $arrastreSabado - $comiDejaSem;
             } else {
                 $prevUdDeja = $prevTotalGanaPase + $prevPrevAnteri;
             }
@@ -834,8 +862,19 @@ class ClientDetailsModal extends Component
             
             // Calcular udDeja del día anterior
             if ($previousDate->isSaturday()) {
-                $comiDejaSem = ($prevTotalGanaPase + $prevPrevDeja) * 0.30;
-                $prevUdDeja = ($prevTotalGanaPase + $prevPrevDeja) - $comiDejaSem;
+                // Calcular arrastre del viernes anterior
+                $fridayDate = $previousDate->copy()->subDay();
+                $prevArrastre = $this->getArrastreForDate($fridayDate->format('Y-m-d'), $userId);
+                
+                // Calcular UD Deja temporal del sábado (sin comisión)
+                $udDejaTemp = $prevTotalGanaPase + $prevPrevDeja;
+                
+                // Calcular arrastre del sábado (arrastre del viernes + UD Deja temporal del sábado)
+                $arrastreSabado = $prevArrastre + $udDejaTemp;
+                
+                // Calcular comisión semanal basada en el arrastre del sábado (30% fijo)
+                $comiDejaSem = $arrastreSabado * 0.30;
+                $prevUdDeja = $arrastreSabado - $comiDejaSem;
             } else {
                 $prevUdDeja = $prevTotalGanaPase + $prevPrevDeja;
             }
