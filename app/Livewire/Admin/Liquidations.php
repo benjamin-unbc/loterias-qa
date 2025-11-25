@@ -438,12 +438,13 @@ class Liquidations extends Component
         
         // Guardar el anterior calculado en cache
         // El anterior que se muestra es prevClientDeja (ya tiene pagos del día anterior aplicados)
-        // Para el día siguiente, necesitamos el anterior CON los pagos del día actual aplicados
+        // Para el día siguiente, necesitamos el UD DEJA del día actual CON los pagos del día actual aplicados
         $cacheKey = $user->id . '_' . $dateStr;
         $cacheKeyWithPayments = $user->id . '_' . $dateStr . '_with_payments';
         
         // Calcular el anterior con pagos del día actual aplicados (para el día siguiente)
-        $anteriWithPayments = $prevClientDeja - $currentPayments['udDio'] + $currentPayments['udRecibe'];
+        // El anterior del día siguiente debe ser el UD DEJA del día actual con los pagos aplicados
+        $anteriWithPayments = $udDeja - $currentPayments['udDio'] + $currentPayments['udRecibe'];
         
         // Guardar siempre el anterior con pagos aplicados (para que el día siguiente lo use)
         $this->anteriorCache[$cacheKeyWithPayments] = $anteriWithPayments;
@@ -472,7 +473,23 @@ class Liquidations extends Component
         
         // Determinar la fecha del día anterior
         if ($selectedDate->isMonday()) {
-            $previousDate = $selectedDate->copy()->subDays(2); // Sábado anterior
+            // Si es lunes, el anterior debe ser el UD DEJA del sábado anterior (con pagos aplicados)
+            $saturdayDate = $selectedDate->copy()->subDays(2); // Sábado anterior
+            
+            // Obtener el UD DEJA del sábado anterior
+            $saturdayUdDeja = $this->getUdDejaForDate($saturdayDate->format('Y-m-d'), $userId, $depth + 1);
+            
+            // Aplicar los pagos del sábado al UD DEJA del sábado
+            $saturdayPayments = $this->getPaymentsForCurrentDate($userId, $saturdayDate->format('Y-m-d'));
+            $anteriConPagos = $saturdayUdDeja - $saturdayPayments['udDio'] + $saturdayPayments['udRecibe'];
+            
+            // Guardar en cache para referencia futura
+            $cacheKey = $userId . '_' . $saturdayDate->format('Y-m-d');
+            $cacheKeyWithPayments = $userId . '_' . $saturdayDate->format('Y-m-d') . '_with_payments';
+            $this->anteriorCache[$cacheKey] = $saturdayUdDeja; // UD DEJA sin pagos
+            $this->anteriorCache[$cacheKeyWithPayments] = $anteriConPagos; // UD DEJA con pagos aplicados
+            
+            return $anteriConPagos;
         } else {
             $previousDate = $selectedDate->copy()->subDay();
             if ($previousDate->isSunday()) {
