@@ -157,6 +157,7 @@ class ClientLiquidations extends Component
                 if ($isCurrentWeek) {
                     $this->anteriorCache = [];
                     $this->arrastreCache = [];
+                    $this->udDejaCache = [];
                 }
                 
                 // Para la semana actual, encontrar el último día que realmente tiene liquidación
@@ -565,14 +566,19 @@ class ClientLiquidations extends Component
     
     /**
      * Obtiene el UD DEJA para una fecha específica
-     * Calcula la liquidación del día para obtener el UD DEJA
+     * Calcula directamente el UD DEJA sin llamar a computeLiquidationDataForDate para evitar recursión
      */
-    protected function getUdDejaForDate(string $date, int $userId): float
+    protected function getUdDejaForDate(string $date, int $userId, int $depth = 0): float
     {
         $selectedDate = Carbon::parse($date);
         
         // Si es domingo, el UD DEJA es 0 (no se juega)
         if ($selectedDate->isSunday()) {
+            return 0;
+        }
+        
+        // Limitar la recursión a máximo 30 días para evitar consultas excesivas
+        if ($depth > 30) {
             return 0;
         }
         
@@ -582,9 +588,79 @@ class ClientLiquidations extends Component
             return $this->udDejaCache[$udDejaCacheKey];
         }
         
-        // Si no está en cache, calcular la liquidación del día para obtener el UD DEJA
-        $liquidationData = $this->computeLiquidationDataForDate($date, $userId);
-        $udDeja = $liquidationData['udDeja'] ?? 0;
+        // Si está marcado como null, significa que está siendo calculado, retornar 0 para evitar recursión
+        if (isset($this->udDejaCache[$udDejaCacheKey]) && $this->udDejaCache[$udDejaCacheKey] === null) {
+            return 0;
+        }
+        
+        // Marcar que estamos calculando para evitar recursión infinita
+        $this->udDejaCache[$udDejaCacheKey] = null;
+        
+        $dateStr = $selectedDate->format('Y-m-d');
+        
+        // Calcular totalAciert
+        $totalAciert = (float) Result::whereDate('date', $dateStr)->where('user_id', $userId)->sum('aciert');
+        
+        // Calcular totalApus (excluyendo jugadas anuladas)
+        $apusQuery = ApusModel::whereDate('created_at', $dateStr)
+            ->where('user_id', $userId)
+            ->whereHas('playsSent', function($query) {
+                $query->where('status', '!=', 'I');
+            });
+        $totalApus = (float) $apusQuery->sum('import');
+        
+        // Si no hay apuestas, UD DEJA es 0
+        if ($totalApus == 0) {
+            $this->udDejaCache[$udDejaCacheKey] = 0;
+            return 0;
+        }
+        
+        // Obtener comisión del cliente
+        $commissionPercentage = $this->client->commission_percentage ?? 20.00;
+        $comision = $totalApus * ($commissionPercentage / 100);
+        $totalGanaPase = $totalApus - $comision - $totalAciert;
+        
+        // Obtener el anterior del día
+        $prevClientDeja = 0;
+        if ($selectedDate->isMonday()) {
+            // Si es lunes, el anterior es del sábado anterior (2 días atrás)
+            $prevDate = $selectedDate->copy()->subDays(2);
+            $prevClientDeja = $this->getAnteriorForDate($prevDate->format('Y-m-d'), $userId, $depth + 1);
+        } else {
+            // Para otros días, obtener el anterior del día anterior
+            $prevDate = $selectedDate->copy()->subDay();
+            if ($prevDate->isSunday()) {
+                $prevDate = $prevDate->copy()->subDay(); // Sábado anterior
+            }
+            $prevClientDeja = $this->getAnteriorForDate($prevDate->format('Y-m-d'), $userId, $depth + 1);
+        }
+        
+        // Calcular UD DEJA según el día
+        if ($selectedDate->isSaturday()) {
+            // Para sábado, calcular comiDejaSem y restar de totalGanaPase
+            $weeklyCommissionPercentage = $this->client->weekly_commission_percentage ?? 30.00;
+            
+            if ($weeklyCommissionPercentage > 0) {
+                // Calcular arrastre del viernes
+                $fridayDate = $selectedDate->copy()->subDay();
+                $prevArrastre = $this->getArrastreForDate($fridayDate->format('Y-m-d'), $userId);
+                
+                // Calcular arrastre del sábado
+                $udDejaTemp = $totalGanaPase + $prevClientDeja;
+                $arrastre = $prevArrastre + $udDejaTemp;
+                
+                // Calcular comiDejaSem
+                $comiDejaSem = $arrastre * ($weeklyCommissionPercentage / 100);
+                
+                // UD DEJA = Gener DEJA - comiDejaSem
+                $udDeja = $totalGanaPase - $comiDejaSem;
+            } else {
+                $udDeja = $totalGanaPase;
+            }
+        } else {
+            // Para otros días, UD DEJA = totalGanaPase + prevClientDeja
+            $udDeja = $totalGanaPase + $prevClientDeja;
+        }
         
         // Guardar en cache
         $this->udDejaCache[$udDejaCacheKey] = $udDeja;
@@ -736,6 +812,7 @@ class ClientLiquidations extends Component
         // Limpiar el cache antes de calcular la semana para asegurar cálculos correctos
         $this->anteriorCache = [];
         $this->arrastreCache = [];
+        $this->udDejaCache = [];
         // No limpiar weeksCache aquí porque solo se usa para la lista, no para el modal
         
         // Generar fechas de lunes a sábado, solo hasta hoy
@@ -823,6 +900,7 @@ class ClientLiquidations extends Component
         // Limpiar el cache antes de calcular la liquidación completa para asegurar cálculos correctos
         $this->anteriorCache = [];
         $this->arrastreCache = [];
+        $this->udDejaCache = [];
         
         $this->fullLiquidationDate = $date;
         $this->showFullLiquidationModal = true;

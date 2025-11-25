@@ -63,11 +63,13 @@ class Liquidations extends Component
             unset($this->anteriorCache[$cacheKeyWithPayments]);
         }
         
-        // También limpiar cache de arrastre
+        // También limpiar cache de arrastre y UD DEJA
         for ($i = 0; $i <= 30; $i++) {
             $dateToClear = $paymentDateCarbon->copy()->addDays($i);
             $arrastreCacheKey = $userId . '_' . $dateToClear->format('Y-m-d') . '_arrastre';
+            $udDejaCacheKey = $userId . '_' . $dateToClear->format('Y-m-d') . '_uddeja';
             unset($this->arrastreCache[$arrastreCacheKey]);
+            unset($this->udDejaCache[$udDejaCacheKey]);
         }
         
         // Forzar recarga del componente para que se recalculen los valores
@@ -497,14 +499,19 @@ class Liquidations extends Component
     
     /**
      * Obtiene el UD DEJA para una fecha específica
-     * Calcula la liquidación del día para obtener el UD DEJA
+     * Calcula directamente el UD DEJA sin llamar a computeClientLiquidationData para evitar recursión
      */
-    protected function getUdDejaForDate(string $date, int $userId): float
+    protected function getUdDejaForDate(string $date, int $userId, int $depth = 0): float
     {
         $selectedDate = Carbon::parse($date);
         
         // Si es domingo, el UD DEJA es 0 (no se juega)
         if ($selectedDate->isSunday()) {
+            return 0;
+        }
+        
+        // Limitar la recursión a máximo 30 días para evitar consultas excesivas
+        if ($depth > 30) {
             return 0;
         }
         
@@ -514,16 +521,88 @@ class Liquidations extends Component
             return $this->udDejaCache[$udDejaCacheKey];
         }
         
-        // Si no está en cache, calcular la liquidación del día para obtener el UD DEJA
-        $user = \App\Models\User::find($userId);
-        if (!$user) {
+        // Si está marcado como null, significa que está siendo calculado, retornar 0 para evitar recursión
+        if (isset($this->udDejaCache[$udDejaCacheKey]) && $this->udDejaCache[$udDejaCacheKey] === null) {
             return 0;
         }
         
-        // Calcular la liquidación del día (esto puede causar recursión si se llama desde computeClientLiquidationData)
-        // Para evitar recursión, usamos una bandera temporal
-        $liquidationData = $this->computeClientLiquidationData($user, $selectedDate);
-        $udDeja = $liquidationData['udDeja'] ?? 0;
+        // Marcar que estamos calculando para evitar recursión infinita
+        $this->udDejaCache[$udDejaCacheKey] = null;
+        
+        // Calcular UD DEJA directamente sin llamar a computeClientLiquidationData
+        $user = \App\Models\User::find($userId);
+        if (!$user) {
+            $this->udDejaCache[$udDejaCacheKey] = 0;
+            return 0;
+        }
+        
+        $dateStr = $selectedDate->format('Y-m-d');
+        
+        // Calcular totalAciert
+        $totalAciert = (float) Result::query()->whereDate('date', $dateStr)->where('user_id', $userId)->sum('aciert');
+        
+        // Calcular totalApus (excluyendo jugadas anuladas)
+        $apusQuery = \App\Models\ApusModel::query()
+            ->whereDate('created_at', $dateStr)
+            ->where('user_id', $userId)
+            ->whereHas('playsSent', function($query) {
+                $query->where('status', '!=', 'I');
+            });
+        $totalApus = (float) $apusQuery->sum('import');
+        
+        // Si no hay apuestas, UD DEJA es 0
+        if ($totalApus == 0) {
+            $this->udDejaCache[$udDejaCacheKey] = 0;
+            return 0;
+        }
+        
+        // Obtener comisión del cliente
+        $client = \App\Models\Client::where('correo', $user->email)->first();
+        $commissionPercentage = $client ? $client->commission_percentage : 20.00;
+        $comision = $totalApus * ($commissionPercentage / 100);
+        $totalGanaPase = $totalApus - $comision - $totalAciert;
+        
+        // Obtener el anterior del día
+        $prevClientDeja = 0;
+        if ($selectedDate->isMonday()) {
+            // Si es lunes, el anterior es del sábado anterior (2 días atrás)
+            $prevDate = $selectedDate->copy()->subDays(2);
+            $prevClientDeja = $this->getAnteriorForDate($prevDate->format('Y-m-d'), $userId, $depth + 1);
+        } else {
+            // Para otros días, obtener el anterior del día anterior
+            $prevDate = $selectedDate->copy()->subDay();
+            if ($prevDate->isSunday()) {
+                $prevDate = $prevDate->copy()->subDay(); // Sábado anterior
+            }
+            $prevClientDeja = $this->getAnteriorForDate($prevDate->format('Y-m-d'), $userId, $depth + 1);
+        }
+        
+        // Calcular UD DEJA según el día
+        if ($selectedDate->isSaturday()) {
+            // Para sábado, calcular comiDejaSem y restar de totalGanaPase
+            $weeklyCommissionPercentage = $client ? ($client->weekly_commission_percentage ?? 30.00) : 30.00;
+            
+            if ($weeklyCommissionPercentage > 0) {
+                // Calcular arrastre del viernes
+                $fridayDate = $selectedDate->copy()->subDay();
+                $prevArrastre = $this->getArrastreForDate($fridayDate->format('Y-m-d'), $userId);
+                
+                // Calcular arrastre del sábado
+                $udDejaTemp = $totalGanaPase + $prevClientDeja;
+                $arrastre = $prevArrastre + $udDejaTemp;
+                
+                // Calcular comiDejaSem
+                $comiDejaSem = $arrastre * ($weeklyCommissionPercentage / 100);
+                
+                // UD DEJA = Gener DEJA - comiDejaSem
+                $udDeja = $totalGanaPase - $comiDejaSem;
+            } else {
+                $udDeja = $totalGanaPase;
+            }
+        } else {
+            // Para otros días, UD DEJA = totalGanaPase + prevClientDeja
+            $udDeja = $totalGanaPase + $prevClientDeja;
+        }
         
         // Guardar en cache
         $this->udDejaCache[$udDejaCacheKey] = $udDeja;
@@ -923,6 +1002,7 @@ class Liquidations extends Component
         $this->anteriorCache = [];
         $this->arrastreCache = [];
         $this->arrastreCacheGlobal = [];
+        $this->udDejaCache = [];
         
         $this->resetPage();
         // Los datos se calculan en tiempo real para cada usuario individual
