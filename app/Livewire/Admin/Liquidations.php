@@ -252,22 +252,34 @@ class Liquidations extends Component
         elseif ($selectedDate->isMonday()) {
             $saturdayDate = $selectedDate->copy()->subDays(2); // Sábado anterior
             
-            // Obtener el UD DEJA del sábado anterior directamente
-            $saturdayUdDeja = $this->getUdDejaForDate($saturdayDate->format('Y-m-d'), $user->id);
+            // SIEMPRE calcular la liquidación completa del sábado para obtener el UD DEJA exacto
+            // Esto asegura que usamos exactamente el mismo valor que se muestra en la liquidación del sábado
+            // Guardar el estado actual del cache para restaurarlo después
+            $saturdayDateStr = $saturdayDate->format('Y-m-d');
+            $udDejaCacheKey = $user->id . '_' . $saturdayDateStr . '_uddeja';
+            $oldCacheValue = $this->udDejaCache[$udDejaCacheKey] ?? null;
+            
+            // Limpiar el cache del sábado para forzar recálculo
+            unset($this->udDejaCache[$udDejaCacheKey]);
+            
+            // Calcular la liquidación del sábado (esto calculará el UD DEJA correctamente)
+            $saturdayLiquidation = $this->computeClientLiquidationData($user, $saturdayDate);
+            $saturdayUdDeja = $saturdayLiquidation['udDeja'] ?? 0;
+            
+            // Restaurar el cache si existía (aunque ahora debería tener el valor correcto)
+            if ($oldCacheValue !== null) {
+                $this->udDejaCache[$udDejaCacheKey] = $saturdayUdDeja;
+            }
             
             // Para el cálculo del UD DEJA del lunes, necesitamos aplicar los pagos del sábado
-            $saturdayPayments = $this->getPaymentsForCurrentDate($user->id, $saturdayDate->format('Y-m-d'));
+            $saturdayPayments = $this->getPaymentsForCurrentDate($user->id, $saturdayDateStr);
             $prevClientDeja = $saturdayUdDeja - $saturdayPayments['udDio'] + $saturdayPayments['udRecibe'];
             
             // Guardar en cache para referencia futura
-            $cacheKey = $user->id . '_' . $saturdayDate->format('Y-m-d');
-            $cacheKeyWithPayments = $user->id . '_' . $saturdayDate->format('Y-m-d') . '_with_payments';
+            $cacheKey = $user->id . '_' . $saturdayDateStr;
+            $cacheKeyWithPayments = $user->id . '_' . $saturdayDateStr . '_with_payments';
             $this->anteriorCache[$cacheKey] = $saturdayUdDeja; // UD DEJA sin pagos
             $this->anteriorCache[$cacheKeyWithPayments] = $prevClientDeja; // UD DEJA con pagos aplicados
-            
-            // Guardar el UD DEJA del sábado sin pagos para mostrarlo como "anteri" en la vista
-            // (los pagos del sábado ya se reflejaron en la liquidación del sábado)
-            $this->saturdayUdDejaForDisplay = $saturdayUdDeja;
         } else {
             // Para días que no son lunes, obtener el anterior del día anterior
             // Necesitamos el 'anteri' del día anterior, no el 'ud_deja'
@@ -400,18 +412,16 @@ class Liquidations extends Component
             $saturdayDate = $selectedDate->copy()->subDays(2);
             $saturdayDateStr = $saturdayDate->format('Y-m-d');
             
-            // Primero intentar usar el cache de UD DEJA del sábado
+            // SIEMPRE calcular la liquidación del sábado para obtener el UD DEJA exacto
+            // No usar cache para asegurar que obtenemos el valor exacto que se calculó en la liquidación del sábado
+            // Crear una nueva instancia para evitar problemas de cache
+            $tempLiquidations = new self();
+            $saturdayLiquidation = $tempLiquidations->computeClientLiquidationData($user, $saturdayDate);
+            $anteriForDisplay = $saturdayLiquidation['udDeja'] ?? 0;
+            
+            // Guardar en cache para futuras referencias
             $udDejaCacheKey = $user->id . '_' . $saturdayDateStr . '_uddeja';
-            if (isset($this->udDejaCache[$udDejaCacheKey]) && $this->udDejaCache[$udDejaCacheKey] !== null) {
-                $anteriForDisplay = $this->udDejaCache[$udDejaCacheKey];
-            } else {
-                // Si no está en cache, calcular la liquidación del sábado para obtener el UD DEJA exacto
-                // Esto asegura que usamos los mismos valores que se usaron en la liquidación real
-                $saturdayLiquidation = $this->computeClientLiquidationData($user, $saturdayDate);
-                $anteriForDisplay = $saturdayLiquidation['udDeja'] ?? 0;
-                // Guardar en cache para futuras referencias
-                $this->udDejaCache[$udDejaCacheKey] = $anteriForDisplay;
-            }
+            $this->udDejaCache[$udDejaCacheKey] = $anteriForDisplay;
         }
         
         return [
