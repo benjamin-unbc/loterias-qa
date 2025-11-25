@@ -426,10 +426,12 @@ class ClientLiquidations extends Component
             // Solo aplicar comisión semanal si el porcentaje es positivo
             if ($weeklyCommissionPercentage > 0) {
                 $comiDejaSem = $arrastre * ($weeklyCommissionPercentage / 100);
-                $udDeja = $arrastre - $comiDejaSem;
+                // UD DEJA del sábado = Gener DEJA (totalGanaPase) - comiDejaSem
+                $udDeja = $totalGanaPase - $comiDejaSem;
             } else {
                 $comiDejaSem = 0;
-                $udDeja = $arrastre;
+                // Si no hay comisión semanal, UD DEJA = Gener DEJA
+                $udDeja = $totalGanaPase;
             }
         } else {
             $comiDejaSem = null;
@@ -679,9 +681,11 @@ class ClientLiquidations extends Component
                 // Solo aplicar comisión semanal si el porcentaje es positivo
                 if ($prevWeeklyCommissionPercentage > 0) {
                     $comiDejaSem = $arrastreSabado * ($prevWeeklyCommissionPercentage / 100);
-                    $prevUdDeja = $arrastreSabado - $comiDejaSem;
+                    // UD DEJA del sábado = Gener DEJA (prevTotalGanaPase) - comiDejaSem
+                    $prevUdDeja = $prevTotalGanaPase - $comiDejaSem;
                 } else {
-                    $prevUdDeja = $arrastreSabado;
+                    // Si no hay comisión semanal, UD DEJA = Gener DEJA
+                    $prevUdDeja = $prevTotalGanaPase;
                 }
             } else {
                 $prevUdDeja = $prevTotalGanaPase + $prevPrevDeja;

@@ -479,10 +479,12 @@ class ClientDetailsModal extends Component
             // Solo aplicar comisión semanal si el porcentaje es positivo
             if ($weeklyCommissionPercentage > 0) {
                 $comiDejaSem = $arrastre * ($weeklyCommissionPercentage / 100);
-                $udDeja = $arrastre - $comiDejaSem;
+                // UD DEJA del sábado = Gener DEJA (totalGanaPase) - comiDejaSem
+                $udDeja = $totalGanaPase - $comiDejaSem;
             } else {
                 $comiDejaSem = 0;
-                $udDeja = $arrastre;
+                // Si no hay comisión semanal, UD DEJA = Gener DEJA
+                $udDeja = $totalGanaPase;
             }
         } else {
             $comiDejaSem = null;
@@ -627,9 +629,11 @@ class ClientDetailsModal extends Component
             if ($weeklyCommissionPercentage > 0) {
                 // Calcular comisión semanal basada en el arrastre del sábado
                 $comiDejaSem = $arrastreSabado * ($weeklyCommissionPercentage / 100);
-                $saturdayUdDeja = $arrastreSabado - $comiDejaSem;
+                // UD DEJA del sábado = Gener DEJA (saturdayTotalGanaPase) - comiDejaSem
+                $saturdayUdDeja = $saturdayTotalGanaPase - $comiDejaSem;
             } else {
-                $saturdayUdDeja = $arrastreSabado;
+                // Si no hay comisión semanal, UD DEJA = Gener DEJA
+                $saturdayUdDeja = $saturdayTotalGanaPase;
             }
             
             // El anterior del sábado es su UD Deja (sin pagos aún)
@@ -700,7 +704,8 @@ class ClientDetailsModal extends Component
                 
                 // Calcular comisión semanal basada en el arrastre del sábado
                 $comiDejaSem = $arrastreSabado * ($weeklyCommissionPercentage / 100);
-                $prevUdDeja = $arrastreSabado - $comiDejaSem;
+                // UD DEJA del sábado = Gener DEJA (prevTotalGanaPase) - comiDejaSem
+                $prevUdDeja = $prevTotalGanaPase - $comiDejaSem;
             } else {
                 $prevUdDeja = $prevTotalGanaPase + $prevPrevAnteri;
             }
@@ -874,7 +879,8 @@ class ClientDetailsModal extends Component
                 
                 // Calcular comisión semanal basada en el arrastre del sábado (30% fijo)
                 $comiDejaSem = $arrastreSabado * 0.30;
-                $prevUdDeja = $arrastreSabado - $comiDejaSem;
+                // UD DEJA del sábado = Gener DEJA (prevTotalGanaPase) - comiDejaSem
+                $prevUdDeja = $prevTotalGanaPase - $comiDejaSem;
             } else {
                 $prevUdDeja = $prevTotalGanaPase + $prevPrevDeja;
             }
