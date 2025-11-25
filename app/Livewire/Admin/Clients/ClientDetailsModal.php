@@ -527,7 +527,20 @@ class ClientDetailsModal extends Component
         $anteriForDisplay = $prevClientDeja;
         if ($selectedDate->isMonday()) {
             $saturdayDate = $selectedDate->copy()->subDays(2);
-            $anteriForDisplay = $this->getUdDejaForDate($saturdayDate->format('Y-m-d'), $userId);
+            $saturdayDateStr = $saturdayDate->format('Y-m-d');
+            
+            // Primero intentar usar el cache de UD DEJA del sábado
+            $udDejaCacheKey = $userId . '_' . $saturdayDateStr . '_uddeja';
+            if (isset($this->udDejaCache[$udDejaCacheKey]) && $this->udDejaCache[$udDejaCacheKey] !== null) {
+                $anteriForDisplay = $this->udDejaCache[$udDejaCacheKey];
+            } else {
+                // Si no está en cache, calcular la liquidación del sábado para obtener el UD DEJA exacto
+                // Esto asegura que usamos los mismos valores que se usaron en la liquidación real
+                $saturdayLiquidation = $this->computeClientLiquidationDataForDate($saturdayDateStr, $userId);
+                $anteriForDisplay = $saturdayLiquidation['udDeja'] ?? 0;
+                // Guardar en cache para futuras referencias
+                $this->udDejaCache[$udDejaCacheKey] = $anteriForDisplay;
+            }
         }
         
         return [
