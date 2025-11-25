@@ -398,12 +398,18 @@ class Liquidations extends Component
             $saturdayDate = $selectedDate->copy()->subDays(2);
             $saturdayDateStr = $saturdayDate->format('Y-m-d');
             
-            // Usar getUdDejaForDate para obtener el UD DEJA del sábado sin causar recursión
-            // Este método calcula directamente el UD DEJA usando la misma lógica que computeClientLiquidationData
-            $anteriForDisplay = $this->getUdDejaForDate($saturdayDateStr, $user->id);
+            // Limpiar el cache del sábado para forzar recálculo con valores correctos
+            $udDejaCacheKey = $user->id . '_' . $saturdayDateStr . '_uddeja';
+            unset($this->udDejaCache[$udDejaCacheKey]);
+            
+            // Crear una nueva instancia para calcular la liquidación del sábado sin causar recursión
+            // Esto asegura que usamos exactamente el mismo cálculo que se muestra en la liquidación del sábado
+            $tempLiquidations = new self();
+            $tempLiquidations->date = $saturdayDateStr; // Establecer la fecha para el cálculo
+            $saturdayLiquidation = $tempLiquidations->computeClientLiquidationData($user, $saturdayDate);
+            $anteriForDisplay = $saturdayLiquidation['udDeja'] ?? 0;
             
             // Guardar en cache para futuras referencias
-            $udDejaCacheKey = $user->id . '_' . $saturdayDateStr . '_uddeja';
             $this->udDejaCache[$udDejaCacheKey] = $anteriForDisplay;
         }
         
