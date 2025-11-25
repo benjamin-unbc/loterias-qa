@@ -467,13 +467,21 @@ class ClientLiquidations extends Component
         $arrastreCacheKey = $userId . '_' . $date . '_arrastre';
         $this->arrastreCache[$arrastreCacheKey] = $arrastre;
         
+        // Para el lunes, el "anteri" que se muestra debe ser el UD DEJA del sábado (sin pagos aplicados)
+        // porque los pagos del sábado ya se reflejaron en la liquidación del sábado
+        $anteriForDisplay = $prevClientDeja;
+        if ($selectedDate->isMonday()) {
+            $saturdayDate = $selectedDate->copy()->subDays(2);
+            $anteriForDisplay = $this->getUdDejaForDate($saturdayDate->format('Y-m-d'), $userId);
+        }
+        
         return [
             'date' => $date,
             'totalApus' => $totalApus,
             'comision' => $comision,
             'totalAciert' => $totalAciert,
             'totalGanaPase' => $totalGanaPase,
-            'anteri' => $prevClientDeja,
+            'anteri' => $anteriForDisplay,
             'udRecibe' => $totalAciert,
             'udDeja' => $udDeja,
             'arrastre' => $arrastre,

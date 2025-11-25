@@ -255,7 +255,7 @@ class Liquidations extends Component
             // Obtener el UD DEJA del sábado anterior directamente
             $saturdayUdDeja = $this->getUdDejaForDate($saturdayDate->format('Y-m-d'), $user->id);
             
-            // Aplicar los pagos del sábado al UD DEJA del sábado
+            // Para el cálculo del UD DEJA del lunes, necesitamos aplicar los pagos del sábado
             $saturdayPayments = $this->getPaymentsForCurrentDate($user->id, $saturdayDate->format('Y-m-d'));
             $prevClientDeja = $saturdayUdDeja - $saturdayPayments['udDio'] + $saturdayPayments['udRecibe'];
             
@@ -264,6 +264,10 @@ class Liquidations extends Component
             $cacheKeyWithPayments = $user->id . '_' . $saturdayDate->format('Y-m-d') . '_with_payments';
             $this->anteriorCache[$cacheKey] = $saturdayUdDeja; // UD DEJA sin pagos
             $this->anteriorCache[$cacheKeyWithPayments] = $prevClientDeja; // UD DEJA con pagos aplicados
+            
+            // Guardar el UD DEJA del sábado sin pagos para mostrarlo como "anteri" en la vista
+            // (los pagos del sábado ya se reflejaron en la liquidación del sábado)
+            $this->saturdayUdDejaForDisplay = $saturdayUdDeja;
         } else {
             // Para días que no son lunes, obtener el anterior del día anterior
             // Necesitamos el 'anteri' del día anterior, no el 'ud_deja'
@@ -389,6 +393,14 @@ class Liquidations extends Component
         $arrastreCacheKey = $user->id . '_' . $dateStr . '_arrastre';
         $this->arrastreCache[$arrastreCacheKey] = $arrastre;
         
+        // Para el lunes, el "anteri" que se muestra debe ser el UD DEJA del sábado (sin pagos aplicados)
+        // porque los pagos del sábado ya se reflejaron en la liquidación del sábado
+        $anteriForDisplay = $prevClientDeja;
+        if ($selectedDate->isMonday()) {
+            $saturdayDate = $selectedDate->copy()->subDays(2);
+            $anteriForDisplay = $this->getUdDejaForDate($saturdayDate->format('Y-m-d'), $user->id);
+        }
+        
         return [
             'results'           => $results,
             'totalAciert'       => $totalAciert,
@@ -400,7 +412,7 @@ class Liquidations extends Component
             'matutinaTotalApus' => $matutinaTotalApus,
             'tardeTotalApus'    => $tardeTotalApus,
             'nocheTotalApus'    => $nocheTotalApus,
-            'anteri'            => $prevClientDeja,
+            'anteri'            => $anteriForDisplay,
             'udRecibe'          => $totalAciert,
             'udDeja'            => $udDeja,
             'arrastre'          => $arrastre,
