@@ -251,25 +251,11 @@ class Liquidations extends Component
         // Si es lunes, obtener el UD DEJA del sábado anterior (no el anterior del sábado)
         elseif ($selectedDate->isMonday()) {
             $saturdayDate = $selectedDate->copy()->subDays(2); // Sábado anterior
-            
-            // SIEMPRE calcular la liquidación completa del sábado para obtener el UD DEJA exacto
-            // Esto asegura que usamos exactamente el mismo valor que se muestra en la liquidación del sábado
-            // Guardar el estado actual del cache para restaurarlo después
             $saturdayDateStr = $saturdayDate->format('Y-m-d');
-            $udDejaCacheKey = $user->id . '_' . $saturdayDateStr . '_uddeja';
-            $oldCacheValue = $this->udDejaCache[$udDejaCacheKey] ?? null;
             
-            // Limpiar el cache del sábado para forzar recálculo
-            unset($this->udDejaCache[$udDejaCacheKey]);
-            
-            // Calcular la liquidación del sábado (esto calculará el UD DEJA correctamente)
-            $saturdayLiquidation = $this->computeClientLiquidationData($user, $saturdayDate);
-            $saturdayUdDeja = $saturdayLiquidation['udDeja'] ?? 0;
-            
-            // Restaurar el cache si existía (aunque ahora debería tener el valor correcto)
-            if ($oldCacheValue !== null) {
-                $this->udDejaCache[$udDejaCacheKey] = $saturdayUdDeja;
-            }
+            // Usar getUdDejaForDate para obtener el UD DEJA del sábado sin causar recursión
+            // Este método calcula directamente el UD DEJA usando la misma lógica que computeClientLiquidationData
+            $saturdayUdDeja = $this->getUdDejaForDate($saturdayDateStr, $user->id);
             
             // Para el cálculo del UD DEJA del lunes, necesitamos aplicar los pagos del sábado
             $saturdayPayments = $this->getPaymentsForCurrentDate($user->id, $saturdayDateStr);
@@ -412,12 +398,9 @@ class Liquidations extends Component
             $saturdayDate = $selectedDate->copy()->subDays(2);
             $saturdayDateStr = $saturdayDate->format('Y-m-d');
             
-            // SIEMPRE calcular la liquidación del sábado para obtener el UD DEJA exacto
-            // No usar cache para asegurar que obtenemos el valor exacto que se calculó en la liquidación del sábado
-            // Crear una nueva instancia para evitar problemas de cache
-            $tempLiquidations = new self();
-            $saturdayLiquidation = $tempLiquidations->computeClientLiquidationData($user, $saturdayDate);
-            $anteriForDisplay = $saturdayLiquidation['udDeja'] ?? 0;
+            // Usar getUdDejaForDate para obtener el UD DEJA del sábado sin causar recursión
+            // Este método calcula directamente el UD DEJA usando la misma lógica que computeClientLiquidationData
+            $anteriForDisplay = $this->getUdDejaForDate($saturdayDateStr, $user->id);
             
             // Guardar en cache para futuras referencias
             $udDejaCacheKey = $user->id . '_' . $saturdayDateStr . '_uddeja';
