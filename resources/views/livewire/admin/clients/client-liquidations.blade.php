@@ -107,14 +107,14 @@
     <!-- Modal de Semana -->
     @if($showWeekModal)
     <div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+        <div class="flex items-center justify-center min-h-screen pt-1 px-4 pb-1 text-center sm:block sm:p-0">
             <!-- Background overlay -->
             <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" wire:click="closeWeekModal"></div>
 
             <!-- Modal panel -->
-            <div class="inline-block align-bottom bg-[#1b1f22] rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-4 sm:align-middle sm:max-w-[95vw] sm:w-full">
+            <div class="inline-block align-middle bg-[#1b1f22] rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-1 sm:max-w-[95vw] sm:w-full mx-auto" style="max-height: 99vh; display: flex; flex-direction: column; width: 95vw;">
                 <!-- Header -->
-                <div class="bg-[#22272b] px-6 py-4 border-b border-gray-600">
+                <div class="bg-[#22272b] px-6 py-4 border-b border-gray-600 flex-shrink-0">
                     <div class="flex items-center justify-between">
                         <div>
                             <h3 class="text-lg font-semibold text-white">
@@ -132,7 +132,7 @@
                 </div>
 
                 <!-- Content -->
-                <div class="bg-[#1b1f22] p-6 overflow-y-auto" style="max-height: calc(90vh - 200px);">
+                <div class="bg-[#1b1f22] p-6 overflow-y-auto flex-1" style="max-height: calc(99vh - 100px);">
                     <div class="space-y-6">
                         @foreach($weekDates as $weekDay)
                             @php
