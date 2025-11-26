@@ -2406,7 +2406,41 @@ public function addRow()
 
     {
         // ✅ OPTIMIZADO: Búsqueda O(1) usando mapeo pre-calculado en lugar de bucles anidados O(n×m)
-        return $this->codeToTimeMap[$lotteryUiCode] ?? '';
+        $time = $this->codeToTimeMap[$lotteryUiCode] ?? null;
+        
+        // Si no se encuentra en el mapa, intentar extraer el horario del código directamente
+        if (empty($time)) {
+            $time = $this->extractTimeFromLotteryCode($lotteryUiCode);
+        }
+        
+        return $time ?? '';
+    }
+    
+    /**
+     * Extrae el horario del código de lotería como fallback
+     * Ejemplos: NAC1800 -> 18:00, COR2100 -> 21:00
+     */
+    private function extractTimeFromLotteryCode($lotteryCode): ?string
+    {
+        // Extraer los últimos 4 dígitos del código
+        if (preg_match('/(\d{4})$/', $lotteryCode, $matches)) {
+            $timeDigits = $matches[1];
+            $hour = substr($timeDigits, 0, 2);
+            $minute = substr($timeDigits, 2, 2);
+            
+            // Validar que sea un horario válido
+            if ($hour >= 0 && $hour <= 23 && $minute >= 0 && $minute <= 59) {
+                return sprintf('%02d:%02d', $hour, $minute);
+            }
+        }
+        
+        // Mapeos especiales
+        $specialMappings = [
+            'ORO1800' => '18:00', // Montevideo 18:00
+            'ORO1500' => '18:00', // Montevideo 15:00 se muestra como 18:00
+        ];
+        
+        return $specialMappings[$lotteryCode] ?? null;
     }
 
 
