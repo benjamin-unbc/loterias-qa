@@ -257,7 +257,8 @@ class LotteryResultProcessor
                         // Ahora validar si pos_g_r es correcta según positionR para determinar si es ganador
                         if ($actualWinningPositionR && $winningNumberAtPositionR) {
                             // Validar que la posición REAL donde salió (pos_g_r) sea correcta según la posición apostada (positionR)
-                            if ($this->isPositionCorrect($apu->positionR, $actualWinningPositionR)) {
+                            // ✅ CORREGIDO: Pasar true para indicar que es redoblona (usa rangos 2-10, 2-20)
+                            if ($this->isPositionCorrect($apu->positionR, $actualWinningPositionR, true)) {
                                 // ✅ La posición real (pos_g_r) es válida según las reglas → es ganador
                                 $multiplierR = 0;
                                 // ✅ CORREGIDO: Calcular premio basado en las posiciones APOSTADAS, no donde realmente salieron
@@ -334,7 +335,8 @@ class LotteryResultProcessor
                         
                         // ✅ Validar que pos_g_r (posición real) sea correcta según positionR (posición apostada)
                         // Si pos_g_r NO es válida según las reglas, NO guardar el resultado
-                        if (!$this->isPositionCorrect($apu->positionR, $actualWinningPositionR)) {
+                        // ✅ CORREGIDO: Pasar true para indicar que es redoblona (usa rangos 2-10, 2-20)
+                        if (!$this->isPositionCorrect($apu->positionR, $actualWinningPositionR, true)) {
                             Log::warning("LotteryResultProcessor - ❌ Redoblona rechazada: Se apostó redoblona NumR {$apu->numberR} PosR {$apu->positionR} pero salió en posición {$actualWinningPositionR} (pos_g_r) que NO es válida según las reglas para lotería {$lotterySystemCode}. Ticket {$apu->ticket} - NO se guardará el resultado.");
                             continue; // No guardar el resultado si pos_g_r no es válida
                         }
@@ -459,13 +461,10 @@ class LotteryResultProcessor
      * ✅ Verifica si la posición apostada es correcta según las reglas de quiniela
      * Usa las mismas reglas que el número principal para validar la redoblona
      */
-    private function isPositionCorrect($playedPosition, $winningPosition): bool
+    private function isPositionCorrect($playedPosition, $winningPosition, $isRedoblona = false): bool
     {
-        // Reglas de quiniela:
-        // - Posición 1 (Quiniela): Solo gana si sale en posición 1
-        // - Posición 5: Gana si sale en posiciones 2-5
-        // - Posición 10: Gana si sale en posiciones 6-10  
-        // - Posición 20: Gana si sale en posiciones 11-20
+        // ✅ CORREGIDO: Para redoblonas, usar rangos 2-5, 2-10, 2-20
+        // Para jugadas normales, usar rangos 2-5, 6-10, 11-20
         
         switch ($playedPosition) {
             case 1:
@@ -473,16 +472,26 @@ class LotteryResultProcessor
                 return $winningPosition == 1;
                 
             case 5:
-                // A los 5: gana si sale en posiciones 2-5
+                // A los 5: gana si sale en posiciones 2-5 (igual para normal y redoblona)
                 return $winningPosition >= 2 && $winningPosition <= 5;
                 
             case 10:
-                // A los 10: gana si sale en posiciones 6-10
-                return $winningPosition >= 6 && $winningPosition <= 10;
+                if ($isRedoblona) {
+                    // Redoblona: gana si sale en posiciones 2-10
+                    return $winningPosition >= 2 && $winningPosition <= 10;
+                } else {
+                    // Jugada normal: gana si sale en posiciones 6-10
+                    return $winningPosition >= 6 && $winningPosition <= 10;
+                }
                 
             case 20:
-                // A los 20: gana si sale en posiciones 11-20
-                return $winningPosition >= 11 && $winningPosition <= 20;
+                if ($isRedoblona) {
+                    // Redoblona: gana si sale en posiciones 2-20
+                    return $winningPosition >= 2 && $winningPosition <= 20;
+                } else {
+                    // Jugada normal: gana si sale en posiciones 11-20
+                    return $winningPosition >= 11 && $winningPosition <= 20;
+                }
                 
             default:
                 // Para otras posiciones, verificar coincidencia exacta
