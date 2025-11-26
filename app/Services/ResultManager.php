@@ -23,29 +23,57 @@ class ResultManager
         }
 
         try {
-            // Verificar si ya existe un resultado idéntico
-            $existingResult = Result::where('ticket', $resultData['ticket'])
+            // ✅ CORREGIDO: Verificar si ya existe un resultado idéntico incluyendo numR y posR
+            // Esto permite que apuestas con diferentes redoblonas se inserten como resultados separados
+            $query = Result::where('ticket', $resultData['ticket'])
                 ->where('lottery', $resultData['lottery'])
                 ->where('number', $resultData['number'])
                 ->where('position', $resultData['position'])
-                ->where('date', $resultData['date'])
-                ->first();
+                ->where('date', $resultData['date']);
+            
+            // Incluir numR y posR en la verificación de duplicados
+            if (isset($resultData['numR']) && $resultData['numR'] !== null) {
+                $query->where('numR', $resultData['numR']);
+            } else {
+                $query->whereNull('numR');
+            }
+            
+            if (isset($resultData['posR']) && $resultData['posR'] !== null) {
+                $query->where('posR', $resultData['posR']);
+            } else {
+                $query->whereNull('posR');
+            }
+            
+            $existingResult = $query->first();
 
             if ($existingResult) {
-                Log::info("ResultManager - Resultado duplicado evitado: Ticket {$resultData['ticket']} - Lotería {$resultData['lottery']} - Número {$resultData['number']} - Posición {$resultData['position']}");
+                Log::info("ResultManager - Resultado duplicado evitado: Ticket {$resultData['ticket']} - Lotería {$resultData['lottery']} - Número {$resultData['number']} - Posición {$resultData['position']} - NumR: " . ($resultData['numR'] ?? 'null') . " - PosR: " . ($resultData['posR'] ?? 'null'));
                 return null;
             }
 
             // Usar transacción para evitar condiciones de carrera
             return DB::transaction(function () use ($resultData) {
-                // Verificar nuevamente dentro de la transacción
-                $existingResult = Result::where('ticket', $resultData['ticket'])
+                // ✅ CORREGIDO: Verificar nuevamente dentro de la transacción incluyendo numR y posR
+                $query = Result::where('ticket', $resultData['ticket'])
                     ->where('lottery', $resultData['lottery'])
                     ->where('number', $resultData['number'])
                     ->where('position', $resultData['position'])
-                    ->where('date', $resultData['date'])
-                    ->lockForUpdate()
-                    ->first();
+                    ->where('date', $resultData['date']);
+                
+                // Incluir numR y posR en la verificación de duplicados
+                if (isset($resultData['numR']) && $resultData['numR'] !== null) {
+                    $query->where('numR', $resultData['numR']);
+                } else {
+                    $query->whereNull('numR');
+                }
+                
+                if (isset($resultData['posR']) && $resultData['posR'] !== null) {
+                    $query->where('posR', $resultData['posR']);
+                } else {
+                    $query->whereNull('posR');
+                }
+                
+                $existingResult = $query->lockForUpdate()->first();
 
                 if ($existingResult) {
                     Log::info("ResultManager - Resultado duplicado evitado en transacción: Ticket {$resultData['ticket']}");
