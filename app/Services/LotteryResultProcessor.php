@@ -122,6 +122,7 @@ class LotteryResultProcessor
             foreach ($apu = $playSent->apus as $apu) { // Corrected loop variable
                 $aciertValue = 0;
                 $aciertValueR = 0; // For redoblona
+                $redoblonaWinningCount = 0; // ✅ CORREGIDO: Inicializar contador de veces que salió la redoblona
 
                 $playedNumberClean = $this->removeAsterisks($apu->number);
                 $lotterySystemCode = $this->getSystemLotteryCode($apu->lottery); // Map UI code to system code
@@ -228,38 +229,51 @@ class LotteryResultProcessor
                         Log::info("LotteryResultProcessor - Redoblona descartada: El número principal {$apu->number} NO salió en posición {$apu->position}. No se puede pagar redoblona.");
                         // No calcular redoblona si el principal no ganó
                     } else {
-                        // ✅ Buscar el número de redoblona en TODAS las posiciones (1-20) para guardar valores REALES
-                        // Primero se buscan y guardan los valores reales en num_g_r y pos_g_r
-                        // Luego se valida si pos_g_r es correcta según positionR (posición apostada)
+                        // ✅ CORREGIDO: Obtener rango de posiciones para redoblona (2-5, 2-10, 2-20)
+                        $redoblonaRange = $this->getRedoblonaPositionRange($apu->positionR);
+                        
+                        // ✅ CORREGIDO: Contar TODAS las veces que sale la redoblona en el rango válido
+                        $redoblonaWinningCount = 0; // Reiniciar contador para esta jugada
                         $actualWinningPositionR = null;
                         $winningNumberAtPositionR = null;
+                        $redoblonaPositions = [];
                         
-                        // ✅ Buscar en la lotería correcta: $winningNumbersForLottery es específico de la lotería apostada ($lotterySystemCode)
-                        foreach (range(1, 20) as $posR) {
-                            // ✅ Verificar que exista el número en esa posición para esta lotería
+                        // Buscar en el rango válido de posiciones de redoblona
+                        foreach (range($redoblonaRange['min'], $redoblonaRange['max']) as $posR) {
+                            // Verificar que exista el número en esa posición para esta lotería
                             if (!isset($winningNumbersForLottery[$posR])) {
-                                continue; // No existe número en esa posición para esta lotería
+                                continue;
                             }
                             
                             $winningNumR = str_pad((string)$winningNumbersForLottery[$posR], 4, '0', STR_PAD_LEFT);
                             $winningNumberLastDigitsR = substr($winningNumR, -$numDigitsPlayedR);
                             
-                            // ✅ Si el número coincide, guardar los valores REALES (num_g_r y pos_g_r)
+                            // Si el número coincide, contar y guardar la primera ocurrencia para num_g_r y pos_g_r
                             if ($playedNumberRClean === $winningNumberLastDigitsR) {
-                                $actualWinningPositionR = $posR;
-                                $winningNumberAtPositionR = $winningNumR;
-                                break; // Encontró el número, guardar los valores reales
+                                $redoblonaWinningCount++;
+                                $redoblonaPositions[] = $posR;
+                                
+                                // Guardar la primera ocurrencia para num_g_r y pos_g_r
+                                if ($actualWinningPositionR === null) {
+                                    $actualWinningPositionR = $posR;
+                                    $winningNumberAtPositionR = $winningNumR;
+                                }
                             }
                         }
                         
-                        // ✅ VALIDAR que pos_g_r (posición real donde salió) sea correcta según positionR (posición apostada)
-                        // Los valores reales (num_g_r y pos_g_r) ya están guardados en $actualWinningPositionR y $winningNumberAtPositionR
-                        // Ahora validar si pos_g_r es correcta según positionR para determinar si es ganador
-                        if ($actualWinningPositionR && $winningNumberAtPositionR) {
-                            // Validar que la posición REAL donde salió (pos_g_r) sea correcta según la posición apostada (positionR)
-                            // ✅ CORREGIDO: Pasar true para indicar que es redoblona (usa rangos 2-10, 2-20)
-                            if ($this->isPositionCorrect($apu->positionR, $actualWinningPositionR, true)) {
-                                // ✅ La posición real (pos_g_r) es válida según las reglas → es ganador
+                        // ✅ VALIDAR que al menos una posición donde salió sea correcta según positionR
+                        if ($redoblonaWinningCount > 0) {
+                            // Validar que al menos una de las posiciones donde salió sea válida según positionR
+                            $isValidPosition = false;
+                            foreach ($redoblonaPositions as $pos) {
+                                if ($this->isPositionCorrect($apu->positionR, $pos, true)) {
+                                    $isValidPosition = true;
+                                    break;
+                                }
+                            }
+                            
+                            if ($isValidPosition) {
+                                // ✅ La redoblona es ganadora → calcular premio
                                 $multiplierR = 0;
                                 // ✅ CORREGIDO: Calcular premio basado en las posiciones APOSTADAS, no donde realmente salieron
                                 $mainPosApostada = (int)$apu->position;
@@ -279,18 +293,21 @@ class LotteryResultProcessor
                                 } elseif ($mainPosApostada >= 11 && $mainPosApostada <= 20) {
                                     if ($redoblonaPosApostada >= 11 && $redoblonaPosApostada <= 20) $multiplierR = $betCollection10To20->payout_20_to_20;
                                 }
-                                $aciertValueR = (float)$apu->import * (float)$multiplierR;
-                                Log::info("LotteryResultProcessor - ✅ Acierto redoblona válido: Principal {$apu->number} salió en posición {$actualWinningPosition}, Redoblona {$playedNumberRClean} apostada en posición {$apu->positionR} salió en posición {$actualWinningPositionR} (pos_g_r) para lotería {$lotterySystemCode}, premio: {$aciertValueR}");
+                                
+                                // ✅ CORREGIDO: Multiplicar premio base × veces que salió × importe
+                                $aciertValueR = (float)$apu->import * (float)$multiplierR * $redoblonaWinningCount;
+                                Log::info("LotteryResultProcessor - ✅ Acierto redoblona válido: Principal {$apu->number} salió en posición {$actualWinningPosition}, Redoblona {$playedNumberRClean} apostada en posición {$apu->positionR} salió {$redoblonaWinningCount} vez(es) en posiciones " . implode(', ', $redoblonaPositions) . " para lotería {$lotterySystemCode}, premio: {$aciertValueR} (base: {$multiplierR} × veces: {$redoblonaWinningCount} × importe: {$apu->import})");
                             } else {
-                                // ✅ Número encontrado y valores reales guardados, pero pos_g_r NO es válida según positionR → NO es ganador
-                                Log::info("LotteryResultProcessor - Redoblona número encontrado pero posición inválida: NumR {$playedNumberRClean} apostado en PosR {$apu->positionR} salió en posición {$actualWinningPositionR} (pos_g_r) - NO válido según reglas para lotería {$lotterySystemCode}");
-                                // No calcular premio, pero los valores reales (num_g_r y pos_g_r) se guardarán para referencia
+                                // ✅ Número encontrado pero ninguna posición es válida según positionR → NO es ganador
+                                Log::info("LotteryResultProcessor - Redoblona número encontrado pero posiciones inválidas: NumR {$playedNumberRClean} apostado en PosR {$apu->positionR} salió en posiciones " . implode(', ', $redoblonaPositions) . " - NO válido según reglas para lotería {$lotterySystemCode}");
                                 $aciertValueR = 0;
+                                $redoblonaWinningCount = 0;
                             }
                         } else {
                             // No se encontró el número de redoblona
                             Log::info("LotteryResultProcessor - Redoblona NO ganadora: El número principal {$apu->number} sí salió en posición {$actualWinningPosition}, pero la redoblona {$apu->numberR} NO existe para lotería {$lotterySystemCode}");
                             $aciertValueR = 0;
+                            $redoblonaWinningCount = 0;
                         }
                     }
                 }
@@ -371,7 +388,7 @@ class LotteryResultProcessor
                         'XA'          => 'X',
                         'import'      => (float) $apu->import,
                         'aciert'      => $aciertValue + $aciertValueR, // Sum both aciertos
-                        'times_won'   => 1, // ✅ Agregar times_won (por defecto 1, este procesador no cuenta múltiples apariciones)
+                        'times_won'   => $redoblonaWinningCount > 0 ? $redoblonaWinningCount : 1, // ✅ CORREGIDO: Usar conteo de veces que salió la redoblona, o 1 si no hay redoblona
                         'date'        => $dateToCalculate,
                         'time'        => $apu->timeApu,
                         'user_id'     => $apu->user_id,
@@ -497,5 +514,30 @@ class LotteryResultProcessor
                 // Para otras posiciones, verificar coincidencia exacta
                 return $playedPosition == $winningPosition;
         }
+    }
+
+    /**
+     * Obtiene el rango de posiciones para la redoblona
+     * ✅ CORREGIDO: Posición 5 busca 2-5, posición 10 busca 2-10, posición 20 busca 2-20
+     */
+    private function getRedoblonaPositionRange($position): array
+    {
+        if ($position == 1) {
+            return ['min' => 1, 'max' => 1];
+        } elseif ($position == 5) {
+            return ['min' => 2, 'max' => 5];
+        } elseif ($position == 10) {
+            return ['min' => 2, 'max' => 10];
+        } elseif ($position == 20) {
+            return ['min' => 2, 'max' => 20];
+        } elseif ($position >= 2 && $position <= 5) {
+            return ['min' => 2, 'max' => 5];
+        } elseif ($position >= 6 && $position <= 10) {
+            return ['min' => 2, 'max' => 10];
+        } elseif ($position >= 11 && $position <= 20) {
+            return ['min' => 2, 'max' => 20];
+        }
+        
+        return ['min' => $position, 'max' => $position];
     }
 }
