@@ -361,11 +361,27 @@ class ClientDetailsModal extends Component
         // Mostrar todas las apuestas sin filtrar (igual que el módulo original)
         $filteredApus = $allApus;
         
-        $previaTotalApus = (float) $filteredApus->where('timeApu', '10:15')->sum('import');
-        $mananaTotalApus = (float) $filteredApus->where('timeApu', '12:00')->sum('import');
-        $matutinaTotalApus = (float) $filteredApus->where('timeApu', '15:00')->sum('import');
-        $tardeTotalApus = (float) $filteredApus->where('timeApu', '18:00')->sum('import');
-        $nocheTotalApus = (float) $filteredApus->where('timeApu', '21:00')->sum('import');
+        // ✅ Normalizar formato de timeApu para comparación (maneja tanto '10:15' como '10:15:00')
+        $previaTotalApus = (float) $filteredApus->filter(function($apu) {
+            $time = $apu->timeApu ? substr($apu->timeApu, 0, 5) : '';
+            return $time === '10:15';
+        })->sum('import');
+        $mananaTotalApus = (float) $filteredApus->filter(function($apu) {
+            $time = $apu->timeApu ? substr($apu->timeApu, 0, 5) : '';
+            return $time === '12:00';
+        })->sum('import');
+        $matutinaTotalApus = (float) $filteredApus->filter(function($apu) {
+            $time = $apu->timeApu ? substr($apu->timeApu, 0, 5) : '';
+            return $time === '15:00';
+        })->sum('import');
+        $tardeTotalApus = (float) $filteredApus->filter(function($apu) {
+            $time = $apu->timeApu ? substr($apu->timeApu, 0, 5) : '';
+            return $time === '18:00';
+        })->sum('import');
+        $nocheTotalApus = (float) $filteredApus->filter(function($apu) {
+            $time = $apu->timeApu ? substr($apu->timeApu, 0, 5) : '';
+            return $time === '21:00';
+        })->sum('import');
         
         $totalApus = $previaTotalApus + $mananaTotalApus + $matutinaTotalApus + $tardeTotalApus + $nocheTotalApus;
         

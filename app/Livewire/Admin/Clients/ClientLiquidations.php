@@ -278,16 +278,17 @@ class ClientLiquidations extends Component
         
         // Consulta de apuestas filtrada por cliente - Optimizado con JOIN y agregaciones SQL
         // Usar JOIN directo en lugar de whereHas para mejor rendimiento
+        // ✅ Usar TIME() para normalizar el formato (maneja tanto '10:15' como '10:15:00')
         $apusTotals = ApusModel::whereDate('apus.created_at', $date)
                              ->where('apus.user_id', $userId)
                              ->join('plays_sent', 'apus.ticket', '=', 'plays_sent.ticket')
                              ->where('plays_sent.status', '!=', 'I')
                              ->selectRaw('
-                                 COALESCE(SUM(CASE WHEN apus.timeApu = "10:15" THEN apus.import ELSE 0 END), 0) as previa,
-                                 COALESCE(SUM(CASE WHEN apus.timeApu = "12:00" THEN apus.import ELSE 0 END), 0) as manana,
-                                 COALESCE(SUM(CASE WHEN apus.timeApu = "15:00" THEN apus.import ELSE 0 END), 0) as matutina,
-                                 COALESCE(SUM(CASE WHEN apus.timeApu = "18:00" THEN apus.import ELSE 0 END), 0) as tarde,
-                                 COALESCE(SUM(CASE WHEN apus.timeApu = "21:00" THEN apus.import ELSE 0 END), 0) as noche,
+                                 COALESCE(SUM(CASE WHEN COALESCE(TIME_FORMAT(apus.timeApu, "%H:%i"), CASE WHEN apus.lottery REGEXP "[0-9]{4}$" THEN CONCAT(LPAD(SUBSTRING(apus.lottery, -4, 2), 2, "0"), ":", LPAD(SUBSTRING(apus.lottery, -2, 2), 2, "0")) ELSE NULL END) = "10:15" THEN apus.import ELSE 0 END), 0) as previa,
+                                 COALESCE(SUM(CASE WHEN COALESCE(TIME_FORMAT(apus.timeApu, "%H:%i"), CASE WHEN apus.lottery REGEXP "[0-9]{4}$" THEN CONCAT(LPAD(SUBSTRING(apus.lottery, -4, 2), 2, "0"), ":", LPAD(SUBSTRING(apus.lottery, -2, 2), 2, "0")) ELSE NULL END) = "12:00" THEN apus.import ELSE 0 END), 0) as manana,
+                                 COALESCE(SUM(CASE WHEN COALESCE(TIME_FORMAT(apus.timeApu, "%H:%i"), CASE WHEN apus.lottery REGEXP "[0-9]{4}$" THEN CONCAT(LPAD(SUBSTRING(apus.lottery, -4, 2), 2, "0"), ":", LPAD(SUBSTRING(apus.lottery, -2, 2), 2, "0")) ELSE NULL END) = "15:00" THEN apus.import ELSE 0 END), 0) as matutina,
+                                 COALESCE(SUM(CASE WHEN COALESCE(TIME_FORMAT(apus.timeApu, "%H:%i"), CASE WHEN apus.lottery REGEXP "[0-9]{4}$" THEN CONCAT(LPAD(SUBSTRING(apus.lottery, -4, 2), 2, "0"), ":", LPAD(SUBSTRING(apus.lottery, -2, 2), 2, "0")) ELSE NULL END) = "18:00" THEN apus.import ELSE 0 END), 0) as tarde,
+                                 COALESCE(SUM(CASE WHEN COALESCE(TIME_FORMAT(apus.timeApu, "%H:%i"), CASE WHEN apus.lottery REGEXP "[0-9]{4}$" THEN CONCAT(LPAD(SUBSTRING(apus.lottery, -4, 2), 2, "0"), ":", LPAD(SUBSTRING(apus.lottery, -2, 2), 2, "0")) ELSE NULL END) = "21:00" THEN apus.import ELSE 0 END), 0) as noche,
                                  COALESCE(SUM(apus.import), 0) as total
                              ')
                              ->first();

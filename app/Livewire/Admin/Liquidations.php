@@ -129,11 +129,79 @@ class Liquidations extends Component
             ->whereHas('playsSent', function($query) {
                 $query->where('status', '!=', 'I');
             });
-        $previaTotalApus   = (float) (clone $apusQuery)->where('timeApu', '10:15')->sum('import');
-        $mananaTotalApus   = (float) (clone $apusQuery)->where('timeApu', '12:00')->sum('import');
-        $matutinaTotalApus = (float) (clone $apusQuery)->where('timeApu', '15:00')->sum('import');
-        $tardeTotalApus    = (float) (clone $apusQuery)->where('timeApu', '18:00')->sum('import');
-        $nocheTotalApus    = (float) (clone $apusQuery)->where('timeApu', '21:00')->sum('import');
+        // ✅ Calcular tiempo automáticamente: usar timeApu si existe, sino extraer del código lottery
+        // Extrae los últimos 4 dígitos del código (ej: NAC1015 -> 1015 -> 10:15)
+        // Usar REGEXP para extraer solo cuando el código termine en 4 dígitos
+        $previaTotalApus   = (float) (clone $apusQuery)->whereRaw("
+            COALESCE(
+                TIME_FORMAT(timeApu, '%H:%i'),
+                CASE 
+                    WHEN lottery REGEXP '[0-9]{4}$' THEN
+                        CONCAT(
+                            LPAD(SUBSTRING(lottery, -4, 2), 2, '0'),
+                            ':',
+                            LPAD(SUBSTRING(lottery, -2, 2), 2, '0')
+                        )
+                    ELSE NULL
+                END
+            ) = '10:15'
+        ")->sum('import');
+        $mananaTotalApus   = (float) (clone $apusQuery)->whereRaw("
+            COALESCE(
+                TIME_FORMAT(timeApu, '%H:%i'),
+                CASE 
+                    WHEN lottery REGEXP '[0-9]{4}$' THEN
+                        CONCAT(
+                            LPAD(SUBSTRING(lottery, -4, 2), 2, '0'),
+                            ':',
+                            LPAD(SUBSTRING(lottery, -2, 2), 2, '0')
+                        )
+                    ELSE NULL
+                END
+            ) = '12:00'
+        ")->sum('import');
+        $matutinaTotalApus = (float) (clone $apusQuery)->whereRaw("
+            COALESCE(
+                TIME_FORMAT(timeApu, '%H:%i'),
+                CASE 
+                    WHEN lottery REGEXP '[0-9]{4}$' THEN
+                        CONCAT(
+                            LPAD(SUBSTRING(lottery, -4, 2), 2, '0'),
+                            ':',
+                            LPAD(SUBSTRING(lottery, -2, 2), 2, '0')
+                        )
+                    ELSE NULL
+                END
+            ) = '15:00'
+        ")->sum('import');
+        $tardeTotalApus    = (float) (clone $apusQuery)->whereRaw("
+            COALESCE(
+                TIME_FORMAT(timeApu, '%H:%i'),
+                CASE 
+                    WHEN lottery REGEXP '[0-9]{4}$' THEN
+                        CONCAT(
+                            LPAD(SUBSTRING(lottery, -4, 2), 2, '0'),
+                            ':',
+                            LPAD(SUBSTRING(lottery, -2, 2), 2, '0')
+                        )
+                    ELSE NULL
+                END
+            ) = '18:00'
+        ")->sum('import');
+        $nocheTotalApus    = (float) (clone $apusQuery)->whereRaw("
+            COALESCE(
+                TIME_FORMAT(timeApu, '%H:%i'),
+                CASE 
+                    WHEN lottery REGEXP '[0-9]{4}$' THEN
+                        CONCAT(
+                            LPAD(SUBSTRING(lottery, -4, 2), 2, '0'),
+                            ':',
+                            LPAD(SUBSTRING(lottery, -2, 2), 2, '0')
+                        )
+                    ELSE NULL
+                END
+            ) = '21:00'
+        ")->sum('import');
         $totalApus = $previaTotalApus + $mananaTotalApus + $matutinaTotalApus + $tardeTotalApus + $nocheTotalApus;
         
         $comision = $totalApus * 0.20;
@@ -230,11 +298,79 @@ class Liquidations extends Component
             ->whereHas('playsSent', function($query) {
                 $query->where('status', '!=', 'I');
             });
-        $previaTotalApus   = (float) (clone $apusQuery)->where('timeApu', '10:15')->sum('import');
-        $mananaTotalApus   = (float) (clone $apusQuery)->where('timeApu', '12:00')->sum('import');
-        $matutinaTotalApus = (float) (clone $apusQuery)->where('timeApu', '15:00')->sum('import');
-        $tardeTotalApus    = (float) (clone $apusQuery)->where('timeApu', '18:00')->sum('import');
-        $nocheTotalApus    = (float) (clone $apusQuery)->where('timeApu', '21:00')->sum('import');
+        // ✅ Calcular tiempo automáticamente: usar timeApu si existe, sino extraer del código lottery
+        // Extrae los últimos 4 dígitos del código (ej: NAC1015 -> 1015 -> 10:15)
+        // Usar REGEXP para extraer solo cuando el código termine en 4 dígitos
+        $previaTotalApus   = (float) (clone $apusQuery)->whereRaw("
+            COALESCE(
+                TIME_FORMAT(timeApu, '%H:%i'),
+                CASE 
+                    WHEN lottery REGEXP '[0-9]{4}$' THEN
+                        CONCAT(
+                            LPAD(SUBSTRING(lottery, -4, 2), 2, '0'),
+                            ':',
+                            LPAD(SUBSTRING(lottery, -2, 2), 2, '0')
+                        )
+                    ELSE NULL
+                END
+            ) = '10:15'
+        ")->sum('import');
+        $mananaTotalApus   = (float) (clone $apusQuery)->whereRaw("
+            COALESCE(
+                TIME_FORMAT(timeApu, '%H:%i'),
+                CASE 
+                    WHEN lottery REGEXP '[0-9]{4}$' THEN
+                        CONCAT(
+                            LPAD(SUBSTRING(lottery, -4, 2), 2, '0'),
+                            ':',
+                            LPAD(SUBSTRING(lottery, -2, 2), 2, '0')
+                        )
+                    ELSE NULL
+                END
+            ) = '12:00'
+        ")->sum('import');
+        $matutinaTotalApus = (float) (clone $apusQuery)->whereRaw("
+            COALESCE(
+                TIME_FORMAT(timeApu, '%H:%i'),
+                CASE 
+                    WHEN lottery REGEXP '[0-9]{4}$' THEN
+                        CONCAT(
+                            LPAD(SUBSTRING(lottery, -4, 2), 2, '0'),
+                            ':',
+                            LPAD(SUBSTRING(lottery, -2, 2), 2, '0')
+                        )
+                    ELSE NULL
+                END
+            ) = '15:00'
+        ")->sum('import');
+        $tardeTotalApus    = (float) (clone $apusQuery)->whereRaw("
+            COALESCE(
+                TIME_FORMAT(timeApu, '%H:%i'),
+                CASE 
+                    WHEN lottery REGEXP '[0-9]{4}$' THEN
+                        CONCAT(
+                            LPAD(SUBSTRING(lottery, -4, 2), 2, '0'),
+                            ':',
+                            LPAD(SUBSTRING(lottery, -2, 2), 2, '0')
+                        )
+                    ELSE NULL
+                END
+            ) = '18:00'
+        ")->sum('import');
+        $nocheTotalApus    = (float) (clone $apusQuery)->whereRaw("
+            COALESCE(
+                TIME_FORMAT(timeApu, '%H:%i'),
+                CASE 
+                    WHEN lottery REGEXP '[0-9]{4}$' THEN
+                        CONCAT(
+                            LPAD(SUBSTRING(lottery, -4, 2), 2, '0'),
+                            ':',
+                            LPAD(SUBSTRING(lottery, -2, 2), 2, '0')
+                        )
+                    ELSE NULL
+                END
+            ) = '21:00'
+        ")->sum('import');
         $totalApus = $previaTotalApus + $mananaTotalApus + $matutinaTotalApus + $tardeTotalApus + $nocheTotalApus;
         
         // Obtener la comisión personalizada del cliente
