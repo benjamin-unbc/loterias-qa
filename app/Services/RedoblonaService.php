@@ -319,6 +319,11 @@ class RedoblonaService
      */
     private function getMultiplier($mainPosition, $redoblonaPosition): float
     {
+        // ✅ CORREGIDO: Asegurar que los valores sean enteros para las comparaciones
+        // Esto evita problemas cuando positionR llega como string "20" en lugar de int 20
+        $mainPosition = (int)$mainPosition;
+        $redoblonaPosition = (int)$redoblonaPosition;
+        
         // Tabla: A los 1 todo a los 5 Cobra, A los 1 todo a los 10 Cobra, A los 1 todo a los 20 Cobra
         if ($mainPosition == 1) {
             if ($redoblonaPosition >= 1 && $redoblonaPosition <= 5) {

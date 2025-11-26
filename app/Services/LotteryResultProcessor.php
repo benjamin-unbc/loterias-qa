@@ -260,22 +260,23 @@ class LotteryResultProcessor
                             if ($this->isPositionCorrect($apu->positionR, $actualWinningPositionR)) {
                                 // ✅ La posición real (pos_g_r) es válida según las reglas → es ganador
                                 $multiplierR = 0;
-                                // Calcular premio basado en las posiciones apostadas y donde realmente salieron
-                                $mainWinningPos = $actualWinningPosition; // ✅ Usar la posición REAL donde salió el número principal
+                                // ✅ CORREGIDO: Calcular premio basado en las posiciones APOSTADAS, no donde realmente salieron
+                                $mainPosApostada = (int)$apu->position;
+                                $redoblonaPosApostada = (int)$apu->positionR;
                                 
-                                if ($apu->position == 1) {
-                                    if ($actualWinningPositionR <= 5) $multiplierR = $betCollectionRedoblona->payout_1_to_5;
-                                    elseif ($actualWinningPositionR <= 10) $multiplierR = $betCollectionRedoblona->payout_1_to_10;
-                                    elseif ($actualWinningPositionR <= 20) $multiplierR = $betCollectionRedoblona->payout_1_to_20;
-                                } elseif ($apu->position >= 2 && $apu->position <= 5) {
-                                    if ($actualWinningPositionR >= 2 && $actualWinningPositionR <= 5) $multiplierR = $betCollection5To20->payout_5_to_5;
-                                    elseif ($actualWinningPositionR >= 6 && $actualWinningPositionR <= 10) $multiplierR = $betCollection5To20->payout_5_to_10;
-                                    elseif ($actualWinningPositionR >= 11 && $actualWinningPositionR <= 20) $multiplierR = $betCollection5To20->payout_5_to_20;
-                                } elseif ($apu->position >= 6 && $apu->position <= 10) {
-                                    if ($actualWinningPositionR >= 6 && $actualWinningPositionR <= 10) $multiplierR = $betCollection10To20->payout_10_to_10;
-                                    elseif ($actualWinningPositionR >= 11 && $actualWinningPositionR <= 20) $multiplierR = $betCollection10To20->payout_10_to_20;
-                                } elseif ($apu->position >= 11 && $apu->position <= 20) {
-                                    if ($actualWinningPositionR >= 11 && $actualWinningPositionR <= 20) $multiplierR = $betCollection10To20->payout_20_to_20;
+                                if ($mainPosApostada == 1) {
+                                    if ($redoblonaPosApostada >= 1 && $redoblonaPosApostada <= 5) $multiplierR = $betCollectionRedoblona->payout_1_to_5;
+                                    elseif ($redoblonaPosApostada >= 6 && $redoblonaPosApostada <= 10) $multiplierR = $betCollectionRedoblona->payout_1_to_10;
+                                    elseif ($redoblonaPosApostada >= 11 && $redoblonaPosApostada <= 20) $multiplierR = $betCollectionRedoblona->payout_1_to_20;
+                                } elseif ($mainPosApostada >= 2 && $mainPosApostada <= 5) {
+                                    if ($redoblonaPosApostada >= 1 && $redoblonaPosApostada <= 5) $multiplierR = $betCollection5To20->payout_5_to_5;
+                                    elseif ($redoblonaPosApostada >= 6 && $redoblonaPosApostada <= 10) $multiplierR = $betCollection5To20->payout_5_to_10;
+                                    elseif ($redoblonaPosApostada >= 11 && $redoblonaPosApostada <= 20) $multiplierR = $betCollection5To20->payout_5_to_20;
+                                } elseif ($mainPosApostada >= 6 && $mainPosApostada <= 10) {
+                                    if ($redoblonaPosApostada >= 6 && $redoblonaPosApostada <= 10) $multiplierR = $betCollection10To20->payout_10_to_10;
+                                    elseif ($redoblonaPosApostada >= 11 && $redoblonaPosApostada <= 20) $multiplierR = $betCollection10To20->payout_10_to_20;
+                                } elseif ($mainPosApostada >= 11 && $mainPosApostada <= 20) {
+                                    if ($redoblonaPosApostada >= 11 && $redoblonaPosApostada <= 20) $multiplierR = $betCollection10To20->payout_20_to_20;
                                 }
                                 $aciertValueR = (float)$apu->import * (float)$multiplierR;
                                 Log::info("LotteryResultProcessor - ✅ Acierto redoblona válido: Principal {$apu->number} salió en posición {$actualWinningPosition}, Redoblona {$playedNumberRClean} apostada en posición {$apu->positionR} salió en posición {$actualWinningPositionR} (pos_g_r) para lotería {$lotterySystemCode}, premio: {$aciertValueR}");
