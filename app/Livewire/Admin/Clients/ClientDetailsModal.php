@@ -307,8 +307,13 @@ class ClientDetailsModal extends Component
             $query->whereDate('date', $this->liquidacionesDate);
         }
 
-        // ✅ MODIFICADO: Mostrar resultados separados por lotería (sin agrupar)
-        $results = $query->orderBy('created_at', 'desc')->get();
+        // ✅ USAR LA MISMA LÓGICA QUE EL MÓDULO DE LIQUIDACIONES
+        // Obtener resultados y ordenarlos por turno (igual que en el módulo principal)
+        $results = $query->get();
+        
+        // Crear una instancia del componente Liquidations para usar su método sortResultsByTurn
+        $liquidationsComponent = new \App\Livewire\Admin\Liquidations();
+        $results = $liquidationsComponent->sortResultsByTurn($results);
         
         return $results;
     }
@@ -980,13 +985,18 @@ class ClientDetailsModal extends Component
             ];
         }
 
-        // Limpiar el cache antes de calcular la liquidación para asegurar cálculos correctos
-        $this->anteriorCache = [];
-        $this->arrastreCache = [];
-        $this->udDejaCache = [];
-
-        $userId = $this->client->associatedUser->id;
-        return $this->computeClientLiquidationDataForDate($this->liquidacionesDate, $userId);
+        // ✅ USAR LA MISMA LÓGICA QUE EL MÓDULO DE LIQUIDACIONES
+        // Crear una instancia del componente Liquidations para usar su método computeClientLiquidationData
+        $liquidationsComponent = new \App\Livewire\Admin\Liquidations();
+        $selectedDate = \Carbon\Carbon::parse($this->liquidacionesDate);
+        
+        // Usar exactamente el mismo método que usa el módulo principal
+        $liquidationData = $liquidationsComponent->computeClientLiquidationData(
+            $this->client->associatedUser,
+            $selectedDate
+        );
+        
+        return $liquidationData;
     }
 
     protected function getClientPreviousLiquidation(int $userId, string $currentDate, bool $skipRecursion = false): ?array
