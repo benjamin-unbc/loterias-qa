@@ -70,9 +70,9 @@ class LotteryResultProcessor
         $prizes = PrizesModel::first();
         $figureOne = FigureOneModel::first();
         $figureTwo = FigureTwoModel::first();
-        $betCollectionRedoblona = BetCollectionRedoblonaModel::where('bet_amount', '1.00')->first();
-        $betCollection5To20 = BetCollection5To20Model::where('bet_amount', '1.00')->first();
-        $betCollection10To20 = BetCollection10To20Model::where('bet_amount', '1.00')->first();
+        $betCollectionRedoblona = BetCollectionRedoblonaModel::where('bet_amount', 1.00)->first();
+        $betCollection5To20 = BetCollection5To20Model::where('bet_amount', 1.00)->first();
+        $betCollection10To20 = BetCollection10To20Model::where('bet_amount', 1.00)->first();
 
         if (!$quiniela || !$prizes || !$figureOne || !$figureTwo || !$betCollectionRedoblona || !$betCollection5To20 || !$betCollection10To20) {
             Log::error("LotteryResultProcessor - Faltan configuraciones de premios. Abortando cálculo.");
