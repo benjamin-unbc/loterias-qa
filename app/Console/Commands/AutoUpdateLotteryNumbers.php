@@ -517,9 +517,9 @@ class AutoUpdateLotteryNumbers extends Command
             
             // Obtener configuraciones de premios
             $quinielaPayouts = \App\Models\QuinielaModel::first();
-            $redoblona1toX = \App\Models\BetCollectionRedoblonaModel::first();
-            $redoblona5to20 = \App\Models\BetCollection5To20Model::first();
-            $redoblona10to20 = \App\Models\BetCollection10To20Model::first();
+            $redoblona1toX = \App\Models\BetCollectionRedoblonaModel::where('bet_amount', 1.00)->first();
+            $redoblona5to20 = \App\Models\BetCollection5To20Model::where('bet_amount', 1.00)->first();
+            $redoblona10to20 = \App\Models\BetCollection10To20Model::where('bet_amount', 1.00)->first();
             
             if (!$quinielaPayouts || !$redoblona1toX || !$redoblona5to20 || !$redoblona10to20) {
                 Log::error("No se encontraron configuraciones de premios");

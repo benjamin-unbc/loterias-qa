@@ -21,12 +21,14 @@ class RedoblonaService
 
     /**
      * Carga las tablas de pagos de redoblona
+     * ✅ CORREGIDO: Buscar específicamente el registro con bet_amount = 1.00
+     * para usar el multiplicador base correcto (igual que se muestra en la vista)
      */
     private function loadPayoutTables()
     {
-        $this->redoblona1toX = BetCollectionRedoblonaModel::first();
-        $this->redoblona5to20 = BetCollection5To20Model::first();
-        $this->redoblona10to20 = BetCollection10To20Model::first();
+        $this->redoblona1toX = BetCollectionRedoblonaModel::where('bet_amount', 1.00)->first();
+        $this->redoblona5to20 = BetCollection5To20Model::where('bet_amount', 1.00)->first();
+        $this->redoblona10to20 = BetCollection10To20Model::where('bet_amount', 1.00)->first();
     }
 
     /**

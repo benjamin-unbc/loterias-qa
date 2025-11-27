@@ -137,9 +137,9 @@ class AutoPaymentSystem extends Command
             'prizes' => PrizesModel::first(),
             'figureOne' => FigureOneModel::first(),
             'figureTwo' => FigureTwoModel::first(),
-            'redoblona1toX' => BetCollectionRedoblonaModel::first(),
-            'redoblona5to20' => BetCollection5To20Model::first(),
-            'redoblona10to20' => BetCollection10To20Model::first(),
+            'redoblona1toX' => BetCollectionRedoblonaModel::where('bet_amount', 1.00)->first(),
+            'redoblona5to20' => BetCollection5To20Model::where('bet_amount', 1.00)->first(),
+            'redoblona10to20' => BetCollection10To20Model::where('bet_amount', 1.00)->first(),
         ];
 
         foreach ($this->payoutTables as $key => $table) {

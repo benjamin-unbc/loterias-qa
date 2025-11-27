@@ -41,9 +41,9 @@ class TestMultipleWinners extends Command
         $prizes = PrizesModel::first();
         $figureOne = FigureOneModel::first();
         $figureTwo = FigureTwoModel::first();
-        $redoblona1toX = BetCollectionRedoblonaModel::first();
-        $redoblona5to20 = BetCollection5To20Model::first();
-        $redoblona10to20 = BetCollection10To20Model::first();
+        $redoblona1toX = BetCollectionRedoblonaModel::where('bet_amount', 1.00)->first();
+        $redoblona5to20 = BetCollection5To20Model::where('bet_amount', 1.00)->first();
+        $redoblona10to20 = BetCollection10To20Model::where('bet_amount', 1.00)->first();
 
         if (!$quiniela || !$prizes || !$figureOne || !$figureTwo) {
             $this->error("❌ Faltan tablas de pagos. Asegúrate de que existan en la base de datos.");

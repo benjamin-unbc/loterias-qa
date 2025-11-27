@@ -63,9 +63,9 @@ class CalculateLotteryResults implements ShouldQueue
         $prizesPayouts = PrizesModel::first(); // Tabla para apuestas de 2 dígitos (**XX)
         $figureOnePayouts = FigureOneModel::first(); // Tabla para apuestas de 3 dígitos (*XXX)
         $figureTwoPayouts = FigureTwoModel::first(); // Tabla para apuestas de 4 dígitos (XXXX)
-        $redoblona1toX = BetCollectionRedoblonaModel::first();
-        $redoblona5to20 = BetCollection5To20Model::first();
-        $redoblona10to20 = BetCollection10To20Model::first();
+        $redoblona1toX = BetCollectionRedoblonaModel::where('bet_amount', 1.00)->first();
+        $redoblona5to20 = BetCollection5To20Model::where('bet_amount', 1.00)->first();
+        $redoblona10to20 = BetCollection10To20Model::where('bet_amount', 1.00)->first();
 
         if (!$quinielaPayouts || !$prizesPayouts || !$figureOnePayouts || !$figureTwoPayouts || !$redoblona1toX || !$redoblona5to20 || !$redoblona10to20) {
             Log::error("CalculateLotteryResults Job: Faltan una o más tablas de pago. Finalizando job.");
