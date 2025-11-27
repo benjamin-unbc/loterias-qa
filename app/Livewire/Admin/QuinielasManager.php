@@ -21,6 +21,10 @@ class QuinielasManager extends Component
     // Propiedades para edición de horarios
     public $editingSchedule = null; // Array con cityName, oldTime, cityId cuando está editando
     public $newTimeValue = ''; // Nuevo valor del horario
+    
+    // Propiedades para agregar nuevos horarios a turnos vacíos
+    public $addingNewSchedule = null; // Array con cityName, state cuando está agregando
+    public $newScheduleTime = ''; // Nuevo horario a agregar
 
     public function mount()
     {
@@ -117,6 +121,14 @@ class QuinielasManager extends Component
             if ($cityName === 'MONTEVIDEO') {
                 $schedules = array_filter($schedules, function($time) {
                     return $time !== '18:00';
+                });
+                $schedules = array_values($schedules); // Reindexar el array
+            }
+            
+            // Filtrar horario 19:30 de Tucumán, dejar solo 17:30
+            if (strtoupper($cityName) === 'TUCUMAN' || $cityName === 'Tucuman') {
+                $schedules = array_filter($schedules, function($time) {
+                    return $time !== '19:30';
                 });
                 $schedules = array_values($schedules); // Reindexar el array
             }
@@ -407,6 +419,241 @@ class QuinielasManager extends Component
         return (int)$hours * 60 + (int)$minutes;
     }
 
+    /**
+     * Inicia el proceso de agregar un nuevo horario a un turno vacío
+     */
+    public function startAddingSchedule($cityName, $state)
+    {
+        // Si ya hay uno en proceso, cancelarlo primero
+        if ($this->addingNewSchedule) {
+            $this->cancelAddingSchedule();
+        }
+        
+        $this->addingNewSchedule = [
+            'cityName' => $cityName,
+            'state' => $state
+        ];
+        $this->newScheduleTime = '';
+    }
+
+    /**
+     * Cancela el proceso de agregar nuevo horario
+     */
+    public function cancelAddingSchedule()
+    {
+        $this->addingNewSchedule = null;
+        $this->newScheduleTime = '';
+    }
+
+    /**
+     * Guarda el nuevo horario creado para un turno vacío
+     */
+    public function saveNewSchedule()
+    {
+        // Validar que hay un proceso de agregado activo
+        if (!$this->addingNewSchedule) {
+            $this->dispatch('notify', message: 'No hay un horario en proceso de agregado', type: 'error');
+            return;
+        }
+        
+        if (empty($this->newScheduleTime)) {
+            $this->dispatch('notify', message: 'Debe ingresar un horario válido', type: 'error');
+            return;
+        }
+
+        $cityName = $this->addingNewSchedule['cityName'];
+        $state = $this->addingNewSchedule['state'];
+        $time = $this->newScheduleTime;
+
+        // Validar formato de hora
+        if (!preg_match('/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/', $time)) {
+            $this->dispatch('notify', message: 'Formato de hora inválido. Use HH:MM (ej: 10:30)', type: 'error');
+            return;
+        }
+
+        // Validar que el horario esté dentro del rango del turno
+        if (!$this->validateTimeForState($time, $state)) {
+            $range = $this->getScheduleStateRange($state);
+            if ($range) {
+                $this->dispatch('notify', message: "El horario debe estar entre {$range[0]} y {$range[1]} para el turno {$state}", type: 'error');
+            } else {
+                $this->dispatch('notify', message: "El horario no es válido para el turno {$state}", type: 'error');
+            }
+            return;
+        }
+
+        // Verificar si ya existe un horario para esta ciudad y extract_id
+        $extractId = $this->getExtractIdByState($state);
+        $existingCity = City::where('name', $cityName)
+            ->where('extract_id', $extractId)
+            ->first();
+
+        try {
+            // Generar código de ciudad
+            $cityCode = $this->generateCityCode($cityName, $time);
+            
+            if ($existingCity) {
+                // Si ya existe, actualizar el horario existente
+                $oldTime = $existingCity->time;
+                $existingCity->update([
+                    'time' => $time,
+                    'code' => $cityCode,
+                ]);
+                
+                // Actualizar la configuración global si existe
+                $globalConfig = GlobalQuinielasConfiguration::where('city_name', $cityName)->first();
+                if ($globalConfig && !empty($globalConfig->selected_schedules)) {
+                    $selectedSchedules = $globalConfig->selected_schedules;
+                    $key = array_search($oldTime, $selectedSchedules);
+                    if ($key !== false) {
+                        $selectedSchedules[$key] = $time;
+                        $globalConfig->update(['selected_schedules' => $selectedSchedules]);
+                    }
+                }
+                
+                $action = 'actualizado';
+            } else {
+                // Verificar si el código ya existe (por si acaso)
+                $existingCode = City::where('code', $cityCode)->first();
+                if ($existingCode) {
+                    $this->dispatch('notify', message: "El código {$cityCode} ya existe para otra ciudad/horario", type: 'error');
+                    return;
+                }
+                
+                // Crear el nuevo registro en la tabla cities
+                City::create([
+                    'extract_id' => $extractId,
+                    'name' => $cityName,
+                    'code' => $cityCode,
+                    'time' => $time,
+                ]);
+                
+                $action = 'agregado';
+            }
+
+            // Limpiar estado ANTES de recargar para evitar conflictos
+            $savedCityName = $cityName;
+            $savedState = $state;
+            $savedTime = $time;
+            
+            $this->addingNewSchedule = null;
+            $this->newScheduleTime = '';
+            
+            // Recargar horarios después de limpiar el estado
+            $this->loadCitySchedules();
+            
+            $message = $action === 'actualizado' 
+                ? "Horario {$savedTime} actualizado correctamente para {$savedCityName} ({$savedState})"
+                : "Horario {$savedTime} agregado correctamente para {$savedCityName} ({$savedState})";
+            
+            $this->dispatch('notify', message: $message, type: 'success');
+        } catch (\Illuminate\Database\QueryException $e) {
+            // Error de base de datos (duplicado, constraint, etc.)
+            if ($e->getCode() == 23000) {
+                $this->dispatch('notify', message: 'Ya existe un registro con estos datos. El horario podría estar duplicado.', type: 'error');
+            } else {
+                $this->dispatch('notify', message: 'Error de base de datos al agregar el horario: ' . $e->getMessage(), type: 'error');
+            }
+            // Limpiar estado incluso si hay error
+            $this->addingNewSchedule = null;
+            $this->newScheduleTime = '';
+        } catch (\Exception $e) {
+            $this->dispatch('notify', message: 'Error al agregar el horario: ' . $e->getMessage(), type: 'error');
+            // Limpiar estado incluso si hay error
+            $this->addingNewSchedule = null;
+            $this->newScheduleTime = '';
+        }
+    }
+
+    /**
+     * Obtiene el extract_id según el estado/turno
+     */
+    protected function getExtractIdByState($state)
+    {
+        $mapping = [
+            'Previa' => 1,
+            'Primera' => 2,
+            'Matutina' => 3,
+            'Vespertina' => 4,
+            'Nocturna' => 5,
+        ];
+
+        return $mapping[$state] ?? null;
+    }
+
+    /**
+     * Genera el código de ciudad basado en el nombre y la hora
+     */
+    protected function generateCityCode($cityName, $time)
+    {
+        // Mapeo de nombres de ciudades a códigos base
+        $cityCodes = [
+            'CIUDAD' => 'NAC',
+            'SANTA FE' => 'SFE',
+            'PROVINCIA' => 'PRO',
+            'ENTRE RIOS' => 'RIO',
+            'CORDOBA' => 'COR',
+            'CORRIENTES' => 'CTE',
+            'CHACO' => 'CHA',
+            'NEUQUEN' => 'NQN',
+            'MISIONES' => 'MIS',
+            'MENDOZA' => 'MZA',
+            'Río Negro' => 'Rio',
+            'Tucuman' => 'Tucu',
+            'Santiago' => 'San',
+            'JUJUY' => 'JUJ',
+            'SALTA' => 'Salt',
+            'MONTEVIDEO' => 'ORO',
+            'SAN LUIS' => 'SLU',
+            'CHUBUT' => 'CHU',
+            'FORMOSA' => 'FOR',
+            'CATAMARCA' => 'CAT',
+            'SAN JUAN' => 'SJU'
+        ];
+
+        $cityCode = $cityCodes[$cityName] ?? substr($cityName, 0, 3);
+        $timeCode = str_replace(':', '', $time);
+        return strtoupper($cityCode . $timeCode);
+    }
+
+    /**
+     * Elimina un horario/turno de una ciudad
+     */
+    public function deleteSchedule($cityName, $time, $cityId)
+    {
+        if (empty($time) || !$cityId) {
+            $this->dispatch('notify', message: 'No se puede eliminar un turno vacío', type: 'error');
+            return;
+        }
+
+        try {
+            // Eliminar el registro de la tabla cities
+            $deleted = City::where('id', $cityId)->delete();
+
+            if ($deleted) {
+                // Actualizar la configuración global si existe
+                $globalConfig = GlobalQuinielasConfiguration::where('city_name', $cityName)->first();
+                if ($globalConfig && !empty($globalConfig->selected_schedules)) {
+                    $selectedSchedules = $globalConfig->selected_schedules;
+                    $key = array_search($time, $selectedSchedules);
+                    if ($key !== false) {
+                        unset($selectedSchedules[$key]);
+                        $selectedSchedules = array_values($selectedSchedules); // Reindexar
+                        $globalConfig->update(['selected_schedules' => $selectedSchedules]);
+                    }
+                }
+
+                // Recargar horarios
+                $this->loadCitySchedules();
+                
+                $this->dispatch('notify', message: "Horario {$time} eliminado correctamente para {$cityName}", type: 'success');
+            } else {
+                $this->dispatch('notify', message: 'No se pudo eliminar el horario', type: 'error');
+            }
+        } catch (\Exception $e) {
+            $this->dispatch('notify', message: 'Error al eliminar el horario: ' . $e->getMessage(), type: 'error');
+        }
+    }
 
     public function render()
     {

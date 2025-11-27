@@ -154,9 +154,32 @@
                                                 @foreach($groupedSchedules[$state] as $index => $time)
                                                     @if($index < 3)
                                                         @if(empty($time))
-                                                            <!-- Turno vacío - solo mostrar texto sin casilla -->
-                                                            <div class="flex items-center gap-1 bg-[#2a2a2a] border border-gray-600 rounded px-2 py-1">
-                                                                <span class="text-gray-500 text-xs">--</span>
+                                                            <!-- Turno vacío - mostrar botón + para agregar -->
+                                                            <div wire:key="empty-{{ $cityName }}-{{ $state }}-{{ $index }}" class="flex items-center gap-1 bg-[#2a2a2a] border border-gray-600 rounded px-2 py-1">
+                                                                @if($addingNewSchedule && isset($addingNewSchedule['cityName']) && isset($addingNewSchedule['state']) && $addingNewSchedule['cityName'] === $cityName && $addingNewSchedule['state'] === $state)
+                                                                    <input type="time" 
+                                                                           wire:model.live="newScheduleTime"
+                                                                           wire:keydown.enter="saveNewSchedule"
+                                                                           class="text-black text-xs bg-[#1a1a1a] border border-gray-500 rounded px-1 py-0.5 w-20 focus:border-blue-400 focus:outline-none">
+                                                                    <button wire:click="saveNewSchedule" 
+                                                                            wire:loading.attr="disabled"
+                                                                            class="text-green-400 hover:text-green-300 text-xs ml-1 p-1 rounded hover:bg-green-900/20 disabled:opacity-50">
+                                                                        <i class="fa-solid fa-check"></i>
+                                                                    </button>
+                                                                    <button wire:click="cancelAddingSchedule" 
+                                                                            wire:loading.attr="disabled"
+                                                                            class="text-red-400 hover:text-red-300 text-xs ml-1 p-1 rounded hover:bg-red-900/20 disabled:opacity-50">
+                                                                        <i class="fa-solid fa-times"></i>
+                                                                    </button>
+                                                                @else
+                                                                    <span class="text-gray-500 text-xs">--</span>
+                                                                    <button wire:click="startAddingSchedule('{{ $cityName }}', '{{ $state }}')" 
+                                                                            wire:loading.attr="disabled"
+                                                                            class="text-green-400 hover:text-green-300 text-xs ml-1 p-1 rounded hover:bg-green-900/20 disabled:opacity-50"
+                                                                            title="Agregar nuevo horario">
+                                                                        <i class="fa-solid fa-plus"></i>
+                                                                    </button>
+                                                                @endif
                                                             </div>
                                                         @else
                                                             <!-- Turno con horario - mostrar casilla -->
@@ -190,8 +213,15 @@
                                                                 <span class="text-white text-xs flex-1">{{ $time ?: '--' }}</span>
                                                                 @if($time && $cityId)
                                                                     <button wire:click="startEditingSchedule('{{ $cityName }}', '{{ $time }}', {{ $cityId }})" 
-                                                                            class="text-gray-400 hover:text-blue-400 text-xs ml-1">
+                                                                            class="text-gray-400 hover:text-blue-400 text-xs ml-1 p-1 rounded hover:bg-blue-900/20"
+                                                                            title="Editar horario">
                                                                         <i class="fa-solid fa-pencil"></i>
+                                                                    </button>
+                                                                    <button wire:click="deleteSchedule('{{ $cityName }}', '{{ $time }}', {{ $cityId }})" 
+                                                                            wire:confirm="¿Estás seguro de eliminar el horario {{ $time }} de {{ $cityName }}?"
+                                                                            class="text-red-400 hover:text-red-300 text-xs ml-1 p-1 rounded hover:bg-red-900/20"
+                                                                            title="Eliminar horario">
+                                                                        <i class="fa-solid fa-xmark"></i>
                                                                     </button>
                                                                 @endif
                                                             @endif
@@ -205,9 +235,32 @@
                                                     @foreach($groupedSchedules[$state] as $index => $time)
                                                         @if($index >= 3)
                                                             @if(empty($time))
-                                                                <!-- Turno vacío adicional - solo mostrar texto sin casilla -->
-                                                                <div class="flex items-center gap-1 bg-[#2a2a2a] border border-gray-600 rounded px-2 py-1">
-                                                                    <span class="text-gray-500 text-xs">--</span>
+                                                                <!-- Turno vacío adicional - mostrar botón + para agregar -->
+                                                                <div wire:key="empty-extra-{{ $cityName }}-{{ $state }}-{{ $index }}" class="flex items-center gap-1 bg-[#2a2a2a] border border-gray-600 rounded px-2 py-1">
+                                                                    @if($addingNewSchedule && isset($addingNewSchedule['cityName']) && isset($addingNewSchedule['state']) && $addingNewSchedule['cityName'] === $cityName && $addingNewSchedule['state'] === $state)
+                                                                        <input type="time" 
+                                                                               wire:model.live="newScheduleTime"
+                                                                               wire:keydown.enter="saveNewSchedule"
+                                                                               class="text-black text-xs bg-[#1a1a1a] border border-gray-500 rounded px-1 py-0.5 w-20 focus:border-blue-400 focus:outline-none">
+                                                                        <button wire:click="saveNewSchedule" 
+                                                                                wire:loading.attr="disabled"
+                                                                                class="text-green-400 hover:text-green-300 text-xs ml-1 p-1 rounded hover:bg-green-900/20 disabled:opacity-50">
+                                                                            <i class="fa-solid fa-check"></i>
+                                                                        </button>
+                                                                        <button wire:click="cancelAddingSchedule" 
+                                                                                wire:loading.attr="disabled"
+                                                                                class="text-red-400 hover:text-red-300 text-xs ml-1 p-1 rounded hover:bg-red-900/20 disabled:opacity-50">
+                                                                            <i class="fa-solid fa-times"></i>
+                                                                        </button>
+                                                                    @else
+                                                                        <span class="text-gray-500 text-xs">--</span>
+                                                                        <button wire:click="startAddingSchedule('{{ $cityName }}', '{{ $state }}')" 
+                                                                                wire:loading.attr="disabled"
+                                                                                class="text-green-400 hover:text-green-300 text-xs ml-1 p-1 rounded hover:bg-green-900/20 disabled:opacity-50"
+                                                                                title="Agregar nuevo horario">
+                                                                            <i class="fa-solid fa-plus"></i>
+                                                                        </button>
+                                                                    @endif
                                                                 </div>
                                                             @else
                                                                 <!-- Turno con horario adicional - mostrar casilla -->
@@ -241,8 +294,15 @@
                                                                     <span class="text-white text-xs flex-1">{{ $time ?: '--' }}</span>
                                                                     @if($time && $cityId)
                                                                         <button wire:click="startEditingSchedule('{{ $cityName }}', '{{ $time }}', {{ $cityId }})" 
-                                                                                class="text-gray-400 hover:text-blue-400 text-xs ml-1">
+                                                                                class="text-gray-400 hover:text-blue-400 text-xs ml-1 p-1 rounded hover:bg-blue-900/20"
+                                                                                title="Editar horario">
                                                                             <i class="fa-solid fa-pencil"></i>
+                                                                        </button>
+                                                                        <button wire:click="deleteSchedule('{{ $cityName }}', '{{ $time }}', {{ $cityId }})" 
+                                                                                wire:confirm="¿Estás seguro de eliminar el horario {{ $time }} de {{ $cityName }}?"
+                                                                                class="text-red-400 hover:text-red-300 text-xs ml-1 p-1 rounded hover:bg-red-900/20"
+                                                                                title="Eliminar horario">
+                                                                            <i class="fa-solid fa-xmark"></i>
                                                                         </button>
                                                                     @endif
                                                                 @endif
