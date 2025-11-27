@@ -57,6 +57,7 @@ class CitiesTableSeeder extends Seeder
             ['extract_id' => 3, 'name' => 'Río Negro', 'code' => 'Rio1500', 'time' => '15:00'],
             ['extract_id' => 3, 'name' => 'Tucuman', 'code' => 'Tucu1730', 'time' => '17:30'],
             ['extract_id' => 3, 'name' => 'Santiago', 'code' => 'San1500', 'time' => '15:00'],
+            ['extract_id' => 3, 'name' => 'MONTEVIDEO', 'code' => 'ORO1500', 'time' => '15:00'],
 
 
             ['extract_id' => 4, 'name' => 'PROVINCIA', 'code' => 'PRO1800', 'time' => '18:00'],

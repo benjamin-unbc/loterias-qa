@@ -55,11 +55,6 @@ class Extracts extends Component
     // Control de visibilidad de filtros
     public $showFilters = false; // Mostrar/ocultar sección de filtros
 
-    /**
-     * Horarios visibles para Montevideo (evita mostrar el registro erróneo de 15:00).
-     */
-    protected array $montevideoAllowedExtracts = [4, 5];
-
     public function mount()
     {
         // Mostrar por defecto los números de hoy (fecha actual)
@@ -67,9 +62,9 @@ class Extracts extends Component
         $this->selectedDate = $this->filterDate; // Inicializar selectedDate
         // Ocultar ciudades específicas de la interfaz
         $hiddenCities = ['SAN LUIS', 'CHUBUT', 'FORMOSA', 'CATAMARCA', 'SAN JUAN'];
-        $this->cities = $this->applyMontevideoVisibilityFilter(
-            City::with('numbers')->whereNotIn('name', $hiddenCities)
-        )->get();
+        $this->cities = City::with('numbers')
+            ->whereNotIn('name', $hiddenCities)
+            ->get();
         $this->isAdmin   = Auth::user()->hasRole('Administrador');
         $this->extracts  = Extract::all();
         
@@ -297,9 +292,7 @@ class Extracts extends Component
     {
         // Obtener todas las ciudades disponibles (excluyendo las ocultas)
         $hiddenCities = ['SAN LUIS', 'CHUBUT', 'FORMOSA', 'CATAMARCA', 'SAN JUAN'];
-        $this->availableCities = $this->applyMontevideoVisibilityFilter(
-            City::whereNotIn('name', $hiddenCities)
-        )
+        $this->availableCities = City::whereNotIn('name', $hiddenCities)
             ->select('id', 'name', 'code')
             ->get()
             ->toArray();
@@ -324,9 +317,7 @@ class Extracts extends Component
     {
         // Obtener ciudades únicas para el selector
         $hiddenCities = ['SAN LUIS', 'CHUBUT', 'FORMOSA', 'CATAMARCA', 'SAN JUAN'];
-        $uniqueCities = $this->applyMontevideoVisibilityFilter(
-            City::whereNotIn('name', $hiddenCities)
-        )
+        $uniqueCities = City::whereNotIn('name', $hiddenCities)
             ->select('name')
             ->distinct()
             ->orderBy('name')
@@ -424,9 +415,7 @@ class Extracts extends Component
         
         // Obtener todas las loterías (ciudades) para la ciudad seleccionada
         $hiddenCities = ['SAN LUIS', 'CHUBUT', 'FORMOSA', 'CATAMARCA', 'SAN JUAN'];
-        $this->cityLotteries = $this->applyMontevideoVisibilityFilter(
-            City::whereNotIn('name', $hiddenCities)
-        )
+        $this->cityLotteries = City::whereNotIn('name', $hiddenCities)
             ->where('name', $this->selectedCityFilter)
             ->select('id', 'name', 'code', 'extract_id')
             ->with('extract:id,name')
@@ -450,9 +439,7 @@ class Extracts extends Component
     public function loadAllLotteries()
     {
         $hiddenCities = ['SAN LUIS', 'CHUBUT', 'FORMOSA', 'CATAMARCA', 'SAN JUAN'];
-        $allLotteries = $this->applyMontevideoVisibilityFilter(
-            City::whereNotIn('name', $hiddenCities)
-        )
+        $allLotteries = City::whereNotIn('name', $hiddenCities)
             ->select('id', 'name', 'code', 'extract_id')
             ->with('extract:id,name')
             ->get()
@@ -758,15 +745,15 @@ class Extracts extends Component
                 ],
                 'MONTEVIDEO' => [
                     'La Previa' => 'ORO1015',
-                    'Primera' => 'ORO1800',
-                    'Matutina' => 'ORO1800',    // Matutina de Montevideo va a Vespertina (ORO1800 = extract_id 4)
+                    'Primera' => 'ORO1200',
+                    'Matutina' => 'ORO1500',    // Matutina de Montevideo va a Matutina (ORO1500 = extract_id 3)
                     'Vespertina' => 'ORO1800',  // Vespertina de Montevideo va a Vespertina (ORO1800 = extract_id 4)
                     'Nocturna' => 'ORO2100'     // Nocturna de Montevideo va a Nocturna (ORO2100 = extract_id 5)
                 ],
                 'Montevideo' => [
                     'La Previa' => 'ORO1015',
-                    'Primera' => 'ORO1800',
-                    'Matutina' => 'ORO1800',    // Matutina de Montevideo va a Vespertina (ORO1800 = extract_id 4)
+                    'Primera' => 'ORO1200',
+                    'Matutina' => 'ORO1500',    // Matutina de Montevideo va a Matutina (ORO1500 = extract_id 3)
                     'Vespertina' => 'ORO1800',  // Vespertina de Montevideo va a Vespertina (ORO1800 = extract_id 4)
                     'Nocturna' => 'ORO2100'     // Nocturna de Montevideo va a Nocturna (ORO2100 = extract_id 5)
                 ],
@@ -850,13 +837,7 @@ class Extracts extends Component
             }
             
             // Buscar la ciudad en la BD por código exacto
-            // NOTA: Para Montevideo, necesitamos considerar el extract_id correcto
             $city = City::where('code', $cityCode)->first();
-            
-            // Si es Montevideo y el código es ORO1800, asegurar que sea extract_id 4 (Vespertina)
-            if ($cityName === 'Montevideo' && $cityCode === 'ORO1800' && $city && $city->extract_id !== 4) {
-                $city = City::where('code', 'ORO1800')->where('extract_id', 4)->first();
-            }
             
             if (!$city) {
                 Log::warning("Extracts - No se encontró ciudad en BD: {$cityCode}");
@@ -916,8 +897,6 @@ class Extracts extends Component
         $query = City::with(['numbers' => function ($query) use ($dateForQuery) {
             $query->where('date', $dateForQuery);
         }])->whereNotIn('name', $hiddenCities);
-
-        $query = $this->applyMontevideoVisibilityFilter($query);
         
         // Aplicar filtros si es administrador
         if ($this->isAdmin) {
@@ -1731,20 +1710,6 @@ class Extracts extends Component
             \Log::error("Error verificando configuración de Quinielas para {$cityName} - {$extractName}: " . $e->getMessage());
             return true; // Por defecto, mostrar si hay error
         }
-    }
-
-    /**
-     * Aplica el filtro de visibilidad para Montevideo (solo 18:00 y 21:00).
-     */
-    protected function applyMontevideoVisibilityFilter($query)
-    {
-        return $query->where(function ($q) {
-            $q->whereRaw('UPPER(name) != ?', ['MONTEVIDEO'])
-              ->orWhere(function ($sub) {
-                  $sub->whereRaw('UPPER(name) = ?', ['MONTEVIDEO'])
-                      ->whereIn('extract_id', $this->montevideoAllowedExtracts);
-              });
-        });
     }
 
     public function render()

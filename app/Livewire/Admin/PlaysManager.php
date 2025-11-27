@@ -156,12 +156,6 @@ class PlaysManager extends Component
 
     public $totalImport;
 
-    /**
-     * Horarios válidos para Montevideo. Evita mostrar la tirada incorrecta de 15:00
-     * que aparece en la página externa pero en realidad corresponde a las 18:00.
-     */
-    protected array $montevideoAllowedTimes = ['18:00', '21:00'];
-
     public string $shareUrl = '';
 
     public $groups;
@@ -184,7 +178,7 @@ class PlaysManager extends Component
         'SFE1015' => 'ER', 'COR1015' => 'SD', 'RIO1015' => 'RT', 'NAC1200' => 'Q', 'CHA1200' => 'CH2',
         'PRO1200' => 'W', 'MZA1200' => 'M1', 'CTE1200' => 'M', 'SFE1200' => 'R', 'COR1200' => 'T',
         'RIO1200' => 'K', 'NAC1500' => 'A', 'CHA1500' => 'CH3', 'PRO1500' => 'E', 'MZA1500' => 'M2',
-        'CTE1500' => 'Ct3', 'SFE1500' => 'D', 'COR1500' => 'L', 'RIO1500' => 'J', 'ORO1800' => 'S',
+        'CTE1500' => 'Ct3', 'SFE1500' => 'D', 'COR1500' => 'L', 'RIO1500' => 'J', 'ORO1500' => 'S',
         'NAC1800' => 'F', 'CHA1800' => 'CH4', 'PRO1800' => 'B', 'MZA1800' => 'M3', 'CTE1800' => 'Z',
         'SFE1800' => 'V', 'COR1800' => 'H', 'RIO1800' => 'U', 'NAC2100' => 'N', 'CHA2100' => 'CH5',
         'PRO2100' => 'P', 'MZA2100' => 'M4', 'CTE2100' => 'G', 'SFE2100' => 'I', 'COR2100' => 'C',
@@ -231,9 +225,7 @@ class PlaysManager extends Component
         'D' => 'SFE1500',
         'L' => 'COR1500',
         'J' => 'RIO1500',
-        'S' => 'ORO1800', // Corregido: ORO1500 -> ORO1800
-        'ORO1500' => 'ORO1800', // Mapeo especial para Montevideo 18:00
-        'ORO1800' => 'ORO1800', // Mapeo directo para Montevideo 18:00
+        'S' => 'ORO1500',
 
         'F' => 'NAC1800',
         'CH4' => 'CHA1800',
@@ -393,15 +385,7 @@ class PlaysManager extends Component
             ->orderBy('name')
             ->get();
 
-        // Filtrar la tirada incorrecta de Montevideo (15:00) y quedarnos con Vespertina/Nocturna
-        $cities = $cities->filter(function($city) {
-            if ($city->name !== 'MONTEVIDEO') {
-                return true;
-            }
-            return in_array($city->time, $this->montevideoAllowedTimes, true);
-        })->values();
-
-        // Agrupar por horario real (ya sin la tirada de 15:00)
+        // Agrupar por horario
         $this->lotteryGroups = $cities->groupBy(function($city) {
             return $city->time;
         })->map(function($citiesInTime) {
@@ -425,14 +409,6 @@ class PlaysManager extends Component
         $this->citySchedules = [];
         foreach ($cities->groupBy('name') as $cityName => $cityData) {
             $schedules = $cityData->pluck('time')->unique()->sort()->values()->toArray();
-            
-            // Montevideo solo muestra horarios válidos (Vespertina/Nocturna)
-            if ($cityName === 'MONTEVIDEO') {
-                $schedules = array_values(array_filter($schedules, function($time) {
-                    return in_array($time, $this->montevideoAllowedTimes, true);
-                }));
-            }
-            
             $this->citySchedules[$cityName] = $schedules;
         }
         
@@ -570,12 +546,6 @@ class PlaysManager extends Component
         ];
 
         $cityCode = $cityCodes[$cityName] ?? substr($cityName, 0, 3);
-        
-        // Si llega Montevideo 15:00 desde fuentes externas, forzamos 18:00
-        if ($cityName === 'MONTEVIDEO' && $time === '15:00') {
-            $time = '18:00';
-        }
-        
         $timeCode = str_replace(':', '', $time);
         return $cityCode . $timeCode;
     }

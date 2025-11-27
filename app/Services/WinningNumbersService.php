@@ -245,14 +245,14 @@ class WinningNumbersService
             'Montevideo' => [
                 'La Previa' => null,  // No existe en Montevideo
                 'Primera' => null,    // No existe en Montevideo
-                'Matutina' => 4,      // Datos de la tabla "Matutina" de la web van a Vespertina (tabla #4)
+                'Matutina' => 2,      // Datos de la tabla "Matutina" de la web van a Matutina (tabla #2)
                 'Vespertina' => null, // No existe en Montevideo
                 'Nocturna' => 8       // Datos de la tabla "Nocturna" de la web van a Nocturna (tabla #8)
             ],
             'MONTEVIDEO' => [
                 'La Previa' => null,  // No existe en Montevideo
                 'Primera' => null,    // No existe en Montevideo
-                'Matutina' => 4,      // Datos de la tabla "Matutina" de la web van a Vespertina (tabla #4)
+                'Matutina' => 2,      // Datos de la tabla "Matutina" de la web van a Matutina (tabla #2)
                 'Vespertina' => null, // No existe en Montevideo
                 'Nocturna' => 8       // Datos de la tabla "Nocturna" de la web van a Nocturna (tabla #8)
             ],

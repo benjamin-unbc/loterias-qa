@@ -216,7 +216,7 @@ class AutoUpdateLotteryNumbers extends Command
             
             // Mapeo especial para Montevideo
             if ($cityName === 'Montevideo') {
-                $turnMapping['Matutina'] = 4; // Matutina de Montevideo va a Vespertina (extract_id 4)
+                $turnMapping['Matutina'] = 3; // Matutina de Montevideo va a Matutina (extract_id 3)
             }
             
             $cityCode = $cityMapping[$cityName] ?? null;
