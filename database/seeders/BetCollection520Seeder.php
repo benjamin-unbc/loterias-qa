@@ -19,9 +19,9 @@ class BetCollection520Seeder extends Seeder
         $data = [
             [
                 'bet_amount'     => 25.00,
-                'payout_5_to_5'  => 256.00,
-                'payout_5_to_10' => 128.00,
-                'payout_5_to_20' => 64.00,
+                'payout_5_to_5'  => 6400.00,
+                'payout_5_to_10' => 3200.00,
+                'payout_5_to_20' => 1600.00,
                 'created_at'     => $now,
                 'updated_at'     => $now,
             ],

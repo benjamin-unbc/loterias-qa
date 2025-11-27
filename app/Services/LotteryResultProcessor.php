@@ -70,9 +70,11 @@ class LotteryResultProcessor
         $prizes = PrizesModel::first();
         $figureOne = FigureOneModel::first();
         $figureTwo = FigureTwoModel::first();
-        // ✅ CORREGIDO: No cargar tablas de redoblona aquí, se cargarán dinámicamente según el importe apostado
+        $betCollectionRedoblona = BetCollectionRedoblonaModel::where('bet_amount', '1.00')->first();
+        $betCollection5To20 = BetCollection5To20Model::where('bet_amount', '1.00')->first();
+        $betCollection10To20 = BetCollection10To20Model::where('bet_amount', '1.00')->first();
 
-        if (!$quiniela || !$prizes || !$figureOne || !$figureTwo) {
+        if (!$quiniela || !$prizes || !$figureOne || !$figureTwo || !$betCollectionRedoblona || !$betCollection5To20 || !$betCollection10To20) {
             Log::error("LotteryResultProcessor - Faltan configuraciones de premios. Abortando cálculo.");
             return;
         }
@@ -272,52 +274,29 @@ class LotteryResultProcessor
                             
                             if ($isValidPosition) {
                                 // ✅ La redoblona es ganadora → calcular premio
-                                // ✅ CORREGIDO: Buscar la tabla de redoblona según el importe apostado
-                                $betAmount = (float)$apu->import;
-                                $betCollectionRedoblona = BetCollectionRedoblonaModel::where('bet_amount', $betAmount)->first();
-                                $betCollection5To20 = BetCollection5To20Model::where('bet_amount', $betAmount)->first();
-                                $betCollection10To20 = BetCollection10To20Model::where('bet_amount', $betAmount)->first();
+                                $multiplierR = 0;
+                                // ✅ CORREGIDO: Calcular premio basado en las posiciones APOSTADAS, no donde realmente salieron
+                                $mainPosApostada = (int)$apu->position;
+                                $redoblonaPosApostada = (int)$apu->positionR;
                                 
-                                // Si no existe la fila exacta, buscar la más cercana o usar la de $1.00 como fallback
-                                if (!$betCollectionRedoblona) {
-                                    $betCollectionRedoblona = BetCollectionRedoblonaModel::where('bet_amount', '1.00')->first();
-                                }
-                                if (!$betCollection5To20) {
-                                    $betCollection5To20 = BetCollection5To20Model::where('bet_amount', '1.00')->first();
-                                }
-                                if (!$betCollection10To20) {
-                                    $betCollection10To20 = BetCollection10To20Model::where('bet_amount', '1.00')->first();
+                                if ($mainPosApostada == 1) {
+                                    if ($redoblonaPosApostada >= 1 && $redoblonaPosApostada <= 5) $multiplierR = $betCollectionRedoblona->payout_1_to_5;
+                                    elseif ($redoblonaPosApostada >= 6 && $redoblonaPosApostada <= 10) $multiplierR = $betCollectionRedoblona->payout_1_to_10;
+                                    elseif ($redoblonaPosApostada >= 11 && $redoblonaPosApostada <= 20) $multiplierR = $betCollectionRedoblona->payout_1_to_20;
+                                } elseif ($mainPosApostada >= 2 && $mainPosApostada <= 5) {
+                                    if ($redoblonaPosApostada >= 1 && $redoblonaPosApostada <= 5) $multiplierR = $betCollection5To20->payout_5_to_5;
+                                    elseif ($redoblonaPosApostada >= 6 && $redoblonaPosApostada <= 10) $multiplierR = $betCollection5To20->payout_5_to_10;
+                                    elseif ($redoblonaPosApostada >= 11 && $redoblonaPosApostada <= 20) $multiplierR = $betCollection5To20->payout_5_to_20;
+                                } elseif ($mainPosApostada >= 6 && $mainPosApostada <= 10) {
+                                    if ($redoblonaPosApostada >= 6 && $redoblonaPosApostada <= 10) $multiplierR = $betCollection10To20->payout_10_to_10;
+                                    elseif ($redoblonaPosApostada >= 11 && $redoblonaPosApostada <= 20) $multiplierR = $betCollection10To20->payout_10_to_20;
+                                } elseif ($mainPosApostada >= 11 && $mainPosApostada <= 20) {
+                                    if ($redoblonaPosApostada >= 11 && $redoblonaPosApostada <= 20) $multiplierR = $betCollection10To20->payout_20_to_20;
                                 }
                                 
-                                if (!$betCollectionRedoblona || !$betCollection5To20 || !$betCollection10To20) {
-                                    Log::error("LotteryResultProcessor - No se encontró tabla de redoblona para bet_amount {$betAmount}");
-                                    $aciertValueR = 0;
-                                } else {
-                                    // ✅ CORREGIDO: Calcular premio basado en las posiciones APOSTADAS
-                                    // Los valores payout_* ya son el monto total que se cobra, no un multiplicador
-                                    $payoutR = 0;
-                                    $mainPosApostada = (int)$apu->position;
-                                    $redoblonaPosApostada = (int)$apu->positionR;
-                                    
-                                    if ($mainPosApostada == 1) {
-                                        if ($redoblonaPosApostada >= 1 && $redoblonaPosApostada <= 5) $payoutR = (float)$betCollectionRedoblona->payout_1_to_5;
-                                        elseif ($redoblonaPosApostada >= 6 && $redoblonaPosApostada <= 10) $payoutR = (float)$betCollectionRedoblona->payout_1_to_10;
-                                        elseif ($redoblonaPosApostada >= 11 && $redoblonaPosApostada <= 20) $payoutR = (float)$betCollectionRedoblona->payout_1_to_20;
-                                    } elseif ($mainPosApostada >= 2 && $mainPosApostada <= 5) {
-                                        if ($redoblonaPosApostada >= 1 && $redoblonaPosApostada <= 5) $payoutR = (float)$betCollection5To20->payout_5_to_5;
-                                        elseif ($redoblonaPosApostada >= 6 && $redoblonaPosApostada <= 10) $payoutR = (float)$betCollection5To20->payout_5_to_10;
-                                        elseif ($redoblonaPosApostada >= 11 && $redoblonaPosApostada <= 20) $payoutR = (float)$betCollection5To20->payout_5_to_20;
-                                    } elseif ($mainPosApostada >= 6 && $mainPosApostada <= 10) {
-                                        if ($redoblonaPosApostada >= 6 && $redoblonaPosApostada <= 10) $payoutR = (float)$betCollection10To20->payout_10_to_10;
-                                        elseif ($redoblonaPosApostada >= 11 && $redoblonaPosApostada <= 20) $payoutR = (float)$betCollection10To20->payout_10_to_20;
-                                    } elseif ($mainPosApostada >= 11 && $mainPosApostada <= 20) {
-                                        if ($redoblonaPosApostada >= 11 && $redoblonaPosApostada <= 20) $payoutR = (float)$betCollection10To20->payout_20_to_20;
-                                    }
-                                    
-                                    // ✅ CORREGIDO: El payout ya es el monto total, solo multiplicar por veces que salió
-                                    $aciertValueR = $payoutR * $redoblonaWinningCount;
-                                    Log::info("LotteryResultProcessor - ✅ Acierto redoblona válido: Principal {$apu->number} salió en posición {$actualWinningPosition}, Redoblona {$playedNumberRClean} apostada en posición {$apu->positionR} salió {$redoblonaWinningCount} vez(es) en posiciones " . implode(', ', $redoblonaPositions) . " para lotería {$lotterySystemCode}, premio: {$aciertValueR} (payout: {$payoutR} × veces: {$redoblonaWinningCount})");
-                                }
+                                // ✅ CORREGIDO: Multiplicar premio base × veces que salió × importe
+                                $aciertValueR = (float)$apu->import * (float)$multiplierR * $redoblonaWinningCount;
+                                Log::info("LotteryResultProcessor - ✅ Acierto redoblona válido: Principal {$apu->number} salió en posición {$actualWinningPosition}, Redoblona {$playedNumberRClean} apostada en posición {$apu->positionR} salió {$redoblonaWinningCount} vez(es) en posiciones " . implode(', ', $redoblonaPositions) . " para lotería {$lotterySystemCode}, premio: {$aciertValueR} (base: {$multiplierR} × veces: {$redoblonaWinningCount} × importe: {$apu->import})");
                             } else {
                                 // ✅ Número encontrado pero ninguna posición es válida según positionR → NO es ganador
                                 Log::info("LotteryResultProcessor - Redoblona número encontrado pero posiciones inválidas: NumR {$playedNumberRClean} apostado en PosR {$apu->positionR} salió en posiciones " . implode(', ', $redoblonaPositions) . " - NO válido según reglas para lotería {$lotterySystemCode}");
