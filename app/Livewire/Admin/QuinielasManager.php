@@ -17,6 +17,11 @@ class QuinielasManager extends Component
     public $selectedCitySchedules = []; // Horarios seleccionados por ciudad
     public $appliedCitySchedules = []; // Horarios aplicados (después de guardar)
     public $hasUnsavedChanges = false; // Indica si hay cambios sin guardar
+
+    /**
+     * Horarios válidos para Montevideo (debe mostrarse como Vespertina 18:00 y Nocturna 21:00).
+     */
+    protected array $montevideoAllowedTimes = ['18:00', '21:00'];
     
     // Propiedades para edición de horarios
     public $editingSchedule = null; // Array con cityName, oldTime, cityId cuando está editando
@@ -113,12 +118,11 @@ class QuinielasManager extends Component
         foreach ($orderedCities as $cityName => $cityData) {
             $schedules = $cityData->pluck('time')->unique()->sort()->values()->toArray();
             
-            // Filtrar visualmente el horario 18:00 de Montevideo
+            // Montevideo solo debe mostrar Vespertina (18:00) y Nocturna (21:00)
             if ($cityName === 'MONTEVIDEO') {
-                $schedules = array_filter($schedules, function($time) {
-                    return $time !== '18:00';
-                });
-                $schedules = array_values($schedules); // Reindexar el array
+                $schedules = array_values(array_filter($schedules, function($time) {
+                    return in_array($time, $this->montevideoAllowedTimes, true);
+                }));
             }
             
             // Agregar estado a cada horario

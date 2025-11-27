@@ -2,10 +2,16 @@
 
 namespace App\Services;
 
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
 class WinningNumbersService
 {
+    /**
+     * Fecha forzada para extracción (YYYY-MM-DD) o null para usar la fecha actual.
+     */
+    private ?string $forcedDate = null;
+
     /**
      * Extrae los 20 números ganadores de una ciudad específica
      *
@@ -317,6 +323,20 @@ class WinningNumbersService
     }
     
     /**
+     * Configura una fecha forzada para la extracción.
+     */
+    public function setForcedDate(?string $date): self
+    {
+        if ($date) {
+            $this->forcedDate = Carbon::parse($date)->toDateString();
+        } else {
+            $this->forcedDate = null;
+        }
+
+        return $this;
+    }
+
+    /**
      * Obtiene la lista de ciudades disponibles
      */
     public function getAvailableCities(): array
@@ -359,8 +379,8 @@ class WinningNumbersService
     private function isPageDateCurrent(string $html, string $city): bool
     {
         try {
-            $currentDate = date('Y-m-d');
-            $this->log("Fecha actual del sistema: $currentDate");
+            $targetDate = $this->getTargetDate();
+            $this->log("Fecha objetivo para extracción: $targetDate" . ($this->forcedDate ? ' (forzada)' : ''));
             
             // Extraer la fecha de la página según la fuente
             if ($city === 'Tucumán') {
@@ -374,12 +394,12 @@ class WinningNumbersService
             if ($pageDate) {
                 $this->log("Fecha encontrada en la página: $pageDate");
                 
-                // SOLO proceder si la fecha de la página coincide EXACTAMENTE con la fecha actual
-                if ($pageDate === $currentDate) {
-                    $this->log("✅ La página muestra la fecha actual ($currentDate). Procediendo con extracción.");
+                // SOLO proceder si la fecha de la página coincide EXACTAMENTE con la fecha objetivo
+                if ($pageDate === $targetDate) {
+                    $this->log("✅ La página muestra la fecha objetivo ($targetDate). Procediendo con extracción.");
                     return true;
                 } else {
-                    $this->log("⚠️ La página muestra fecha diferente ($pageDate vs $currentDate). NO se extraerán números hasta que la página actualice su fecha.");
+                    $this->log("⚠️ La página muestra fecha diferente ($pageDate vs $targetDate). NO se extraerán números hasta que la página coincida.");
                     return false;
                 }
             }
@@ -420,6 +440,9 @@ class WinningNumbersService
             libxml_use_internal_errors(true);
             $dom->loadHTML($html);
             $xpath = new \DOMXPath($dom);
+
+            $targetDate = $this->getTargetDate();
+            $targetDateHuman = Carbon::parse($targetDate)->format('d/m/Y');
             
             // Método 1: Buscar el elemento con data-fecha-default
             $dateElements = $xpath->query('//*[@data-fecha-default]');
@@ -451,8 +474,8 @@ class WinningNumbersService
                 '//input[@id*="fecha"]',
                 '//span[contains(@class, "fecha")]',
                 '//div[contains(@class, "fecha")]',
-                '//*[contains(text(), "' . date('d/m/Y') . '")]',
-                '//*[contains(text(), "' . date('Y-m-d') . '")]'
+                '//*[contains(text(), "' . $targetDateHuman . '")]',
+                '//*[contains(text(), "' . $targetDate . '")]'
             ];
             
             foreach ($dateSelectors as $selector) {
@@ -494,7 +517,7 @@ class WinningNumbersService
             $this->log('Error convirtiendo formato de fecha: ' . $e->getMessage(), 'error');
         }
         
-        return date('Y-m-d');
+        return $this->getTargetDate();
     }
     
     /**
@@ -757,5 +780,16 @@ class WinningNumbersService
     {
         $year = intval($number);
         return $year >= 1900 && $year <= 2100;
+    }
+    /**
+     * Devuelve la fecha objetivo actual (forzada o del sistema)
+     */
+    private function getTargetDate(): string
+    {
+        if ($this->forcedDate) {
+            return $this->forcedDate;
+        }
+
+        return date('Y-m-d');
     }
 }

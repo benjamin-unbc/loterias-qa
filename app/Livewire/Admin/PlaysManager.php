@@ -156,6 +156,12 @@ class PlaysManager extends Component
 
     public $totalImport;
 
+    /**
+     * Horarios válidos para Montevideo. Evita mostrar la tirada incorrecta de 15:00
+     * que aparece en la página externa pero en realidad corresponde a las 18:00.
+     */
+    protected array $montevideoAllowedTimes = ['18:00', '21:00'];
+
     public string $shareUrl = '';
 
     public $groups;
@@ -387,46 +393,19 @@ class PlaysManager extends Component
             ->orderBy('name')
             ->get();
 
-        // Agrupar por horario (con mapeo especial para Montevideo)
-        $this->lotteryGroups = $cities->groupBy(function($city) {
-            // Mapeo especial para Montevideo: 18:00 se agrupa como 15:00
-            if ($city->name === 'MONTEVIDEO' && $city->time === '18:00') {
-                return '15:00';
+        // Filtrar la tirada incorrecta de Montevideo (15:00) y quedarnos con Vespertina/Nocturna
+        $cities = $cities->filter(function($city) {
+            if ($city->name !== 'MONTEVIDEO') {
+                return true;
             }
+            return in_array($city->time, $this->montevideoAllowedTimes, true);
+        })->values();
+
+        // Agrupar por horario real (ya sin la tirada de 15:00)
+        $this->lotteryGroups = $cities->groupBy(function($city) {
             return $city->time;
         })->map(function($citiesInTime) {
             return $citiesInTime->map(function($city) {
-                // Mapeo especial para Montevideo
-                if ($city->name === 'MONTEVIDEO') {
-                    // Si es Montevideo a las 18:00, mostrarlo como 15:00 pero con código ORO1800
-                    if ($city->time === '18:00') {
-                        return [
-                            'id' => $city->id,
-                            'name' => $city->name,
-                            'code' => $city->code, // Mantener ORO1800
-                            'time' => '15:00', // Mostrar como 15:00
-                            'extract_name' => $city->extract->name,
-                            'ui_code' => $this->generateUICode($city->name, '15:00'),
-                            'abbreviation' => $this->generateAbbreviation($city->name, $city->extract->name)
-                        ];
-                    }
-                    // Si es Montevideo a las 21:00, mantenerlo normal
-                    if ($city->time === '21:00') {
-                        return [
-                            'id' => $city->id,
-                            'name' => $city->name,
-                            'code' => $city->code,
-                            'time' => $city->time,
-                            'extract_name' => $city->extract->name,
-                            'ui_code' => $this->generateUICode($city->name, $city->time),
-                            'abbreviation' => $this->generateAbbreviation($city->name, $city->extract->name)
-                        ];
-                    }
-                    // Si es Montevideo en cualquier otro horario, no mostrarlo
-                    return null;
-                }
-                
-                // Para todas las demás ciudades, mantener normal
                 return [
                     'id' => $city->id,
                     'name' => $city->name,
@@ -436,7 +415,7 @@ class PlaysManager extends Component
                     'ui_code' => $this->generateUICode($city->name, $city->time),
                     'abbreviation' => $this->generateAbbreviation($city->name, $city->extract->name)
                 ];
-            })->filter(); // Filtrar los valores null
+            })->filter();
         });
 
         // Obtener todos los horarios únicos ordenados
@@ -447,12 +426,11 @@ class PlaysManager extends Component
         foreach ($cities->groupBy('name') as $cityName => $cityData) {
             $schedules = $cityData->pluck('time')->unique()->sort()->values()->toArray();
             
-            // Filtrar visualmente el horario 18:00 de Montevideo
+            // Montevideo solo muestra horarios válidos (Vespertina/Nocturna)
             if ($cityName === 'MONTEVIDEO') {
-                $schedules = array_filter($schedules, function($time) {
-                    return $time !== '18:00';
-                });
-                $schedules = array_values($schedules); // Reindexar el array
+                $schedules = array_values(array_filter($schedules, function($time) {
+                    return in_array($time, $this->montevideoAllowedTimes, true);
+                }));
             }
             
             $this->citySchedules[$cityName] = $schedules;
@@ -479,23 +457,8 @@ class PlaysManager extends Component
         // Crear mapeo de códigos UI a códigos de BD
         $this->uiCodeMapping = [];
         foreach ($cities as $city) {
-            // Mapeo especial para Montevideo
-            if ($city->name === 'MONTEVIDEO') {
-                if ($city->time === '18:00') {
-                    // Para Montevideo 18:00, usar código ORO1800 pero UI code con 15:00
-                    $uiCode = $this->generateUICode($city->name, '15:00');
-                    $this->uiCodeMapping[$uiCode] = $city->code; // ORO1800
-                } elseif ($city->time === '21:00') {
-                    // Para Montevideo 21:00, mantener normal
-                    $uiCode = $this->generateUICode($city->name, $city->time);
-                    $this->uiCodeMapping[$uiCode] = $city->code;
-                }
-                // Ignorar otros horarios de Montevideo
-            } else {
-                // Para todas las demás ciudades, mantener normal
-                $uiCode = $this->generateUICode($city->name, $city->time);
-                $this->uiCodeMapping[$uiCode] = $city->code;
-            }
+            $uiCode = $this->generateUICode($city->name, $city->time);
+            $this->uiCodeMapping[$uiCode] = $city->code;
         }
 
         // Inicializar selecciones
@@ -608,9 +571,9 @@ class PlaysManager extends Component
 
         $cityCode = $cityCodes[$cityName] ?? substr($cityName, 0, 3);
         
-        // Mapeo especial para Montevideo: 15:00 debe generar ORO1800
+        // Si llega Montevideo 15:00 desde fuentes externas, forzamos 18:00
         if ($cityName === 'MONTEVIDEO' && $time === '15:00') {
-            return 'ORO1800';
+            $time = '18:00';
         }
         
         $timeCode = str_replace(':', '', $time);
