@@ -229,6 +229,8 @@ class LotteryResultProcessor
                         Log::info("LotteryResultProcessor - Redoblona descartada: El número principal {$apu->number} NO salió en posición {$apu->position}. No se puede pagar redoblona.");
                         // No calcular redoblona si el principal no ganó
                     } else {
+                        // ✅ IMPORTANTE: Cuando hay redoblona, NO se paga premio principal, solo redoblona
+                        $aciertValue = 0; // Resetear premio principal porque se paga TODO como redoblona
                         // ✅ CORREGIDO: Obtener rango de posiciones para redoblona (2-5, 2-10, 2-20)
                         $redoblonaRange = $this->getRedoblonaPositionRange($apu->positionR);
                         
