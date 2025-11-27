@@ -360,6 +360,16 @@ class QuinielasManager extends Component
 
             // Recargar horarios y limpiar estado de edición
             $this->loadCitySchedules();
+            
+            // Actualizar la selección si el horario anterior estaba seleccionado
+            if (isset($this->selectedCitySchedules[$cityName])) {
+                $key = array_search($oldTime, $this->selectedCitySchedules[$cityName]);
+                if ($key !== false) {
+                    $this->selectedCitySchedules[$cityName][$key] = $newTime;
+                    sort($this->selectedCitySchedules[$cityName]);
+                }
+            }
+            
             $this->editingSchedule = null;
             $this->newTimeValue = '';
             
@@ -542,6 +552,22 @@ class QuinielasManager extends Component
             // Recargar horarios después de limpiar el estado
             $this->loadCitySchedules();
             
+            // Si la ciudad está en las loterías por defecto, agregar el nuevo horario a la selección
+            $defaultSelectedLotteries = [
+                'CIUDAD', 'CHACO', 'PROVINCIA', 'MENDOZA', 'CORRIENTES', 
+                'SANTA FE', 'CORDOBA', 'ENTRE RIOS', 'MONTEVIDEO'
+            ];
+            
+            if (in_array($savedCityName, $defaultSelectedLotteries)) {
+                if (!isset($this->selectedCitySchedules[$savedCityName])) {
+                    $this->selectedCitySchedules[$savedCityName] = [];
+                }
+                if (!in_array($savedTime, $this->selectedCitySchedules[$savedCityName])) {
+                    $this->selectedCitySchedules[$savedCityName][] = $savedTime;
+                    sort($this->selectedCitySchedules[$savedCityName]);
+                }
+            }
+            
             $message = $action === 'actualizado' 
                 ? "Horario {$savedTime} actualizado correctamente para {$savedCityName} ({$savedState})"
                 : "Horario {$savedTime} agregado correctamente para {$savedCityName} ({$savedState})";
@@ -645,6 +671,15 @@ class QuinielasManager extends Component
 
                 // Recargar horarios
                 $this->loadCitySchedules();
+                
+                // Remover el horario eliminado de la selección si estaba seleccionado
+                if (isset($this->selectedCitySchedules[$cityName])) {
+                    $key = array_search($time, $this->selectedCitySchedules[$cityName]);
+                    if ($key !== false) {
+                        unset($this->selectedCitySchedules[$cityName][$key]);
+                        $this->selectedCitySchedules[$cityName] = array_values($this->selectedCitySchedules[$cityName]);
+                    }
+                }
                 
                 $this->dispatch('notify', message: "Horario {$time} eliminado correctamente para {$cityName}", type: 'success');
             } else {
