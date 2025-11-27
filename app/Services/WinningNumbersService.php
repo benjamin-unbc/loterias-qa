@@ -275,10 +275,78 @@ class WinningNumbersService
         $mapping = $turnTableMapping[$city] ?? $turnTableMapping['default'];
         $tableIndex = $mapping[$turn] ?? null;
         
+        // Para Montevideo, si la tabla indicada no tiene números, buscar en todas las tablas
+        $table = null;
+        $tableHasNumbers = false;
+        
         if ($tableIndex !== null && isset($tables[$tableIndex])) {
             $table = $tables[$tableIndex];
             $this->log("Usando tabla #$tableIndex para turno: $turn en ciudad: $city");
             
+            // Verificar si esta tabla tiene números válidos
+            if (strtoupper($city) === 'MONTEVIDEO' && $turn === 'Matutina') {
+                $testCells = $xpath->query('.//td', $table);
+                $numberCount = 0;
+                for ($j = 0; $j < $testCells->length; $j++) {
+                    $cell = $testCells->item($j);
+                    if ($cell) {
+                        $text = trim($cell->textContent);
+                        if (preg_match('/^\d{4,5}$/', $text) && $text !== '----') {
+                            $numberCount++;
+                        }
+                    }
+                }
+                $tableHasNumbers = ($numberCount >= 20);
+            } else {
+                $tableHasNumbers = true; // Para otras ciudades, asumir que la tabla es correcta
+            }
+        }
+        
+        // Si la tabla esperada no tiene números (Montevideo Matutina), buscar en todas las tablas
+        if (strtoupper($city) === 'MONTEVIDEO' && $turn === 'Matutina' && !$tableHasNumbers) {
+            for ($i = 0; $i < $tables->length; $i++) {
+                $testTable = $tables[$i];
+                $testCells = $xpath->query('.//td', $testTable);
+                $numberCount = 0;
+                for ($j = 0; $j < $testCells->length; $j++) {
+                    $cell = $testCells->item($j);
+                    if ($cell) {
+                        $text = trim($cell->textContent);
+                        if (preg_match('/^\d{4,5}$/', $text) && $text !== '----') {
+                            $numberCount++;
+                        }
+                    }
+                }
+                if ($numberCount >= 20) {
+                    $table = $testTable;
+                    $tableIndex = $i;
+                    break;
+                }
+            }
+        } elseif (strtoupper($city) === 'MONTEVIDEO' && $turn === 'Matutina' && $tableIndex === null) {
+            // Si no encontramos la tabla esperada, buscar en todas las tablas que puedan contener números
+            for ($i = 0; $i < $tables->length; $i++) {
+                $testTable = $tables[$i];
+                $testCells = $xpath->query('.//td', $testTable);
+                $numberCount = 0;
+                for ($j = 0; $j < $testCells->length; $j++) {
+                    $cell = $testCells->item($j);
+                    if ($cell) {
+                        $text = trim($cell->textContent);
+                        if (preg_match('/^\d{4,5}$/', $text) && $text !== '----') {
+                            $numberCount++;
+                        }
+                    }
+                }
+                if ($numberCount >= 20) {
+                    $table = $testTable;
+                    $tableIndex = $i;
+                    break;
+                }
+            }
+        }
+        
+        if ($table) {
             // Extraer números de las celdas de la tabla en el orden correcto
             $cells = $xpath->query('.//td', $table);
             $this->log("Tabla #$tableIndex tiene " . $cells->length . " celdas");
@@ -286,23 +354,84 @@ class WinningNumbersService
             // Crear array para almacenar números por posición
             $positionedNumbers = [];
             
-            for ($i = 0; $i < $cells->length; $i += 2) {
-                $positionCell = $cells->item($i);
-                $numberCell = $cells->item($i + 1);
-                
-                if ($positionCell && $numberCell) {
-                    $position = trim($positionCell->textContent);
-                    $number = trim($numberCell->textContent);
-                    
-                    // Verificar que la posición sea un número y el valor sea un número de 4 o 5 dígitos
-                    // Si tiene 5 dígitos, tomar los últimos 4
-                    if (preg_match('/^\d+\.?$/', $position) && preg_match('/^\d{4,5}$/', $number) && $number !== '----') {
-                        // Si tiene 5 dígitos, tomar los últimos 4
-                        if (strlen($number) === 5) {
-                            $number = substr($number, -4);
+            // Para Montevideo, la estructura puede ser diferente, intentar múltiples estrategias
+            if (strtoupper($city) === 'MONTEVIDEO') {
+                // Estrategia 1: Buscar todos los números de 4-5 dígitos en las celdas (ignorar celdas con "----")
+                $allNumbers = [];
+                $emptyCells = 0;
+                for ($i = 0; $i < $cells->length; $i++) {
+                    $cell = $cells->item($i);
+                    if ($cell) {
+                        $text = trim($cell->textContent);
+                        // Contar celdas vacías
+                        if ($text === '----' || $text === '' || $text === '-') {
+                            $emptyCells++;
+                            continue;
                         }
-                        $positionNumber = intval($position);
-                        $positionedNumbers[$positionNumber] = $number;
+                        // Buscar números de 4-5 dígitos
+                        if (preg_match('/^\d{4,5}$/', $text)) {
+                            $number = strlen($text) === 5 ? substr($text, -4) : $text;
+                            $allNumbers[] = $number;
+                        }
+                    }
+                }
+                
+                // Si todas las celdas están vacías, los números aún no están publicados
+                if ($emptyCells === $cells->length && count($allNumbers) === 0) {
+                    return [];
+                }
+                
+                // Si encontramos 20 números, usarlos directamente
+                if (count($allNumbers) >= 20) {
+                    $numbers = array_slice($allNumbers, 0, 20);
+                    $this->log("Números extraídos para $turn (Montevideo): " . count($numbers) . " números");
+                    if (!empty($numbers)) {
+                        $this->log("Primeros 5 números: " . implode(', ', array_slice($numbers, 0, 5)));
+                    }
+                    return $numbers;
+                }
+                
+                // Estrategia 2: Intentar con pares posición-número
+                for ($i = 0; $i < $cells->length; $i += 2) {
+                    $positionCell = $cells->item($i);
+                    $numberCell = $cells->item($i + 1);
+                    
+                    if ($positionCell && $numberCell) {
+                        $position = trim($positionCell->textContent);
+                        $number = trim($numberCell->textContent);
+                        
+                        // Verificar que la posición sea un número y el valor sea un número de 4 o 5 dígitos
+                        // Si tiene 5 dígitos, tomar los últimos 4
+                        if (preg_match('/^\d+\.?$/', $position) && preg_match('/^\d{4,5}$/', $number) && $number !== '----') {
+                            // Si tiene 5 dígitos, tomar los últimos 4
+                            if (strlen($number) === 5) {
+                                $number = substr($number, -4);
+                            }
+                            $positionNumber = intval($position);
+                            $positionedNumbers[$positionNumber] = $number;
+                        }
+                    }
+                }
+            } else {
+                // Para otras ciudades, usar el método estándar
+                for ($i = 0; $i < $cells->length; $i += 2) {
+                    $positionCell = $cells->item($i);
+                    $numberCell = $cells->item($i + 1);
+                    
+                    if ($positionCell && $numberCell) {
+                        $position = trim($positionCell->textContent);
+                        $number = trim($numberCell->textContent);
+                        
+                        // Verificar que la posición sea un número y el valor sea un número de 4 o 5 dígitos
+                        // Si tiene 5 dígitos, tomar los últimos 4
+                        if (preg_match('/^\d+\.?$/', $position) && preg_match('/^\d{4,5}$/', $number) && $number !== '----') {
+                            // Si tiene 5 dígitos, tomar los últimos 4
+                            if (strlen($number) === 5) {
+                                $number = substr($number, -4);
+                            }
+                            $positionNumber = intval($position);
+                            $positionedNumbers[$positionNumber] = $number;
+                        }
                     }
                 }
             }
@@ -315,9 +444,13 @@ class WinningNumbersService
             if (!empty($numbers)) {
                 $this->log("Primeros 5 números: " . implode(', ', array_slice($numbers, 0, 5)));
             }
-        } else {
-            $this->log("No se encontró tabla para turno: $turn en ciudad: $city");
-        }
+            } else {
+                if ($table) {
+                    $this->log("No se encontraron números válidos en la tabla #$tableIndex para turno: $turn en ciudad: $city");
+                } else {
+                    $this->log("No se encontró tabla para turno: $turn en ciudad: $city (índice esperado: " . ($tableIndex ?? 'null') . ")");
+                }
+            }
         
         return $numbers;
     }

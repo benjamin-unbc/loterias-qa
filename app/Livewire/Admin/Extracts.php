@@ -840,7 +840,7 @@ class Extracts extends Component
             $city = City::where('code', $cityCode)->first();
             
             if (!$city) {
-                Log::warning("Extracts - No se encontró ciudad en BD: {$cityCode}");
+                Log::warning("Extracts - No se encontró ciudad en BD: {$cityCode} para {$cityName} - {$turnName}");
                 return ['inserted' => 0, 'updated' => 0];
             }
             
@@ -1198,8 +1198,8 @@ class Extracts extends Component
         // Mapeo específico para Montevideo (estructura diferente)
         if ($cityName && (stripos($cityName, 'Montevideo') !== false)) {
             $montevideoMapping = [
-                4 => 4, // Tabla 4 = VESPERTINA (datos de Matutina van a Vespertina)
-                8 => 5, // Tabla 8 = NOCTURNA (datos de Nocturna van a Nocturna)
+                2 => 3, // Tabla 2 = MATUTINA (datos de Matutina van a Matutina, extract_id 3)
+                8 => 5, // Tabla 8 = NOCTURNA (datos de Nocturna van a Nocturna, extract_id 5)
             ];
             return $montevideoMapping[$tableIndex] ?? null;
         }
