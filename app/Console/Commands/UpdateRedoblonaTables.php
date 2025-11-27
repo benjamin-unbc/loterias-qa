@@ -12,7 +12,10 @@ class UpdateRedoblonaTables extends Command
 
     public function handle()
     {
-        $this->info('Actualizando valores de bet_collection_redoblona...');
+        $this->info('Limpiando y actualizando valores de bet_collection_redoblona...');
+        
+        // ✅ ELIMINAR TODOS los registros primero para evitar duplicados
+        DB::table('bet_collection_redoblona')->truncate();
         
         // ✅ VALORES CORRECTOS para bet_collection_redoblona (A los 1 todo a los 5/10/20)
         $redoblonaValues = [
@@ -24,43 +27,24 @@ class UpdateRedoblonaTables extends Command
             ['bet_amount' => 1.00, 'payout_1_to_5' => 1280.00, 'payout_1_to_10' => 640.00, 'payout_1_to_20' => 336.84],
         ];
         
+        // Insertar los valores correctos
         foreach ($redoblonaValues as $values) {
-            DB::table('bet_collection_redoblona')
-                ->updateOrInsert(
-                    ['bet_amount' => $values['bet_amount']],
-                    [
-                        'payout_1_to_5' => $values['payout_1_to_5'],
-                        'payout_1_to_10' => $values['payout_1_to_10'],
-                        'payout_1_to_20' => $values['payout_1_to_20'],
-                        'updated_at' => now(),
-                    ]
-                );
+            DB::table('bet_collection_redoblona')->insert([
+                'bet_amount' => $values['bet_amount'],
+                'payout_1_to_5' => $values['payout_1_to_5'],
+                'payout_1_to_10' => $values['payout_1_to_10'],
+                'payout_1_to_20' => $values['payout_1_to_20'],
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
         }
         
-        // Eliminar duplicados si existen (mantener solo el primero)
-        $duplicates = DB::table('bet_collection_redoblona')
-            ->select('bet_amount', DB::raw('COUNT(*) as count'))
-            ->groupBy('bet_amount')
-            ->having('count', '>', 1)
-            ->get();
+        $this->info('✅ bet_collection_redoblona actualizada correctamente');
         
-        foreach ($duplicates as $dup) {
-            $ids = DB::table('bet_collection_redoblona')
-                ->where('bet_amount', $dup->bet_amount)
-                ->orderBy('id')
-                ->pluck('id')
-                ->toArray();
-            
-            // Mantener el primero, eliminar los demás
-            if (count($ids) > 1) {
-                DB::table('bet_collection_redoblona')
-                    ->whereIn('id', array_slice($ids, 1))
-                    ->delete();
-                $this->info("Eliminados duplicados para bet_amount {$dup->bet_amount}");
-            }
-        }
+        $this->info('Limpiando y actualizando valores de bet_collection_5_20...');
         
-        $this->info('Actualizando valores de bet_collection_5_20...');
+        // ✅ ELIMINAR TODOS los registros primero para evitar duplicados
+        DB::table('bet_collection_5_20')->truncate();
         
         // ✅ VALORES CORRECTOS para bet_collection_5_20 (A los 5 todo a los 5/10/20)
         $bet520Values = [
@@ -72,42 +56,24 @@ class UpdateRedoblonaTables extends Command
             ['bet_amount' => 1.00, 'payout_5_to_5' => 256.00, 'payout_5_to_10' => 128.00, 'payout_5_to_20' => 64.00],
         ];
         
+        // Insertar los valores correctos
         foreach ($bet520Values as $values) {
-            DB::table('bet_collection_5_20')
-                ->updateOrInsert(
-                    ['bet_amount' => $values['bet_amount']],
-                    [
-                        'payout_5_to_5' => $values['payout_5_to_5'],
-                        'payout_5_to_10' => $values['payout_5_to_10'],
-                        'payout_5_to_20' => $values['payout_5_to_20'],
-                        'updated_at' => now(),
-                    ]
-                );
+            DB::table('bet_collection_5_20')->insert([
+                'bet_amount' => $values['bet_amount'],
+                'payout_5_to_5' => $values['payout_5_to_5'],
+                'payout_5_to_10' => $values['payout_5_to_10'],
+                'payout_5_to_20' => $values['payout_5_to_20'],
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
         }
         
-        // Eliminar duplicados
-        $duplicates = DB::table('bet_collection_5_20')
-            ->select('bet_amount', DB::raw('COUNT(*) as count'))
-            ->groupBy('bet_amount')
-            ->having('count', '>', 1)
-            ->get();
+        $this->info('✅ bet_collection_5_20 actualizada correctamente');
         
-        foreach ($duplicates as $dup) {
-            $ids = DB::table('bet_collection_5_20')
-                ->where('bet_amount', $dup->bet_amount)
-                ->orderBy('id')
-                ->pluck('id')
-                ->toArray();
-            
-            if (count($ids) > 1) {
-                DB::table('bet_collection_5_20')
-                    ->whereIn('id', array_slice($ids, 1))
-                    ->delete();
-                $this->info("Eliminados duplicados para bet_amount {$dup->bet_amount}");
-            }
-        }
+        $this->info('Limpiando y actualizando valores de bet_collection_10_20...');
         
-        $this->info('Actualizando valores de bet_collection_10_20...');
+        // ✅ ELIMINAR TODOS los registros primero para evitar duplicados
+        DB::table('bet_collection_10_20')->truncate();
         
         // ✅ VALORES CORRECTOS para bet_collection_10_20 (A los 10/20 todo a los 10/20)
         $bet1020Values = [
@@ -119,42 +85,20 @@ class UpdateRedoblonaTables extends Command
             ['bet_amount' => 1.00, 'payout_10_to_10' => 64.00, 'payout_10_to_20' => 32.00, 'payout_20_to_20' => 16.00],
         ];
         
+        // Insertar los valores correctos
         foreach ($bet1020Values as $values) {
-            DB::table('bet_collection_10_20')
-                ->updateOrInsert(
-                    ['bet_amount' => $values['bet_amount']],
-                    [
-                        'payout_10_to_10' => $values['payout_10_to_10'],
-                        'payout_10_to_20' => $values['payout_10_to_20'],
-                        'payout_20_to_20' => $values['payout_20_to_20'],
-                        'updated_at' => now(),
-                    ]
-                );
+            DB::table('bet_collection_10_20')->insert([
+                'bet_amount' => $values['bet_amount'],
+                'payout_10_to_10' => $values['payout_10_to_10'],
+                'payout_10_to_20' => $values['payout_10_to_20'],
+                'payout_20_to_20' => $values['payout_20_to_20'],
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
         }
         
-        // Eliminar duplicados
-        $duplicates = DB::table('bet_collection_10_20')
-            ->select('bet_amount', DB::raw('COUNT(*) as count'))
-            ->groupBy('bet_amount')
-            ->having('count', '>', 1)
-            ->get();
-        
-        foreach ($duplicates as $dup) {
-            $ids = DB::table('bet_collection_10_20')
-                ->where('bet_amount', $dup->bet_amount)
-                ->orderBy('id')
-                ->pluck('id')
-                ->toArray();
-            
-            if (count($ids) > 1) {
-                DB::table('bet_collection_10_20')
-                    ->whereIn('id', array_slice($ids, 1))
-                    ->delete();
-                $this->info("Eliminados duplicados para bet_amount {$dup->bet_amount}");
-            }
-        }
-        
-        $this->info('✅ Tablas de redoblona actualizadas correctamente');
+        $this->info('✅ bet_collection_10_20 actualizada correctamente');
+        $this->info('✅ Todas las tablas de redoblona actualizadas correctamente sin duplicados');
         
         return 0;
     }
