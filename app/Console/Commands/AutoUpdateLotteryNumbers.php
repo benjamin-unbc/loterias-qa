@@ -426,7 +426,7 @@ class AutoUpdateLotteryNumbers extends Command
             foreach ($availableCities as $cityName) {
                 // Mapeo especial para Montevideo
                 if ($cityName === 'Montevideo') {
-                    $turnMapping['Matutina'] = 4; // Matutina de Montevideo va a Vespertina (extract_id 4)
+                    $turnMapping['Matutina'] = 3; // Matutina de Montevideo va a Matutina (extract_id 3)
                 }
                 $cityCode = $cityMapping[$cityName] ?? null;
                 if (!$cityCode) continue;
@@ -508,8 +508,9 @@ class AutoUpdateLotteryNumbers extends Command
                 return;
             }
             
-            // Buscar jugadas que coincidan con esta lotería
+            // Buscar jugadas que coincidan con esta lotería (excluyendo anuladas)
             $matchingPlays = \App\Models\PlaysSentModel::whereDate('created_at', $date)
+                                                      ->where('status', '!=', 'I') // Excluir jugadas anuladas
                                                       ->whereRaw('FIND_IN_SET(?, lot)', [$lotteryCode])
                                                       ->get();
             

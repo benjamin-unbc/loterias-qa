@@ -214,9 +214,12 @@ class AutoPaymentSystem extends Command
             return ['resultsInserted' => 0, 'totalPrize' => 0];
         }
 
-        // Buscar jugadas que puedan ser ganadoras con esta lotería completa
+        // Buscar jugadas que puedan ser ganadoras con esta lotería completa (excluyendo anuladas)
         $plays = ApusModel::whereDate('created_at', $date)
             ->where('lottery', 'LIKE', "%{$lotteryCode}%")
+            ->whereHas('playsSent', function($query) {
+                $query->where('status', '!=', 'I'); // Excluir jugadas anuladas
+            })
             ->get();
 
         if ($plays->isEmpty()) {

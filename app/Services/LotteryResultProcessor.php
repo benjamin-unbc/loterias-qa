@@ -108,6 +108,7 @@ class LotteryResultProcessor
         Log::info("LotteryResultProcessor - Números ganadores agrupados (solo loterías completas):", $groupedWinningNumbers);
 
         $playsSents = PlaysSentModel::whereDate('date', Carbon::parse($dateToCalculate))
+            ->where('status', '!=', 'I') // Excluir jugadas anuladas
             ->with('apus')
             ->get();
 

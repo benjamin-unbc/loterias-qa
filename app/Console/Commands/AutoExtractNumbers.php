@@ -213,7 +213,7 @@ class AutoExtractNumbers extends Command
             
             // Mapeo especial para Montevideo
             if ($cityName === 'Montevideo') {
-                $turnMapping['Matutina'] = 4; // Matutina de Montevideo va a Vespertina (extract_id 4)
+                $turnMapping['Matutina'] = 3; // Matutina de Montevideo va a Matutina (extract_id 3)
             }
             
             $cityCode = $cityMapping[$cityName] ?? null;
@@ -343,9 +343,12 @@ class AutoExtractNumbers extends Command
                 return;
             }
             
-            // Buscar jugadas que coincidan con esta lotería
+            // Buscar jugadas que coincidan con esta lotería (excluyendo anuladas)
             $matchingPlays = \App\Models\ApusModel::whereDate('created_at', $date)
                                                  ->whereRaw('FIND_IN_SET(?, lottery)', [$lotteryCode])
+                                                 ->whereHas('playsSent', function($query) {
+                                                     $query->where('status', '!=', 'I'); // Excluir jugadas anuladas
+                                                 })
                                                  ->get();
             
             Log::info("AutoExtractNumbers - Encontradas " . $matchingPlays->count() . " jugadas para lotería {$lotteryCode}");
@@ -641,9 +644,12 @@ class AutoExtractNumbers extends Command
                 return ['resultsInserted' => 0, 'totalPrize' => 0];
             }
 
-            // Buscar jugadas que puedan ser ganadoras con esta lotería completa
+            // Buscar jugadas que puedan ser ganadoras con esta lotería completa (excluyendo anuladas)
             $plays = \App\Models\ApusModel::whereDate('created_at', $date)
                 ->whereRaw('FIND_IN_SET(?, lottery)', [$lotteryCode])
+                ->whereHas('playsSent', function($query) {
+                    $query->where('status', '!=', 'I'); // Excluir jugadas anuladas
+                })
                 ->get();
 
             if ($plays->isEmpty()) {

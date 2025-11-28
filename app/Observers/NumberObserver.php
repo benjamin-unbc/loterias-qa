@@ -411,11 +411,15 @@ class NumberObserver
 
     /**
      * ✅ NUEVO: Obtiene las jugadas que pueden ser ganadoras para una lotería específica
+     * ✅ MODIFICADO: Excluye jugadas anuladas (status 'I' en PlaysSentModel)
      */
     private function getMatchingPlaysForLottery($lotteryCode, $date)
     {
         return ApusModel::whereDate('created_at', $date)
             ->whereRaw('FIND_IN_SET(?, lottery)', [$lotteryCode])
+            ->whereHas('playsSent', function($query) {
+                $query->where('status', '!=', 'I'); // Excluir jugadas anuladas
+            })
             ->get();
     }
 

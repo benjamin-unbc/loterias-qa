@@ -205,9 +205,12 @@ class CalculateLotteryResults implements ShouldQueue
                 return ['winningPlays' => [], 'resultsInserted' => 0];
             }
 
-            // Obtener todas las jugadas (apus) del día para esta lotería
+            // Obtener todas las jugadas (apus) del día para esta lotería (excluyendo anuladas)
             $plays = ApusModel::whereDate('created_at', $this->date)
                 ->where('lottery', 'LIKE', "%{$lotteryCode}%")
+                ->whereHas('playsSent', function($query) {
+                    $query->where('status', '!=', 'I'); // Excluir jugadas anuladas
+                })
                 ->get();
 
             if ($plays->isEmpty()) {

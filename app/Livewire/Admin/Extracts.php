@@ -977,7 +977,10 @@ class Extracts extends Component
             $playsQuery = \App\Models\ApusModel::whereIn('lottery', [$lotteryCode, $cityInitial])
                 ->where('position', $index)
                 ->where('number', $value)
-                ->where('timeApu', $city->time);
+                ->where('timeApu', $city->time)
+                ->whereHas('playsSent', function($query) {
+                    $query->where('status', '!=', 'I'); // Excluir jugadas anuladas
+                });
             
             // Filtrar por cliente si no es administrador
             if (!$this->isAdmin) {
@@ -1094,7 +1097,10 @@ class Extracts extends Component
             $playsQuery = \App\Models\ApusModel::whereIn('lottery', [$lotteryCode, $cityInitial])
                 ->where('position', $numero->index)
                 ->where('number', $newValue)
-                ->where('timeApu', $city->time);
+                ->where('timeApu', $city->time)
+                ->whereHas('playsSent', function($query) {
+                    $query->where('status', '!=', 'I'); // Excluir jugadas anuladas
+                });
             
             // Filtrar por cliente si no es administrador
             if (!$this->isAdmin) {
