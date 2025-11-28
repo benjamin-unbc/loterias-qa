@@ -6,6 +6,7 @@ use App\Models\PlaysSentModel;
 use App\Models\ApusModel;
 use App\Models\Ticket;
 use App\Models\City;
+use App\Models\Result;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -350,12 +351,24 @@ private function processApusData($rawApus)
             return;
         }
 
+        // Eliminar todos los resultados (aciertos) asociados al ticket
+        $deletedResults = Result::where('ticket', $ticket)
+            ->where('user_id', Auth::user()->id)
+            ->delete();
+
+        // Actualizar el status de la jugada a inactiva
         PlaysSentModel::where('ticket', $ticket)
             ->where('user_id', Auth::user()->id)
             ->update(['status' => 'I']);
 
         $this->showConfirmationModal = false;
-        $this->dispatch('notify', message: 'Jugada deshabilitada correctamente.', type: 'success');
+        
+        $message = 'Jugada deshabilitada correctamente.';
+        if ($deletedResults > 0) {
+            $message .= " Se eliminaron {$deletedResults} resultado(s) de aciertos.";
+        }
+        
+        $this->dispatch('notify', message: $message, type: 'success');
     }
 
     public function confirmDisablePlay($ticket)
