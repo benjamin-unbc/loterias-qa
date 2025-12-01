@@ -23,6 +23,7 @@ class Result extends Model
      */
     protected $fillable = [
         'user_id',
+        'apu_id',
         'ticket',
         'lottery',
         'number',

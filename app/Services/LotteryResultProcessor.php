@@ -409,6 +409,7 @@ class LotteryResultProcessor
                         'date'        => $dateToCalculate,
                         'time'        => $apu->timeApu,
                         'user_id'     => $apu->user_id,
+                        'apu_id'      => $apu->id, // ✅ NUEVO: Incluir apu_id para permitir múltiples resultados del mismo número
                         'numero_g'    => $winningNumberAtPosition ?? null, // ✅ Número ganador real
                         'posicion_g'  => $actualWinningPosition ?? null, // ✅ Posición donde realmente salió
                         'num_g_r'     => $numGR, // ✅ Número real donde salió la redoblona (si se encontró)

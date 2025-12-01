@@ -23,8 +23,8 @@ class ResultManager
         }
 
         try {
-            // ✅ CORREGIDO: Verificar si ya existe un resultado idéntico incluyendo numR y posR
-            // Esto permite que apuestas con diferentes redoblonas se inserten como resultados separados
+            // ✅ CORREGIDO: Verificar si ya existe un resultado idéntico incluyendo numR, posR y apu_id
+            // Esto permite que apuestas con diferentes redoblonas o diferentes APUs se inserten como resultados separados
             $query = Result::where('ticket', $resultData['ticket'])
                 ->where('lottery', $resultData['lottery'])
                 ->where('number', $resultData['number'])
@@ -44,16 +44,24 @@ class ResultManager
                 $query->whereNull('posR');
             }
             
+            // ✅ NUEVO: Incluir apu_id en la verificación de duplicados
+            // Esto permite múltiples resultados del mismo número cuando provienen de diferentes APUs
+            if (isset($resultData['apu_id']) && $resultData['apu_id'] !== null) {
+                $query->where('apu_id', $resultData['apu_id']);
+            } else {
+                $query->whereNull('apu_id');
+            }
+            
             $existingResult = $query->first();
 
             if ($existingResult) {
-                Log::info("ResultManager - Resultado duplicado evitado: Ticket {$resultData['ticket']} - Lotería {$resultData['lottery']} - Número {$resultData['number']} - Posición {$resultData['position']} - NumR: " . ($resultData['numR'] ?? 'null') . " - PosR: " . ($resultData['posR'] ?? 'null'));
+                Log::info("ResultManager - Resultado duplicado evitado: Ticket {$resultData['ticket']} - Lotería {$resultData['lottery']} - Número {$resultData['number']} - Posición {$resultData['position']} - NumR: " . ($resultData['numR'] ?? 'null') . " - PosR: " . ($resultData['posR'] ?? 'null') . " - APU ID: " . ($resultData['apu_id'] ?? 'null'));
                 return null;
             }
 
             // Usar transacción para evitar condiciones de carrera
             return DB::transaction(function () use ($resultData) {
-                // ✅ CORREGIDO: Verificar nuevamente dentro de la transacción incluyendo numR y posR
+                // ✅ CORREGIDO: Verificar nuevamente dentro de la transacción incluyendo numR, posR y apu_id
                 $query = Result::where('ticket', $resultData['ticket'])
                     ->where('lottery', $resultData['lottery'])
                     ->where('number', $resultData['number'])
@@ -71,6 +79,13 @@ class ResultManager
                     $query->where('posR', $resultData['posR']);
                 } else {
                     $query->whereNull('posR');
+                }
+                
+                // ✅ NUEVO: Incluir apu_id en la verificación de duplicados
+                if (isset($resultData['apu_id']) && $resultData['apu_id'] !== null) {
+                    $query->where('apu_id', $resultData['apu_id']);
+                } else {
+                    $query->whereNull('apu_id');
                 }
                 
                 $existingResult = $query->lockForUpdate()->first();
