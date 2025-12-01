@@ -25,6 +25,8 @@ class ResultManager
         try {
             // ✅ CORREGIDO: Verificar si ya existe un resultado idéntico incluyendo numR, posR y apu_id
             // Esto permite que apuestas con diferentes redoblonas o diferentes APUs se inserten como resultados separados
+            
+            // Primera verificación: buscar resultado exacto con mismo apu_id
             $query = Result::where('ticket', $resultData['ticket'])
                 ->where('lottery', $resultData['lottery'])
                 ->where('number', $resultData['number'])
@@ -53,6 +55,40 @@ class ResultManager
             }
             
             $existingResult = $query->first();
+
+            // ✅ MEJORADO: Si estamos insertando con apu_id, también verificar si existe un resultado sin apu_id
+            // que debería ser actualizado en lugar de crear un duplicado
+            if (!$existingResult && isset($resultData['apu_id']) && $resultData['apu_id'] !== null) {
+                $queryWithoutApuId = Result::where('ticket', $resultData['ticket'])
+                    ->where('lottery', $resultData['lottery'])
+                    ->where('number', $resultData['number'])
+                    ->where('position', $resultData['position'])
+                    ->where('date', $resultData['date'])
+                    ->whereNull('apu_id');
+                
+                // Incluir numR y posR
+                if (isset($resultData['numR']) && $resultData['numR'] !== null) {
+                    $queryWithoutApuId->where('numR', $resultData['numR']);
+                } else {
+                    $queryWithoutApuId->whereNull('numR');
+                }
+                
+                if (isset($resultData['posR']) && $resultData['posR'] !== null) {
+                    $queryWithoutApuId->where('posR', $resultData['posR']);
+                } else {
+                    $queryWithoutApuId->whereNull('posR');
+                }
+                
+                $existingResultWithoutApuId = $queryWithoutApuId->first();
+                
+                if ($existingResultWithoutApuId) {
+                    // Actualizar el resultado existente con el apu_id en lugar de crear un duplicado
+                    $existingResultWithoutApuId->apu_id = $resultData['apu_id'];
+                    $existingResultWithoutApuId->save();
+                    Log::info("ResultManager - Resultado existente actualizado con apu_id: ID {$existingResultWithoutApuId->id} - Ticket {$resultData['ticket']} - APU ID: {$resultData['apu_id']}");
+                    return $existingResultWithoutApuId;
+                }
+            }
 
             if ($existingResult) {
                 Log::info("ResultManager - Resultado duplicado evitado: Ticket {$resultData['ticket']} - Lotería {$resultData['lottery']} - Número {$resultData['number']} - Posición {$resultData['position']} - NumR: " . ($resultData['numR'] ?? 'null') . " - PosR: " . ($resultData['posR'] ?? 'null') . " - APU ID: " . ($resultData['apu_id'] ?? 'null'));
@@ -89,6 +125,40 @@ class ResultManager
                 }
                 
                 $existingResult = $query->lockForUpdate()->first();
+
+                // ✅ MEJORADO: Si estamos insertando con apu_id, también verificar si existe un resultado sin apu_id
+                if (!$existingResult && isset($resultData['apu_id']) && $resultData['apu_id'] !== null) {
+                    $queryWithoutApuId = Result::where('ticket', $resultData['ticket'])
+                        ->where('lottery', $resultData['lottery'])
+                        ->where('number', $resultData['number'])
+                        ->where('position', $resultData['position'])
+                        ->where('date', $resultData['date'])
+                        ->whereNull('apu_id')
+                        ->lockForUpdate();
+                    
+                    // Incluir numR y posR
+                    if (isset($resultData['numR']) && $resultData['numR'] !== null) {
+                        $queryWithoutApuId->where('numR', $resultData['numR']);
+                    } else {
+                        $queryWithoutApuId->whereNull('numR');
+                    }
+                    
+                    if (isset($resultData['posR']) && $resultData['posR'] !== null) {
+                        $queryWithoutApuId->where('posR', $resultData['posR']);
+                    } else {
+                        $queryWithoutApuId->whereNull('posR');
+                    }
+                    
+                    $existingResultWithoutApuId = $queryWithoutApuId->first();
+                    
+                    if ($existingResultWithoutApuId) {
+                        // Actualizar el resultado existente con el apu_id en lugar de crear un duplicado
+                        $existingResultWithoutApuId->apu_id = $resultData['apu_id'];
+                        $existingResultWithoutApuId->save();
+                        Log::info("ResultManager - Resultado existente actualizado con apu_id en transacción: ID {$existingResultWithoutApuId->id} - Ticket {$resultData['ticket']} - APU ID: {$resultData['apu_id']}");
+                        return $existingResultWithoutApuId;
+                    }
+                }
 
                 if ($existingResult) {
                     Log::info("ResultManager - Resultado duplicado evitado en transacción: Ticket {$resultData['ticket']}");
