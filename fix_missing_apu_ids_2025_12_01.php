@@ -46,28 +46,26 @@ foreach ($resultsWithoutApuId as $result) {
     // Buscar el APU correspondiente
     // Necesitamos buscar en la tabla apus basándonos en ticket, lottery, number, position, numR, posR, user_id
     $apuQuery = DB::table('apus')
-        ->where('ticket', $result->ticket)
-        ->where('lottery', $result->lottery)
-        ->where('number', $result->number)
-        ->where('position', $result->position)
-        ->where('user_id', $result->user_id);
+        ->join('plays_sent', 'apus.ticket', '=', 'plays_sent.ticket')
+        ->where('apus.ticket', $result->ticket)
+        ->where('apus.lottery', $result->lottery)
+        ->where('apus.number', $result->number)
+        ->where('apus.position', $result->position)
+        ->where('apus.user_id', $result->user_id)
+        ->whereDate('plays_sent.date', $date);
     
     // Incluir numR y posR si existen
     if ($result->numR !== null) {
-        $apuQuery->where('numberR', $result->numR);
+        $apuQuery->where('apus.numberR', $result->numR);
     } else {
-        $apuQuery->whereNull('numberR');
+        $apuQuery->whereNull('apus.numberR');
     }
     
     if ($result->posR !== null) {
-        $apuQuery->where('positionR', $result->posR);
+        $apuQuery->where('apus.positionR', $result->posR);
     } else {
-        $apuQuery->whereNull('positionR');
+        $apuQuery->whereNull('apus.positionR');
     }
-    
-    // Buscar también por fecha del plays_sent
-    $apuQuery->join('plays_sent', 'apus.ticket', '=', 'plays_sent.ticket')
-        ->whereDate('plays_sent.date', $date);
     
     $apus = $apuQuery->select('apus.*')->get();
     
