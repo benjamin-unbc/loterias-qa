@@ -124,6 +124,7 @@ class LotteryResultProcessor
                 $aciertValue = 0;
                 $aciertValueR = 0; // For redoblona
                 $redoblonaWinningCount = 0; // ✅ CORREGIDO: Inicializar contador de veces que salió la redoblona
+                $winningCount = 0; // ✅ CORREGIDO: Inicializar contador de veces que salió el número principal
 
                 $playedNumberClean = $this->removeAsterisks($apu->number);
                 $lotterySystemCode = $this->getSystemLotteryCode($apu->lottery); // Map UI code to system code
@@ -169,8 +170,10 @@ class LotteryResultProcessor
                     $numDigitsPlayed = strlen($playedNumberClean);
                     $actualWinningPosition = null;
                     $winningNumberAtPosition = null;
+                    $winningCount = 0; // ✅ CORREGIDO: Contador de veces que sale el número principal
+                    $winningPositions = []; // ✅ Para logging
                     
-                    // Buscar el número en todas las posiciones del rango
+                    // ✅ CORREGIDO: Contar TODAS las veces que sale el número en el rango válido
                     foreach ($searchPositions as $pos) {
                         if (!isset($winningNumbersForLottery[$pos])) continue;
                         
@@ -180,9 +183,13 @@ class LotteryResultProcessor
                         if ($playedNumberClean === $winningNumberLastDigits) {
                             // ✅ VALIDAR que la posición donde salió es correcta según la posición apostada (misma lógica que redoblona)
                             if ($this->isPositionCorrect($apu->position, $pos)) {
-                                $actualWinningPosition = $pos;
-                                $winningNumberAtPosition = $winningNum;
-                                break;
+                                $winningCount++;
+                                $winningPositions[] = $pos;
+                                // Guardar la primera posición encontrada para referencia
+                                if (!$actualWinningPosition) {
+                                    $actualWinningPosition = $pos;
+                                    $winningNumberAtPosition = $winningNum;
+                                }
                             } else {
                                 // Número encontrado pero en posición incorrecta según las reglas
                                 Log::info("LotteryResultProcessor - Número principal encontrado pero posición inválida: Número {$playedNumberClean} apostado en posición {$apu->position} salió en posición {$pos} (NO válido según reglas) para lotería {$lotterySystemCode}");
@@ -190,7 +197,7 @@ class LotteryResultProcessor
                         }
                     }
                     
-                    if ($actualWinningPosition && $winningNumberAtPosition) {
+                    if ($winningCount > 0 && $actualWinningPosition && $winningNumberAtPosition) {
                         // ✅ CORRECCIÓN: Si position == 1, SIEMPRE es quiniela, independientemente de asteriscos
                         $ticketType = ($apu->position == 1) ? 'quiniela' : $this->getTicketType($apu->number);
                         
@@ -200,22 +207,29 @@ class LotteryResultProcessor
                             elseif ($numDigitsPlayed == 3) $multiplier = $quiniela->cobra_3_cifra;
                             elseif ($numDigitsPlayed == 2) $multiplier = $quiniela->cobra_2_cifra;
                             elseif ($numDigitsPlayed == 1) $multiplier = $quiniela->cobra_1_cifra;
+                            // Para quiniela (posición 1), no se multiplica por veces (solo puede salir una vez)
+                            $aciertValue = (float)$apu->import * (float)$multiplier;
                         } elseif ($ticketType === 'prizes') {
                             // Calcular premio basado en la posición donde realmente salió
                             if ($actualWinningPosition <= 5) $multiplier = $prizes->cobra_5;
                             elseif ($actualWinningPosition <= 10) $multiplier = $prizes->cobra_10;
                             else $multiplier = $prizes->cobra_20;
+                            // ✅ CORREGIDO: Multiplicar premio base × veces que salió × importe
+                            $aciertValue = (float)$apu->import * (float)$multiplier * $winningCount;
                         } elseif ($ticketType === 'figureOne') {
                             if ($actualWinningPosition <= 5) $multiplier = $figureOne->cobra_5;
                             elseif ($actualWinningPosition <= 10) $multiplier = $figureOne->cobra_10;
                             else $multiplier = $figureOne->cobra_20;
+                            // ✅ CORREGIDO: Multiplicar premio base × veces que salió × importe
+                            $aciertValue = (float)$apu->import * (float)$multiplier * $winningCount;
                         } elseif ($ticketType === 'figureTwo') {
                             if ($actualWinningPosition <= 5) $multiplier = $figureTwo->cobra_5;
                             elseif ($actualWinningPosition <= 10) $multiplier = $figureTwo->cobra_10;
                             else $multiplier = $figureTwo->cobra_20;
+                            // ✅ CORREGIDO: Multiplicar premio base × veces que salió × importe
+                            $aciertValue = (float)$apu->import * (float)$multiplier * $winningCount;
                         }
-                        $aciertValue = (float)$apu->import * (float)$multiplier;
-                        Log::info("LotteryResultProcessor - Acierto principal: {$playedNumberClean} en posición apostada {$apu->position}, salió en posición {$actualWinningPosition}, tipo: {$ticketType}, premio: {$aciertValue}");
+                        Log::info("LotteryResultProcessor - Acierto principal: {$playedNumberClean} en posición apostada {$apu->position}, salió {$winningCount} vez(es) en posiciones " . implode(', ', $winningPositions) . ", tipo: {$ticketType}, premio: {$aciertValue} (base: {$multiplier} × veces: {$winningCount} × importe: {$apu->import})");
                     }
                 }
 
@@ -391,7 +405,7 @@ class LotteryResultProcessor
                         'XA'          => 'X',
                         'import'      => (float) $apu->import,
                         'aciert'      => $aciertValue + $aciertValueR, // Sum both aciertos
-                        'times_won'   => $redoblonaWinningCount > 0 ? $redoblonaWinningCount : 1, // ✅ CORREGIDO: Usar conteo de veces que salió la redoblona, o 1 si no hay redoblona
+                        'times_won'   => $redoblonaWinningCount > 0 ? $redoblonaWinningCount : ($winningCount > 0 ? $winningCount : 1), // ✅ CORREGIDO: Usar conteo de veces que salió (redoblona o principal), o 1 por defecto
                         'date'        => $dateToCalculate,
                         'time'        => $apu->timeApu,
                         'user_id'     => $apu->user_id,
