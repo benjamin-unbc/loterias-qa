@@ -60,6 +60,11 @@ Route::middleware([
         Route::group(['middleware' => ['permission:access_menu_liquidaciones']], function () {
             Route::get('/clients/{id}/liquidations', \App\Livewire\Admin\Clients\ClientLiquidations::class)->name('clients.liquidations');
         });
+        
+        //Clients details
+        Route::group(['middleware' => ['permission:ver clientes']], function () {
+            Route::get('/clients/{id}/details', \App\Livewire\Admin\Clients\ClientDetailsModal::class)->name('clients.details');
+        });
 
       
     });

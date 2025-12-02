@@ -1,36 +1,30 @@
-<div>
-@if($showModal && $client)
-<div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-    <div class="flex items-center justify-center min-h-screen p-0 text-center sm:block sm:p-0">
-        <!-- Background overlay -->
-        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" wire:click="closeModal"></div>
-
-        <!-- Modal panel -->
-        <div class="inline-block align-middle bg-[#1b1f22] rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-0 sm:align-middle sm:max-w-[100vw] sm:w-full sm:h-[100vh] sm:max-h-[100vh] sm:rounded-none">
-            <!-- Header -->
-                        <div class="bg-[#22272b] px-6 py-4 border-b border-gray-600">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center space-x-4">
-                        @if($client->profile_photo_path)
-                            <img src="{{ asset('storage/' . $client->profile_photo_path) }}" alt="{{ $client->nombre }}" class="w-12 h-12 rounded-full object-cover">
-                        @else
-                            <div class="w-12 h-12 rounded-full bg-gray-600 flex items-center justify-center">
-                                <i class="fa-solid fa-user text-white text-lg"></i>
-                            </div>
-                        @endif
-                        <div>
-                            <h3 class="text-lg font-semibold text-white">
-                                {{ $client->nombre }} {{ $client->apellido }}
-                            </h3>
-                            <p class="text-sm text-gray-400">{{ $client->correo }}</p>
-                            <p class="text-sm text-gray-400">{{ $client->nombre_fantasia }}</p>
-                        </div>
+<div class="min-h-screen bg-[#1b1f22]">
+@if($client)
+    <!-- Header -->
+    <div class="bg-[#22272b] px-6 py-4 border-b border-gray-600">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                @if($client->profile_photo_path)
+                    <img src="{{ asset('storage/' . $client->profile_photo_path) }}" alt="{{ $client->nombre }}" class="w-12 h-12 rounded-full object-cover">
+                @else
+                    <div class="w-12 h-12 rounded-full bg-gray-600 flex items-center justify-center">
+                        <i class="fa-solid fa-user text-white text-lg"></i>
                     </div>
-                    <button wire:click="closeModal" class="text-gray-400 hover:text-white">
-                        <i class="fa-solid fa-times text-xl"></i>
-                    </button>
+                @endif
+                <div>
+                    <h3 class="text-lg font-semibold text-white">
+                        {{ $client->nombre }} {{ $client->apellido }}
+                    </h3>
+                    <p class="text-sm text-gray-400">{{ $client->correo }}</p>
+                    <p class="text-sm text-gray-400">{{ $client->nombre_fantasia }}</p>
                 </div>
             </div>
+            <a href="{{ route('clients.show') }}" class="text-gray-400 hover:text-white flex items-center gap-2">
+                <i class="fa-solid fa-arrow-left"></i>
+                <span>Volver</span>
+            </a>
+        </div>
+    </div>
 
             <!-- Tabs -->
             <div class="bg-[#22272b] border-b border-gray-600">
@@ -58,8 +52,8 @@
                 </nav>
             </div>
 
-            <!-- Content -->
-            <div class="bg-[#1b1f22] p-6 overflow-y-auto" style="max-height: calc(100vh - 200px); height: calc(100vh - 200px);">
+    <!-- Content -->
+    <div class="bg-[#1b1f22] p-6">
                 @if($activeTab === 'jugadas')
                     <!-- Jugadas Enviadas Tab -->
                     <div class="space-y-4">
@@ -717,9 +711,16 @@
                     </div>
                 @endif
             </div>
+@else
+    <div class="flex items-center justify-center min-h-screen">
+        <div class="text-center">
+            <p class="text-gray-400 text-lg">Cliente no encontrado</p>
+            <a href="{{ route('clients.show') }}" class="text-yellow-200 hover:text-yellow-300 mt-4 inline-block">
+                Volver a la lista de clientes
+            </a>
         </div>
     </div>
-</div>
+@endif
 
 <!-- Modal de Ticket -->
 @if($showTicketModal && $selectedTicket)
@@ -942,8 +943,6 @@
     </x-slot>
     <x-slot name="footer"></x-slot>
 </x-ticket-modal>
-@endif
-
 @endif
 </div>
 

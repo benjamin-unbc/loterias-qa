@@ -152,43 +152,56 @@ class ClientLiquidations extends Component
                 $currentWeekMonday = $today->copy()->startOfWeek();
                 $isCurrentWeek = $currentMonday->format('Y-m-d') === $currentWeekMonday->format('Y-m-d');
                 
-                // Para la semana actual, limpiar el cache y calcular solo esa semana
-                // Esto asegura que usamos el mismo método que "ver semana"
-                if ($isCurrentWeek) {
-                    $this->anteriorCache = [];
-                    $this->arrastreCache = [];
-                    $this->udDejaCache = [];
-                }
+                // Buscar el último día de la semana que tiene datos (Result o ApusModel)
+                $weekDatesWithData = $allDatesWithData->filter(function($date) use ($currentMonday, $saturday) {
+                    $dateCarbon = Carbon::parse($date);
+                    return $dateCarbon->gte($currentMonday) && $dateCarbon->lte($saturday);
+                })->sort()->values();
                 
                 // Para la semana actual, encontrar el último día que realmente tiene liquidación
                 // No usar el último día hasta hoy si no tiene datos
                 $lastDateOfWeek = end($weekDates);
-                if ($isCurrentWeek) {
-                    // Buscar el último día de la semana que tiene datos (Result o ApusModel)
-                    $weekDatesWithData = $allDatesWithData->filter(function($date) use ($currentMonday, $saturday) {
-                        $dateCarbon = Carbon::parse($date);
-                        return $dateCarbon->gte($currentMonday) && $dateCarbon->lte($saturday);
-                    })->sort()->values();
-                    
-                    if ($weekDatesWithData->isNotEmpty()) {
-                        // Usar el último día con datos, no el último día hasta hoy
-                        $lastDateOfWeek = $weekDatesWithData->last();
-                    }
+                if ($isCurrentWeek && $weekDatesWithData->isNotEmpty()) {
+                    // Usar el último día con datos, no el último día hasta hoy
+                    $lastDateOfWeek = $weekDatesWithData->last();
                 }
                 
-                // OPTIMIZADO: Solo calcular el anterior del último día de la semana
-                // No necesitamos calcular la liquidación completa de todos los días para la lista
-                // Solo calculamos el anterior del último día que es lo que se muestra en la tabla
-                // getAnteriorForDate calculará recursivamente si no hay cache, lo cual es más eficiente
-                // que calcular toda la liquidación completa de cada día
-                $anterior = 0;
+                // SIEMPRE obtener el UD DEJA del sábado de la semana
+                // Crear una nueva instancia para cada semana para evitar problemas de cache
+                $saturdayDateStr = $saturday->format('Y-m-d');
+                $saturdayCarbon = Carbon::parse($saturdayDateStr);
                 
-                // Si es la semana actual o necesitamos el anterior, calcularlo de forma optimizada
-                if ($isCurrentWeek || !empty($weekDates)) {
-                    // Calcular solo el anterior del último día de la semana
-                    // getAnteriorForDate es recursivo y calculará desde los datos si no hay cache
-                    // Esto es mucho más rápido que calcular toda la liquidación completa
-                    $anterior = $this->getAnteriorForDate($lastDateOfWeek, $userId);
+                // Solo calcular si el sábado es anterior o igual a hoy
+                if ($saturdayCarbon->lte($today)) {
+                    // Crear una nueva instancia del componente de liquidaciones para esta semana
+                    // Esto asegura que el cache esté limpio para cada semana
+                    $liquidationsComponent = new \App\Livewire\Admin\Liquidations();
+                    
+                    // Calcular desde el lunes de la semana hasta el sábado en orden cronológico
+                    // para construir el cache correctamente antes de obtener el UD DEJA del sábado
+                    $tempDate = $currentMonday->copy();
+                    while ($tempDate->lte($saturdayCarbon)) {
+                        if (!$tempDate->isSunday() && $tempDate->lte($today)) {
+                            // Calcular cada día de la semana en orden para construir el cache correctamente
+                            $liquidationsComponent->computeClientLiquidationData(
+                                $this->client->associatedUser,
+                                $tempDate->copy()
+                            );
+                        }
+                        $tempDate->addDay();
+                    }
+                    
+                    // Ahora obtener el UD DEJA del sábado (ya está calculado y en cache)
+                    $saturdayLiquidationData = $liquidationsComponent->computeClientLiquidationData(
+                        $this->client->associatedUser,
+                        $saturdayCarbon
+                    );
+                    
+                    // Obtener el UD DEJA directamente del resultado
+                    $lastDayUdDeja = (float) ($saturdayLiquidationData['udDeja'] ?? 0);
+                } else {
+                    // Si el sábado es futuro, usar 0
+                    $lastDayUdDeja = 0;
                 }
                 
                 $weeks->push([
@@ -199,8 +212,8 @@ class ClientLiquidations extends Component
                     'dates' => $weekDates,
                     'label' => "Semana {$currentMonday->format('d-m-Y')} hasta {$saturday->format('d-m-Y')}",
                     'lastDate' => $lastDateOfWeek,
-                    'clienteDeja' => $anterior, // Mantener el nombre de la clave para compatibilidad, pero ahora contiene el anterior
-                    'anterior' => $anterior,
+                    'clienteDeja' => $lastDayUdDeja, // UD DEJA del último día de la semana
+                    'anterior' => $lastDayUdDeja, // Mantener compatibilidad con 'anterior'
                     'isCurrentWeek' => $isCurrentWeek
                 ]);
             }
@@ -419,6 +432,7 @@ class ClientLiquidations extends Component
             $prevArrastre = $this->getArrastreForDate($previousDate->format('Y-m-d'), $userId);
             
             // Calcular UD Deja temporal del sábado (sin comisión)
+            // Si no hay apuestas, totalGanaPase será 0, pero prevClientDeja puede tener valor
             $udDejaTemp = $totalGanaPase + $prevClientDeja;
             
             // Calcular arrastre del sábado (arrastre del viernes + UD Deja temporal del sábado)
@@ -434,6 +448,8 @@ class ClientLiquidations extends Component
             }
             
             // UD DEJA del sábado = Gener DEJA (totalGanaPase) - comiDejaSem
+            // IMPORTANTE: Siempre calcular el UD DEJA, incluso si no hay apuestas
+            // Si no hay apuestas, totalGanaPase será 0, pero aún se resta la comisión semanal
             $udDeja = $totalGanaPase - $comiDejaSem;
         }
         // Si no hay apuestas (y no es sábado), UD Deja es 0 pero el arrastre mantiene el del día anterior
@@ -1315,6 +1331,40 @@ class ClientLiquidations extends Component
         
         // Mostrar mensaje de éxito con SweetAlert
         $this->dispatch('payment-saved', message: 'Pago registrado correctamente. Se verá reflejado en la siguiente liquidación.');
+    }
+    
+    /**
+     * Obtiene el UD DEJA del sábado de la semana correspondiente a una fecha
+     * Si la fecha es sábado, retorna su UD DEJA
+     * Si no es sábado, encuentra el sábado de esa semana y retorna su UD DEJA
+     * Siempre retorna un valor, incluso si no hay jugadas (puede ser 0)
+     */
+    public function getSaturdayUdDejaForDate(string $date, int $userId): float
+    {
+        $selectedDate = Carbon::parse($date);
+        
+        // Si es domingo, el sábado es el día anterior
+        if ($selectedDate->isSunday()) {
+            $saturdayDate = $selectedDate->copy()->subDay();
+        }
+        // Si es sábado, usar la fecha actual
+        elseif ($selectedDate->isSaturday()) {
+            $saturdayDate = $selectedDate->copy();
+        }
+        // Para otros días, encontrar el sábado de esa semana
+        else {
+            // Obtener el lunes de la semana
+            $monday = $selectedDate->copy()->startOfWeek();
+            // El sábado es 5 días después del lunes
+            $saturdayDate = $monday->copy()->addDays(5);
+        }
+        
+        $saturdayDateStr = $saturdayDate->format('Y-m-d');
+        
+        // Calcular el UD DEJA del sábado (siempre calcular, incluso si no hay jugadas)
+        $saturdayLiquidationData = $this->computeLiquidationDataForDate($saturdayDateStr, $userId);
+        
+        return $saturdayLiquidationData['udDeja'] ?? 0;
     }
     
     public function render()

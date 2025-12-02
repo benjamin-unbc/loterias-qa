@@ -11,14 +11,15 @@ use App\Models\Number;
 use App\Models\ClientPayment;
 use Livewire\Component;
 use Livewire\WithPagination;
+use Livewire\Attributes\Layout;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 
+#[Layout('layouts.app')]
 class ClientDetailsModal extends Component
 {
     use WithPagination;
 
-    public $showModal = false;
     public $client = null;
     public $activeTab = 'jugadas';
     
@@ -61,53 +62,22 @@ class ClientDetailsModal extends Component
      */
     protected $udDejaCache = [];
 
-    protected $listeners = ['openClientDetails'];
-
-    public function mount()
+    public function mount($id = null)
     {
         $this->jugadasDate = now()->toDateString();
         $this->resultadosDate = now()->toDateString();
         $this->extractosDate = now()->toDateString();
         $this->liquidacionesDate = now()->subDay()->toDateString(); // Ayer por defecto
-    }
-
-    public function openClientDetails(...$args)
-    {
-        try {
-            // Obtener clientId de los argumentos
-            $clientId = null;
-            
-            if (isset($args[0])) {
-                $firstArg = $args[0];
-                
-                // Si es un array, obtener el primer elemento o buscar por clave
-                if (is_array($firstArg)) {
-                    $clientId = $firstArg['clientId'] ?? $firstArg['client_id'] ?? $firstArg[0] ?? null;
-                } 
-                // Si es un número directo
-                elseif (is_numeric($firstArg)) {
-                    $clientId = $firstArg;
-                }
+        
+        // Cargar el cliente si se proporciona un ID
+        if ($id) {
+            try {
+                $this->client = Client::findOrFail($id);
+            } catch (\Exception $e) {
+                \Log::error('Error al cargar cliente en mount: ' . $e->getMessage());
+                abort(404, 'Cliente no encontrado');
             }
-            
-            if (!$clientId) {
-                return;
-            }
-            
-            $this->client = Client::findOrFail($clientId);
-            $this->showModal = true;
-            $this->activeTab = 'jugadas';
-            $this->resetPage();
-        } catch (\Exception $e) {
-            \Log::error('Error en openClientDetails: ' . $e->getMessage());
         }
-    }
-
-    public function closeModal()
-    {
-        $this->showModal = false;
-        $this->client = null;
-        $this->resetPage();
     }
 
     public function setActiveTab($tab)

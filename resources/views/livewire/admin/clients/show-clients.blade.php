@@ -126,11 +126,11 @@
                         </td>
                         <td class="px-6 py-4 text-left flex space-x-2 text-lg">
                             @can('ver clientes')
-                            <button wire:click="$dispatch('openClientDetails', [{{ $client->id }}])"
+                            <a href="{{ route('clients.details', $client->id) }}"
                                 class="font-medium text-white hover:text-yellow-200 transition-colors duration-200"
                                 title="Ver detalles del cliente">
                                 <i class="fa-solid fa-eye"></i>
-                            </button>
+                            </a>
                             @endcan
                             @can('access_menu_liquidaciones')
                             <a href="{{ route('clients.liquidations', $client->id) }}"
@@ -181,7 +181,4 @@
             @endif
         </div>
     </div>
-    
-    <!-- Modal de detalles del cliente -->
-    @livewire('admin.clients.client-details-modal')
 </div>

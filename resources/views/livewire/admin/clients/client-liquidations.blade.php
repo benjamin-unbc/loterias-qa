@@ -52,11 +52,15 @@
                                 </div>
                             </td>
                             <td class="px-6 py-4">
+                                @php
+                                    // SIEMPRE usar el UD DEJA del sábado (almacenado en 'clienteDeja' o 'anterior')
+                                    $udDejaSabado = $week['clienteDeja'] ?? $week['anterior'] ?? 0;
+                                @endphp
                                 <div class="flex items-center gap-2">
-                                    <span class="font-semibold {{ ($week['anterior'] ?? $week['clienteDeja'] ?? 0) >= 0 ? 'text-green-400' : 'text-red-400' }}">
-                                        ${{ number_format($week['anterior'] ?? $week['clienteDeja'] ?? 0, 2, ',', '.') }}
+                                    <span class="font-semibold {{ $udDejaSabado >= 0 ? 'text-green-400' : 'text-red-400' }}">
+                                        ${{ number_format($udDejaSabado, 2, ',', '.') }}
                                     </span>
-                                    @if(($week['anterior'] ?? $week['clienteDeja'] ?? 0) >= 0)
+                                    @if($udDejaSabado >= 0)
                                         <span class="text-xs text-gray-400">(Debe pagar)</span>
                                     @else
                                         <span class="text-xs text-gray-400">(Debe cobrar)</span>
@@ -72,11 +76,12 @@
                                     </button>
                                     @php
                                         $lastDate = $week['lastDate'] ?? end($week['dates']);
-                                        $anterior = $week['anterior'] ?? $week['clienteDeja'] ?? 0;
+                                        // Usar el UD DEJA del sábado (almacenado en 'clienteDeja' o 'anterior')
+                                        $udDejaSabado = $week['clienteDeja'] ?? $week['anterior'] ?? 0;
                                         $lastDateCarbon = \Carbon\Carbon::parse($lastDate);
                                         $today = \Carbon\Carbon::today();
                                         // Permitir pagos en semanas pasadas (hasta hoy, no futuras)
-                                        $canPay = $lastDateCarbon->lte($today) && $anterior != 0;
+                                        $canPay = $lastDateCarbon->lte($today) && $udDejaSabado != 0;
                                     @endphp
                                     @if($canPay)
                                         <button wire:click="openPaymentModal('{{ $lastDate }}')"
@@ -263,9 +268,20 @@
                                                                     <p>{{ number_format($dayData['totalGanaPase'], 2) }}</p>
                                                                 </div>
                                                             @endif
+                                                            @php
+                                                                // Si es lunes, el ANTERI debe ser el UD DEJA del sábado anterior
+                                                                // Si no es lunes, el ANTERI es el UD DEJA del día anterior
+                                                                $anteriValue = $dayData['anteri'] ?? 0;
+                                                                if ($dayCarbon->isMonday()) {
+                                                                    // Para lunes, obtener el UD DEJA del sábado anterior (2 días atrás)
+                                                                    $saturdayDate = $dayCarbon->copy()->subDays(2);
+                                                                    $saturdayLiquidationData = $this->computeLiquidationDataForDate($saturdayDate->format('Y-m-d'), $client->associatedUser->id ?? 0);
+                                                                    $anteriValue = $saturdayLiquidationData['udDeja'] ?? 0;
+                                                                }
+                                                            @endphp
                                                             <div class="flex justify-between">
                                                                 <h4 class="font-medium">ANTERI:</h4>
-                                                                <p>{{ number_format($dayData['anteri'], 2) }}</p>
+                                                                <p>{{ number_format($anteriValue, 2) }}</p>
                                                             </div>
                                                             @if(($dayData['udDio'] ?? 0) > 0)
                                                                 <div class="flex justify-between">
@@ -533,9 +549,25 @@
                                                         <p>{{ number_format($liquidationData['totalGanaPase'], 2) }}</p>
                                                     </div>
                                                 @endif
+                                                @php
+                                                    // Si es lunes, el ANTERI debe ser el UD DEJA del sábado anterior
+                                                    // Si no es lunes, el ANTERI es el UD DEJA del día anterior
+                                                    $selectedDateCarbon = \Carbon\Carbon::parse($fullLiquidationDate);
+                                                    $anteriValue = $liquidationData['anteri'] ?? 0;
+                                                    if ($selectedDateCarbon->isMonday()) {
+                                                        // Para lunes, obtener el UD DEJA del sábado anterior (2 días atrás)
+                                                        $saturdayDate = $selectedDateCarbon->copy()->subDays(2);
+                                                        $liquidationsComponent = new \App\Livewire\Admin\Liquidations();
+                                                        $saturdayLiquidationData = $liquidationsComponent->computeClientLiquidationData(
+                                                            $client->associatedUser ?? null,
+                                                            $saturdayDate
+                                                        );
+                                                        $anteriValue = $saturdayLiquidationData['udDeja'] ?? 0;
+                                                    }
+                                                @endphp
                                                 <div class="flex justify-between">
                                                     <h4 class="font-medium">ANTERI:</h4>
-                                                    <p>{{ number_format($liquidationData['anteri'], 2) }}</p>
+                                                    <p>{{ number_format($anteriValue, 2) }}</p>
                                                 </div>
                                                 @if(($liquidationData['udDio'] ?? 0) > 0)
                                                     <div class="flex justify-between">
