@@ -231,7 +231,8 @@ class Liquidations extends Component
             // UD DEJA del sábado = Gener DEJA (totalGanaPase) - comiDejaSem
             $udDeja = $totalGanaPase - $comiDejaSem;
         } else {
-            $comiDejaSem = null;
+            // Cuando no es sábado, la comisión semanal es 0 (no aplica)
+            $comiDejaSem = 0;
             $udDeja = $totalGanaPase + $prevGenerDeja;
             
             // Calcular Arrastre según el día
@@ -462,12 +463,36 @@ class Liquidations extends Component
         if ($selectedDate->isSunday()) {
             $udDeja = 0;
             $arrastre = 0;
-            $comiDejaSem = null;
+            $comiDejaSem = 0; // No aplica en domingo
         }
-        // Si no hay apuestas, UD Deja es 0 pero el arrastre mantiene el del día anterior
+        // Si es sábado, SIEMPRE calcular comisión semanal basada en el arrastre (incluso si no hay apuestas)
+        elseif ($selectedDate->isSaturday()) {
+            // Calcular arrastre del viernes
+            $previousDate = $selectedDate->copy()->subDay();
+            $prevArrastre = $this->getArrastreForDate($previousDate->format('Y-m-d'), $user->id);
+            
+            // Calcular UD Deja temporal del sábado (sin comisión)
+            $udDejaTemp = $totalGanaPase + $prevClientDeja;
+            
+            // Calcular arrastre del sábado (arrastre del viernes + UD Deja temporal del sábado)
+            $arrastre = $prevArrastre + $udDejaTemp;
+            
+            // Calcular comisión semanal basada en el arrastre del sábado
+            // Por defecto es el 30% del arrastre si no está configurado
+            if ($weeklyCommissionPercentage > 0) {
+                $comiDejaSem = $arrastre * ($weeklyCommissionPercentage / 100);
+            } else {
+                // Si no hay porcentaje configurado, usar 30% por defecto
+                $comiDejaSem = $arrastre * 0.30;
+            }
+            
+            // UD DEJA del sábado = Gener DEJA (totalGanaPase) - comiDejaSem
+            $udDeja = $totalGanaPase - $comiDejaSem;
+        }
+        // Si no hay apuestas (y no es sábado), UD Deja es 0 pero el arrastre mantiene el del día anterior
         elseif ($totalApus == 0) {
             $udDeja = 0; // UD Deja en 0 cuando no hay apuestas
-            $comiDejaSem = null;
+            $comiDejaSem = 0; // No aplica cuando no hay apuestas
             
             // El arrastre mantiene el valor del día anterior (acumulativo)
             if ($selectedDate->isMonday()) {
@@ -482,30 +507,9 @@ class Liquidations extends Component
                 $prevArrastre = $this->getArrastreForDate($previousDate->format('Y-m-d'), $user->id);
                 $arrastre = $prevArrastre; // Mantener el arrastre anterior sin sumar nada
             }
-        } elseif ($selectedDate->isSaturday()) {
-            // Calcular arrastre del viernes
-            $previousDate = $selectedDate->copy()->subDay();
-            $prevArrastre = $this->getArrastreForDate($previousDate->format('Y-m-d'), $user->id);
-            
-            // Calcular UD Deja temporal del sábado (sin comisión)
-            $udDejaTemp = $totalGanaPase + $prevClientDeja;
-            
-            // Calcular arrastre del sábado (arrastre del viernes + UD Deja temporal del sábado)
-            $arrastre = $prevArrastre + $udDejaTemp;
-            
-            // Calcular comisión semanal basada en el arrastre del sábado
-            // Solo aplicar comisión semanal si el porcentaje es positivo
-            if ($weeklyCommissionPercentage > 0) {
-                $comiDejaSem = $arrastre * ($weeklyCommissionPercentage / 100);
-                // UD DEJA del sábado = Gener DEJA (totalGanaPase) - comiDejaSem
-                $udDeja = $totalGanaPase - $comiDejaSem;
-            } else {
-                $comiDejaSem = 0;
-                // Si no hay comisión semanal, UD DEJA = Gener DEJA
-                $udDeja = $totalGanaPase;
-            }
         } else {
-            $comiDejaSem = null;
+            // Cuando no es sábado, la comisión semanal es 0 (no aplica)
+            $comiDejaSem = 0;
             // Calcular UD Deja
             $udDeja = $totalGanaPase + $prevClientDeja;
             
@@ -810,23 +814,24 @@ class Liquidations extends Component
             // Para sábado, calcular comiDejaSem y restar de totalGanaPase
             $weeklyCommissionPercentage = $client ? ($client->weekly_commission_percentage ?? 30.00) : 30.00;
             
+            // Calcular arrastre del viernes
+            $fridayDate = $selectedDate->copy()->subDay();
+            $prevArrastre = $this->getArrastreForDate($fridayDate->format('Y-m-d'), $userId);
+            
+            // Calcular arrastre del sábado
+            $udDejaTemp = $totalGanaPase + $prevClientDeja;
+            $arrastre = $prevArrastre + $udDejaTemp;
+            
+            // Calcular comiDejaSem (usar 30% por defecto si no está configurado)
             if ($weeklyCommissionPercentage > 0) {
-                // Calcular arrastre del viernes
-                $fridayDate = $selectedDate->copy()->subDay();
-                $prevArrastre = $this->getArrastreForDate($fridayDate->format('Y-m-d'), $userId);
-                
-                // Calcular arrastre del sábado
-                $udDejaTemp = $totalGanaPase + $prevClientDeja;
-                $arrastre = $prevArrastre + $udDejaTemp;
-                
-                // Calcular comiDejaSem
                 $comiDejaSem = $arrastre * ($weeklyCommissionPercentage / 100);
-                
-                // UD DEJA = Gener DEJA - comiDejaSem
-                $udDeja = $totalGanaPase - $comiDejaSem;
             } else {
-                $udDeja = $totalGanaPase;
+                // Si no hay porcentaje configurado, usar 30% por defecto
+                $comiDejaSem = $arrastre * 0.30;
             }
+            
+            // UD DEJA = Gener DEJA - comiDejaSem
+            $udDeja = $totalGanaPase - $comiDejaSem;
         } else {
             // Para otros días, UD DEJA = totalGanaPase + prevClientDeja
             $udDeja = $totalGanaPase + $prevClientDeja;
@@ -1078,15 +1083,15 @@ class Liquidations extends Component
                 $arrastreSabado = $prevArrastre + $udDejaTemp;
                 
                 // Calcular comisión semanal basada en el arrastre del sábado
-                // Solo aplicar comisión semanal si el porcentaje es positivo
+                // Por defecto es el 30% del arrastre si no está configurado
                 if ($prevWeeklyCommissionPercentage > 0) {
                     $comiDejaSem = $arrastreSabado * ($prevWeeklyCommissionPercentage / 100);
-                    // UD DEJA del sábado = Gener DEJA (prevTotalGanaPase) - comiDejaSem
-                    $prevUdDeja = $prevTotalGanaPase - $comiDejaSem;
                 } else {
-                    // Si no hay comisión semanal, UD DEJA = Gener DEJA
-                    $prevUdDeja = $prevTotalGanaPase;
+                    // Si no hay porcentaje configurado, usar 30% por defecto
+                    $comiDejaSem = $arrastreSabado * 0.30;
                 }
+                // UD DEJA del sábado = Gener DEJA (prevTotalGanaPase) - comiDejaSem
+                $prevUdDeja = $prevTotalGanaPase - $comiDejaSem;
             } else {
                 $prevUdDeja = $prevTotalGanaPase + $prevPrevDeja;
             }

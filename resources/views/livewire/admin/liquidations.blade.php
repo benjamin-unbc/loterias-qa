@@ -220,7 +220,7 @@
                                     @if(\Carbon\Carbon::parse($date)->isSaturday())
                                         <div class="flex justify-between">
                                             <h4 class="font-medium">COMI DEJA SEM:</h4>
-                                            <p>{{ number_format($comi_deja_sem, 2) }}</p>
+                                            <p>{{ number_format($comi_deja_sem ?? 0, 2) }}</p>
                                         </div>
                                     @endif
                                     <div class="flex justify-between">

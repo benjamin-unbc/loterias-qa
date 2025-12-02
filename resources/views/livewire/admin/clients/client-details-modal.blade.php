@@ -672,7 +672,7 @@
                                                     @if(\Carbon\Carbon::parse($liquidacionesDate)->isSaturday())
                                                         <div class="flex justify-between">
                                                             <h4 class="font-medium">COMI DEJA SEM:</h4>
-                                                            <p>{{ number_format($liquidacionData['comiDejaSem'], 2) }}</p>
+                                                            <p>{{ number_format($liquidacionData['comiDejaSem'] ?? 0, 2) }}</p>
                                                         </div>
                                                     @endif
                                                     <div class="flex justify-between">
