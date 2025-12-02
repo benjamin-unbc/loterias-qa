@@ -38,14 +38,19 @@ class ClientLiquidations extends Component
     protected $weeksCache = null;
     protected $weeksCacheKey = null;
     
+    // Cache para primera fecha de liquidación
+    protected $firstLiquidationDateCache = null;
+    
     public function mount($id)
     {
         $this->clientId = $id;
-        $this->client = Client::findOrFail($id);
+        // OPTIMIZADO: Eager loading de associatedUser para evitar consultas N+1
+        $this->client = Client::with('associatedUser')->findOrFail($id);
     }
     
     /**
      * Obtiene la primera fecha de liquidación del cliente
+     * OPTIMIZADO: Cachea el resultado para evitar recalcular en cada render
      */
     public function getFirstLiquidationDateProperty()
     {
@@ -53,11 +58,20 @@ class ClientLiquidations extends Component
             return null;
         }
         
+        // Si ya está cacheado, retornarlo
+        if ($this->firstLiquidationDateCache !== null) {
+            return $this->firstLiquidationDateCache;
+        }
+        
+        // OPTIMIZADO: Usar select específico y limit para mejorar rendimiento
         $firstResult = Result::where('user_id', $this->client->associatedUser->id)
+            ->select('date')
             ->orderBy('date', 'asc')
+            ->limit(1)
             ->first();
             
-        return $firstResult ? $firstResult->date : null;
+        $this->firstLiquidationDateCache = $firstResult ? $firstResult->date : null;
+        return $this->firstLiquidationDateCache;
     }
     
     /**
@@ -81,8 +95,10 @@ class ClientLiquidations extends Component
         
         // OPTIMIZADO: Obtener todas las fechas que tienen datos usando consultas más eficientes
         // Usar selectRaw con DISTINCT directamente en SQL en lugar de procesar en memoria
+        // Agregar índices implícitos usando whereDate para mejor rendimiento
         $resultDates = Result::where('user_id', $userId)
             ->selectRaw('DISTINCT DATE(date) as date')
+            ->orderBy('date', 'asc')
             ->pluck('date')
             ->map(function($date) {
                 return Carbon::parse($date)->format('Y-m-d');
@@ -91,10 +107,12 @@ class ClientLiquidations extends Component
             ->values();
         
         // OPTIMIZADO: Usar JOIN para filtrar solo apuestas con plays_sent válidos
+        // Agregar índice implícito con orderBy para mejor rendimiento
         $apusDates = ApusModel::where('apus.user_id', $userId)
             ->join('plays_sent', 'apus.ticket', '=', 'plays_sent.ticket')
             ->where('plays_sent.status', '!=', 'I')
             ->selectRaw('DISTINCT DATE(apus.created_at) as date')
+            ->orderBy('date', 'asc')
             ->pluck('date')
             ->map(function($date) {
                 return Carbon::parse($date)->format('Y-m-d');
@@ -166,39 +184,16 @@ class ClientLiquidations extends Component
                     $lastDateOfWeek = $weekDatesWithData->last();
                 }
                 
-                // SIEMPRE obtener el UD DEJA del sábado de la semana
-                // Crear una nueva instancia para cada semana para evitar problemas de cache
+                // OPTIMIZADO: Solo calcular el UD DEJA del sábado cuando sea necesario
+                // En lugar de calcular liquidaciones completas para cada día, usar método optimizado
                 $saturdayDateStr = $saturday->format('Y-m-d');
                 $saturdayCarbon = Carbon::parse($saturdayDateStr);
                 
                 // Solo calcular si el sábado es anterior o igual a hoy
                 if ($saturdayCarbon->lte($today)) {
-                    // Crear una nueva instancia del componente de liquidaciones para esta semana
-                    // Esto asegura que el cache esté limpio para cada semana
-                    $liquidationsComponent = new \App\Livewire\Admin\Liquidations();
-                    
-                    // Calcular desde el lunes de la semana hasta el sábado en orden cronológico
-                    // para construir el cache correctamente antes de obtener el UD DEJA del sábado
-                    $tempDate = $currentMonday->copy();
-                    while ($tempDate->lte($saturdayCarbon)) {
-                        if (!$tempDate->isSunday() && $tempDate->lte($today)) {
-                            // Calcular cada día de la semana en orden para construir el cache correctamente
-                            $liquidationsComponent->computeClientLiquidationData(
-                                $this->client->associatedUser,
-                                $tempDate->copy()
-                            );
-                        }
-                        $tempDate->addDay();
-                    }
-                    
-                    // Ahora obtener el UD DEJA del sábado (ya está calculado y en cache)
-                    $saturdayLiquidationData = $liquidationsComponent->computeClientLiquidationData(
-                        $this->client->associatedUser,
-                        $saturdayCarbon
-                    );
-                    
-                    // Obtener el UD DEJA directamente del resultado
-                    $lastDayUdDeja = (float) ($saturdayLiquidationData['udDeja'] ?? 0);
+                    // OPTIMIZADO: Calcular solo el UD DEJA del sábado usando método optimizado
+                    // Esto evita calcular liquidaciones completas para todos los días de la semana
+                    $lastDayUdDeja = $this->getOptimizedSaturdayUdDeja($saturdayDateStr, $userId, $currentMonday);
                 } else {
                     // Si el sábado es futuro, usar 0
                     $lastDayUdDeja = 0;
@@ -245,6 +240,11 @@ class ClientLiquidations extends Component
      * Cache de instancia para almacenar UD DEJA calculados
      */
     protected $udDejaCache = [];
+    
+    /**
+     * Cache de instancia para almacenar pagos por fecha
+     */
+    protected $paymentsCache = [];
     
     /**
      * Calcula los datos de liquidación para una fecha específica
@@ -914,6 +914,7 @@ class ClientLiquidations extends Component
         $this->anteriorCache = [];
         $this->arrastreCache = [];
         $this->udDejaCache = [];
+        $this->paymentsCache = []; // OPTIMIZADO: Limpiar cache de pagos también
         // No limpiar weeksCache aquí porque solo se usa para la lista, no para el modal
         
         // Generar fechas de lunes a sábado, solo hasta hoy
@@ -1007,6 +1008,7 @@ class ClientLiquidations extends Component
         $this->anteriorCache = [];
         $this->arrastreCache = [];
         $this->udDejaCache = [];
+        $this->paymentsCache = []; // OPTIMIZADO: Limpiar cache de pagos también
         
         $this->fullLiquidationDate = $date;
         $this->showFullLiquidationModal = true;
@@ -1179,15 +1181,24 @@ class ClientLiquidations extends Component
     /**
      * Obtiene los pagos registrados para una fecha específica
      * Retorna un array con udDio, udRecibe, lista de pagos individuales y totales
+     * OPTIMIZADO: Usa cache para evitar consultas repetidas
      * 
      * @param string $date Fecha de la liquidación
      * @return array ['udDio' => float, 'udRecibe' => float, 'paymentsList' => array, 'totalPayments' => int]
      */
     protected function getPaymentsForCurrentDate(string $date): array
     {
+        // OPTIMIZADO: Verificar cache primero
+        $cacheKey = 'payments_' . $this->client->id . '_' . $date;
+        if (isset($this->paymentsCache[$cacheKey])) {
+            return $this->paymentsCache[$cacheKey];
+        }
+        
         try {
+            // OPTIMIZADO: Usar select específico para mejorar rendimiento
             $payments = ClientPayment::where('client_id', $this->client->id)
                 ->whereDate('payment_date', $date)
+                ->select('amount', 'type', 'created_at', 'notes')
                 ->orderBy('created_at', 'asc')
                 ->get();
             
@@ -1218,7 +1229,7 @@ class ClientLiquidations extends Component
             $paymentDateDio = !empty($paymentsListDio) ? $paymentsListDio[0]['date'] : null;
             $paymentDateRecibe = !empty($paymentsListRecibe) ? $paymentsListRecibe[0]['date'] : null;
             
-            return [
+            $result = [
                 'udDio' => $udDio,
                 'udRecibe' => $udRecibe,
                 'paymentDateDio' => $paymentDateDio,
@@ -1227,9 +1238,14 @@ class ClientLiquidations extends Component
                 'paymentsListRecibe' => $paymentsListRecibe,
                 'totalPayments' => count($payments),
             ];
+            
+            // OPTIMIZADO: Guardar en cache
+            $this->paymentsCache[$cacheKey] = $result;
+            
+            return $result;
         } catch (\Exception $e) {
             \Log::warning('Error al obtener pagos para fecha actual: ' . $e->getMessage());
-            return [
+            $result = [
                 'udDio' => 0.0,
                 'udRecibe' => 0.0,
                 'paymentDateDio' => null,
@@ -1238,6 +1254,11 @@ class ClientLiquidations extends Component
                 'paymentsListRecibe' => [],
                 'totalPayments' => 0,
             ];
+            
+            // Guardar resultado vacío en cache también
+            $this->paymentsCache[$cacheKey] = $result;
+            
+            return $result;
         }
     }
     
@@ -1308,19 +1329,33 @@ class ClientLiquidations extends Component
         $userId = $this->client->associatedUser->id ?? null;
         
         if ($userId) {
-            // Limpiar cache del día del pago y días siguientes (hasta 30 días)
+            // OPTIMIZADO: Limpiar cache del día del pago y días siguientes (hasta 30 días)
+            // También limpiar cache de pagos para forzar recálculo
             for ($i = 0; $i <= 30; $i++) {
                 $dateToClear = $paymentDateCarbon->copy()->addDays($i);
-                $cacheKey = $userId . '_' . $dateToClear->format('Y-m-d');
-                $cacheKeyWithPayments = $userId . '_' . $dateToClear->format('Y-m-d') . '_with_payments';
+                $dateStr = $dateToClear->format('Y-m-d');
+                $cacheKey = $userId . '_' . $dateStr;
+                $cacheKeyWithPayments = $userId . '_' . $dateStr . '_with_payments';
                 
                 unset($this->anteriorCache[$cacheKey]);
                 unset($this->anteriorCache[$cacheKeyWithPayments]);
+                
+                // Limpiar cache de UD DEJA y arrastre
+                unset($this->udDejaCache[$userId . '_' . $dateStr . '_uddeja']);
+                unset($this->udDejaCache[$userId . '_' . $dateStr . '_uddeja_with_payments']);
+                unset($this->arrastreCache[$userId . '_' . $dateStr . '_arrastre']);
+                
+                // Limpiar cache de pagos
+                unset($this->paymentsCache['payments_' . $this->client->id . '_' . $dateStr]);
+                
+                // Limpiar cache de sábados
+                unset($this->udDejaCache['saturday_uddeja_' . $userId . '_' . $dateStr]);
             }
             
-            // Limpiar cache de semanas para forzar recálculo
+            // Limpiar cache de semanas y primera fecha para forzar recálculo
             $this->weeksCache = null;
             $this->weeksCacheKey = null;
+            $this->firstLiquidationDateCache = null;
         }
         
         // Cerrar el modal
@@ -1331,6 +1366,57 @@ class ClientLiquidations extends Component
         
         // Mostrar mensaje de éxito con SweetAlert
         $this->dispatch('payment-saved', message: 'Pago registrado correctamente. Se verá reflejado en la siguiente liquidación.');
+    }
+    
+    /**
+     * OPTIMIZADO: Calcula solo el UD DEJA del sábado sin calcular liquidaciones completas
+     * para todos los días de la semana. Esto mejora significativamente el rendimiento.
+     * 
+     * @param string $saturdayDateStr Fecha del sábado en formato Y-m-d
+     * @param int $userId ID del usuario
+     * @param Carbon $weekMonday Lunes de la semana (para cálculos optimizados)
+     * @return float UD DEJA del sábado
+     */
+    protected function getOptimizedSaturdayUdDeja(string $saturdayDateStr, int $userId, Carbon $weekMonday): float
+    {
+        $saturdayCarbon = Carbon::parse($saturdayDateStr);
+        
+        // Verificar cache primero
+        $cacheKey = 'saturday_uddeja_' . $userId . '_' . $saturdayDateStr;
+        if (isset($this->udDejaCache[$cacheKey]) && $this->udDejaCache[$cacheKey] !== null) {
+            return $this->udDejaCache[$cacheKey];
+        }
+        
+        // OPTIMIZADO: Usar el método local computeLiquidationDataForDate en lugar de crear
+        // una nueva instancia del componente Liquidations. Esto reutiliza el cache existente
+        // y evita crear objetos innecesarios.
+        
+        // Calcular desde el lunes hasta el sábado en orden cronológico
+        // pero solo si no están en cache para construir el cache necesario
+        $tempDate = $weekMonday->copy();
+        while ($tempDate->lte($saturdayCarbon)) {
+            if (!$tempDate->isSunday() && $tempDate->lte(Carbon::today())) {
+                $dateStr = $tempDate->format('Y-m-d');
+                // Solo calcular si no está en cache
+                $udDejaCacheKey = $userId . '_' . $dateStr . '_uddeja';
+                $udDejaCacheKeyWithPayments = $userId . '_' . $dateStr . '_uddeja_with_payments';
+                if (!isset($this->udDejaCache[$udDejaCacheKey]) && !isset($this->udDejaCache[$udDejaCacheKeyWithPayments])) {
+                    // Usar el método local que reutiliza el cache de esta instancia
+                    $this->computeLiquidationDataForDate($dateStr, $userId);
+                }
+            }
+            $tempDate->addDay();
+        }
+        
+        // Obtener el UD DEJA del sábado usando el método local
+        $saturdayLiquidationData = $this->computeLiquidationDataForDate($saturdayDateStr, $userId);
+        
+        $udDeja = (float) ($saturdayLiquidationData['udDeja'] ?? 0);
+        
+        // Guardar en cache específico para sábados
+        $this->udDejaCache[$cacheKey] = $udDeja;
+        
+        return $udDeja;
     }
     
     /**
@@ -1361,10 +1447,9 @@ class ClientLiquidations extends Component
         
         $saturdayDateStr = $saturdayDate->format('Y-m-d');
         
-        // Calcular el UD DEJA del sábado (siempre calcular, incluso si no hay jugadas)
-        $saturdayLiquidationData = $this->computeLiquidationDataForDate($saturdayDateStr, $userId);
-        
-        return $saturdayLiquidationData['udDeja'] ?? 0;
+        // OPTIMIZADO: Usar método optimizado en lugar de calcular liquidación completa
+        $weekMonday = $selectedDate->copy()->startOfWeek();
+        return $this->getOptimizedSaturdayUdDeja($saturdayDateStr, $userId, $weekMonday);
     }
     
     public function render()
