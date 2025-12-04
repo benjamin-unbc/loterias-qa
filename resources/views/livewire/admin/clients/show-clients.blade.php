@@ -131,11 +131,9 @@
                                 title="Ver detalles del cliente">
                                 <i class="fa-solid fa-eye"></i>
                             </a>
-                            @endcan
-                            @can('access_menu_liquidaciones')
-                            <a href="{{ route('clients.liquidations', $client->id) }}"
-                                class="font-medium text-white hover:text-yellow-200 transition-colors duration-200"
-                                title="Ver liquidaciones del cliente">
+                            <a href="{{ route('clients.simple-liquidation', $client->id) }}"
+                                class="font-medium text-white hover:text-green-400 transition-colors duration-200"
+                                title="Liquidación simple - Ver ANTERI y registrar pagos">
                                 <i class="fa-solid fa-dollar-sign"></i>
                             </a>
                             @endcan
