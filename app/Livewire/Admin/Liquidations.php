@@ -517,47 +517,17 @@ class Liquidations extends Component
         // prevClientDeja ya es el UD DEJA del día anterior con pagos del día anterior aplicados
         $anteriForDisplay = $prevClientDeja;
         
-        // Si el UD DEJA del día actual es 0, verificar si el UD DEJA del día anterior también es 0
-        // Si el día anterior tiene UD DEJA = 0, entonces usar el ANTERI del día anterior
-        if ($udDeja == 0 && !$selectedDate->isMonday()) {
-            // Verificar si el UD DEJA del día anterior es 0
-            $previousDate = $selectedDate->copy()->subDay();
-            if ($previousDate->isSunday()) {
-                $previousDate = $previousDate->copy()->subDay(); // Sábado anterior
-            }
-            $previousDateStr = $previousDate->format('Y-m-d');
-            
-            // Obtener el UD DEJA del día anterior (sin pagos del día anterior)
-            $prevUdDejaCacheKey = $user->id . '_' . $previousDateStr . '_uddeja';
-            $prevUdDeja = null;
-            
-            if (isset($this->udDejaCache[$prevUdDejaCacheKey]) && $this->udDejaCache[$prevUdDejaCacheKey] !== null) {
-                $prevUdDeja = $this->udDejaCache[$prevUdDejaCacheKey];
-            } else {
-                // Si no está en cache, calcular el UD DEJA del día anterior
-                $prevUdDeja = $this->getUdDejaForDate($previousDateStr, $user->id);
-            }
-            
-            // Si el UD DEJA del día anterior también es 0, entonces usar el ANTERI del día anterior
-            if ($prevUdDeja == 0) {
-                // El ANTERI del día anterior es el UD DEJA del día anterior al anterior
-                $prevPrevDate = $previousDate->copy()->subDay();
-                if ($prevPrevDate->isSunday()) {
-                    $prevPrevDate = $prevPrevDate->copy()->subDay(); // Sábado anterior
-                }
-                $prevPrevDateStr = $prevPrevDate->format('Y-m-d');
-                $prevPrevUdDejaCacheKey = $user->id . '_' . $prevPrevDateStr . '_uddeja_with_payments';
-                
-                if (isset($this->udDejaCache[$prevPrevUdDejaCacheKey]) && $this->udDejaCache[$prevPrevUdDejaCacheKey] !== null) {
-                    $anteriForDisplay = $this->udDejaCache[$prevPrevUdDejaCacheKey];
-                } else {
-                    // Si no está en cache, calcular el UD DEJA del día anterior al anterior
-                    $prevPrevUdDeja = $this->getUdDejaForDate($prevPrevDateStr, $user->id);
-                    $prevPrevPayments = $this->getPaymentsForCurrentDate($user->id, $prevPrevDateStr);
-                    $anteriForDisplay = $prevPrevUdDeja - $prevPrevPayments['udDio'] + $prevPrevPayments['udRecibe'];
-                }
-            }
-            // Si el UD DEJA del día anterior tiene valor, mantener prevClientDeja (que ya es el UD DEJA del día anterior)
+        // IMPORTANTE: Para Martes a Sábado, SIEMPRE usar el ANTERI del lunes (ya calculado en prevClientDeja)
+        // No sobrescribir con la lógica antigua que busca días anteriores cuando udDeja es 0
+        // Esta lógica solo aplica si NO es lunes y NO es martes a sábado (es decir, solo para casos especiales)
+        // Pero como ahora Martes a Sábado siempre usan el ANTERI del lunes, esta lógica ya no es necesaria
+        // Sin embargo, la mantenemos para casos edge pero respetando el ANTERI del lunes para Martes a Sábado
+        
+        // Si es Martes a Sábado, prevClientDeja ya tiene el ANTERI del lunes, no hacer nada más
+        if (!$selectedDate->isMonday() && !$selectedDate->isSunday()) {
+            // Para Martes a Sábado, prevClientDeja ya es el ANTERI del lunes
+            // No sobrescribir con la lógica antigua
+            // El anteriForDisplay ya está correcto (es prevClientDeja que es el ANTERI del lunes)
         }
         
         // El UD DEJA del día actual se calcula usando el ANTERI (que es el UD DEJA del día anterior)
