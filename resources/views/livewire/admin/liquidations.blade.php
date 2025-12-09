@@ -242,88 +242,88 @@
             </div>
         @endif
     </div>
-</div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
-<script>
-window.addEventListener('printLiquidation', () => {
-    printLiquidation();
-});
-
-window.addEventListener('downloadLiquidation', () => {
-    guardarLiquidacion();
-});
-
-function printLiquidation() {
-    const container = document.getElementById('liquidationContainer');
-    if (!container) return;
-
-    html2canvas(container, { scale: 2 }).then(canvas => {
-        const imgData = canvas.toDataURL('image/png');
-        let iframe = document.createElement('iframe');
-        iframe.style.position = "fixed";
-        iframe.style.right = "0";
-        iframe.style.bottom = "0";
-        iframe.style.width = "0";
-        iframe.style.height = "0";
-        iframe.style.border = "0";
-        document.body.appendChild(iframe);
-        
-        const doc = iframe.contentWindow.document;
-        doc.open();
-        doc.write(`
-          <html>
-            <head>
-              <title>Imprimir Liquidación</title>
-              <style>
-                @page { size: Letter; margin: 0mm; }
-                html, body { margin: 0; padding: 0; }
-                body { background: #fff; }
-                img { width: 100%; height: auto; }
-              </style>
-            </head>
-            <body>
-              <img src="${imgData}" alt="Liquidación" onload="window.focus(); window.print();">
-            </body>
-          </html>
-        `);
-        doc.close();
-        setTimeout(() => {
-            document.body.removeChild(iframe);
-        }, 1000);
+    <script>
+    window.addEventListener('printLiquidation', () => {
+        printLiquidation();
     });
-}
 
-async function guardarLiquidacion() {
-    const container = document.getElementById('liquidationContainer');
-    if (!container) return;
+    window.addEventListener('downloadLiquidation', () => {
+        guardarLiquidacion();
+    });
 
-    const canvas = await html2canvas(container, { scale: 2 });
-    const imgData = canvas.toDataURL("image/png");
+    function printLiquidation() {
+        const container = document.getElementById('liquidationContainer');
+        if (!container) return;
 
-    const link = document.createElement('a');
-    link.href = imgData;
-    link.download = "liquidacion-{{ $date ?? 'sin-fecha' }}.png";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-</script>
-
-<style>
-@media print {
-    @page {
-        size: letter;
-        margin: 0;
+        html2canvas(container, { scale: 2 }).then(canvas => {
+            const imgData = canvas.toDataURL('image/png');
+            let iframe = document.createElement('iframe');
+            iframe.style.position = "fixed";
+            iframe.style.right = "0";
+            iframe.style.bottom = "0";
+            iframe.style.width = "0";
+            iframe.style.height = "0";
+            iframe.style.border = "0";
+            document.body.appendChild(iframe);
+            
+            const doc = iframe.contentWindow.document;
+            doc.open();
+            doc.write(`
+              <html>
+                <head>
+                  <title>Imprimir Liquidación</title>
+                  <style>
+                    @page { size: Letter; margin: 0mm; }
+                    html, body { margin: 0; padding: 0; }
+                    body { background: #fff; }
+                    img { width: 100%; height: auto; }
+                  </style>
+                </head>
+                <body>
+                  <img src="${imgData}" alt="Liquidación" onload="window.focus(); window.print();">
+                </body>
+              </html>
+            `);
+            doc.close();
+            setTimeout(() => {
+                document.body.removeChild(iframe);
+            }, 1000);
+        });
     }
-    html, body {
-        margin: 0;
-        padding: 0;
-        width: 100%;
-        height: 100%;
-        -webkit-print-color-adjust: exact;
-        overflow: hidden;
+
+    async function guardarLiquidacion() {
+        const container = document.getElementById('liquidationContainer');
+        if (!container) return;
+
+        const canvas = await html2canvas(container, { scale: 2 });
+        const imgData = canvas.toDataURL("image/png");
+
+        const link = document.createElement('a');
+        link.href = imgData;
+        link.download = "liquidacion-{{ $date ?? 'sin-fecha' }}.png";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     }
-}
-</style>
+    </script>
+
+    <style>
+    @media print {
+        @page {
+            size: letter;
+            margin: 0;
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            -webkit-print-color-adjust: exact;
+            overflow: hidden;
+        }
+    }
+    </style>
+</div>
