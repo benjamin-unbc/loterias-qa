@@ -321,16 +321,16 @@ class AutoPaymentSystem extends Command
                 $allowedIndexes = [1];
                 break;
             case 5:
-                // A los 5: posiciones 2-5
-                $allowedIndexes = range(2, 5);
+                // A los 5: posiciones 1-5 (ahora incluye posición 1)
+                $allowedIndexes = range(1, 5);
                 break;
             case 10:
-                // A los 10: posiciones 2-10
-                $allowedIndexes = range(2, 10);
+                // A los 10: posiciones 1-10 (ahora incluye posición 1)
+                $allowedIndexes = range(1, 10);
                 break;
             case 20:
-                // A los 20: posiciones 2-20
-                $allowedIndexes = range(2, 20);
+                // A los 20: posiciones 1-20 (ahora incluye posición 1)
+                $allowedIndexes = range(1, 20);
                 break;
             default:
                 // Para otras posiciones específicas, solo esa posición
@@ -374,9 +374,9 @@ class AutoPaymentSystem extends Command
             $playedPosition = (int)$play->position;
             
             // ✅ NUEVA LÓGICA: Determinar rango permitido según posición apostada
-            // Posición 5: busca de 2-5
-            // Posición 10: busca de 2-10
-            // Posición 20: busca de 2-20
+            // Posición 5: busca de 1-5 (ahora incluye posición 1)
+            // Posición 10: busca de 1-10 (ahora incluye posición 1)
+            // Posición 20: busca de 1-20 (ahora incluye posición 1)
             $allowedIndexes = [];
             
             switch ($playedPosition) {
@@ -385,16 +385,16 @@ class AutoPaymentSystem extends Command
                     $allowedIndexes = [1];
                     break;
                 case 5:
-                    // A los 5: posiciones 2-5
-                    $allowedIndexes = range(2, 5);
+                    // A los 5: posiciones 1-5 (ahora incluye posición 1)
+                    $allowedIndexes = range(1, 5);
                     break;
                 case 10:
-                    // A los 10: posiciones 2-10
-                    $allowedIndexes = range(2, 10);
+                    // A los 10: posiciones 1-10 (ahora incluye posición 1)
+                    $allowedIndexes = range(1, 10);
                     break;
                 case 20:
-                    // A los 20: posiciones 2-20
-                    $allowedIndexes = range(2, 20);
+                    // A los 20: posiciones 1-20 (ahora incluye posición 1)
+                    $allowedIndexes = range(1, 20);
                     break;
                 default:
                     // Para otras posiciones específicas, solo esa posición
@@ -601,16 +601,16 @@ class AutoPaymentSystem extends Command
                 $allowedIndexes = [1];
                 break;
             case 5:
-                // A los 5: posiciones 2-5
-                $allowedIndexes = range(2, 5);
+                // A los 5: posiciones 1-5 (ahora incluye posición 1)
+                $allowedIndexes = range(1, 5);
                 break;
             case 10:
-                // A los 10: posiciones 2-10
-                $allowedIndexes = range(2, 10);
+                // A los 10: posiciones 1-10 (ahora incluye posición 1)
+                $allowedIndexes = range(1, 10);
                 break;
             case 20:
-                // A los 20: posiciones 2-20
-                $allowedIndexes = range(2, 20);
+                // A los 20: posiciones 1-20 (ahora incluye posición 1)
+                $allowedIndexes = range(1, 20);
                 break;
             default:
                 // Para otras posiciones específicas, solo esa posición

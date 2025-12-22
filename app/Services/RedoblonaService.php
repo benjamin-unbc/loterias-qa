@@ -101,9 +101,9 @@ class RedoblonaService
         }
 
         // ✅ NUEVA LÓGICA: Buscar números ganadores en el rango de posiciones de redoblona
-        // Posición 5: busca de 2-5
-        // Posición 10: busca de 2-10
-        // Posición 20: busca de 2-20
+        // Posición 5: busca de 1-5 (ahora incluye posición 1)
+        // Posición 10: busca de 1-10 (ahora incluye posición 1)
+        // Posición 20: busca de 1-20 (ahora incluye posición 1)
         $redoblonaRange = $this->getRedoblonaPositionRange($play->positionR);
         $redoblonaNumbers = Number::with(['city', 'extract'])
             ->whereHas('city', function($query) use ($lotteryCode) {
@@ -203,24 +203,24 @@ class RedoblonaService
 
     /**
      * Obtiene el rango de posiciones para el número principal
-     * ✅ NUEVA LÓGICA: Posición 5 busca 2-5, posición 10 busca 2-10, posición 20 busca 2-20
+     * ✅ MODIFICADO: Posiciones 5, 10, 20 ahora incluyen posición 1
      */
     private function getMainPositionRange($position): array
     {
         if ($position == 1) {
             return ['min' => 1, 'max' => 1];
         } elseif ($position == 5) {
-            return ['min' => 2, 'max' => 5];
+            return ['min' => 1, 'max' => 5];
         } elseif ($position == 10) {
-            return ['min' => 2, 'max' => 10];
+            return ['min' => 1, 'max' => 10];
         } elseif ($position == 20) {
-            return ['min' => 2, 'max' => 20];
+            return ['min' => 1, 'max' => 20];
         } elseif ($position >= 2 && $position <= 5) {
-            return ['min' => 2, 'max' => 5];
+            return ['min' => 1, 'max' => 5];
         } elseif ($position >= 6 && $position <= 10) {
-            return ['min' => 2, 'max' => 10];
+            return ['min' => 1, 'max' => 10];
         } elseif ($position >= 11 && $position <= 20) {
-            return ['min' => 2, 'max' => 20];
+            return ['min' => 1, 'max' => 20];
         }
         
         return ['min' => $position, 'max' => $position];
@@ -228,24 +228,24 @@ class RedoblonaService
 
     /**
      * Obtiene el rango de posiciones para la redoblona (igual que las jugadas normales)
-     * ✅ MODIFICADO: Posición 5 busca 2-5, posición 10 busca 2-10, posición 20 busca 2-20
+     * ✅ MODIFICADO: Posiciones 5, 10, 20 ahora incluyen posición 1
      */
     private function getRedoblonaPositionRange($position): array
     {
         if ($position == 1) {
             return ['min' => 1, 'max' => 1];
         } elseif ($position == 5) {
-            return ['min' => 2, 'max' => 5];
+            return ['min' => 1, 'max' => 5];
         } elseif ($position == 10) {
-            return ['min' => 2, 'max' => 10];
+            return ['min' => 1, 'max' => 10];
         } elseif ($position == 20) {
-            return ['min' => 2, 'max' => 20];
+            return ['min' => 1, 'max' => 20];
         } elseif ($position >= 2 && $position <= 5) {
-            return ['min' => 2, 'max' => 5];
+            return ['min' => 1, 'max' => 5];
         } elseif ($position >= 6 && $position <= 10) {
-            return ['min' => 2, 'max' => 10];
+            return ['min' => 1, 'max' => 10];
         } elseif ($position >= 11 && $position <= 20) {
-            return ['min' => 2, 'max' => 20];
+            return ['min' => 1, 'max' => 20];
         }
         
         return ['min' => $position, 'max' => $position];

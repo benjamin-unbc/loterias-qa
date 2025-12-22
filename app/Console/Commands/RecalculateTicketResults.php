@@ -155,20 +155,20 @@ class RecalculateTicketResults extends Command
             $playedDigits = strlen($playedNumber);
             $playedPosition = (int)$play->position;
 
-            // Determinar rango
+            // Determinar rango (ahora incluye posición 1 para posiciones 5, 10, 20)
             $allowedIndexes = [];
             switch ($playedPosition) {
                 case 1:
                     $allowedIndexes = [1];
                     break;
                 case 5:
-                    $allowedIndexes = range(2, 5);
+                    $allowedIndexes = range(1, 5); // Ahora incluye posición 1
                     break;
                 case 10:
-                    $allowedIndexes = range(2, 10);
+                    $allowedIndexes = range(1, 10); // Ahora incluye posición 1
                     break;
                 case 20:
-                    $allowedIndexes = range(2, 20);
+                    $allowedIndexes = range(1, 20); // Ahora incluye posición 1
                     break;
                 default:
                     $allowedIndexes = [$playedPosition];

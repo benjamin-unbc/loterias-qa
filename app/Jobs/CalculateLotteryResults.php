@@ -128,29 +128,29 @@ class CalculateLotteryResults implements ShouldQueue
         if ($apostadaPosition === 1) {
             return [1];
         }
-        // Posición 5: busca de 2-5
+        // Posición 5: busca de 1-5 (ahora incluye posición 1)
         elseif ($apostadaPosition == 5) {
-            return range(2, 5);
+            return range(1, 5);
         }
-        // Posición 10: busca de 2-10
+        // Posición 10: busca de 1-10 (ahora incluye posición 1)
         elseif ($apostadaPosition == 10) {
-            return range(2, 10);
+            return range(1, 10);
         }
-        // Posición 20: busca de 2-20
+        // Posición 20: busca de 1-20 (ahora incluye posición 1)
         elseif ($apostadaPosition == 20) {
-            return range(2, 20);
+            return range(1, 20);
         }
-        // Tabla 2-5: posiciones 2-5
+        // Tabla 2-5: posiciones 1-5 (ahora incluye posición 1)
         elseif ($apostadaPosition >= 2 && $apostadaPosition <= 5) {
-            return range(2, 5);
+            return range(1, 5);
         }
-        // Tabla 6-10: posiciones 2-10
+        // Tabla 6-10: posiciones 1-10 (ahora incluye posición 1)
         elseif ($apostadaPosition >= 6 && $apostadaPosition <= 10) {
-            return range(2, 10);
+            return range(1, 10);
         }
-        // Tabla 11-20: posiciones 2-20
+        // Tabla 11-20: posiciones 1-20 (ahora incluye posición 1)
         elseif ($apostadaPosition >= 11 && $apostadaPosition <= 20) {
-            return range(2, 20);
+            return range(1, 20);
         }
         
         // Si apostaste a una posición fuera de rango, no hay premio
@@ -159,11 +159,11 @@ class CalculateLotteryResults implements ShouldQueue
 
     /**
      * ✅ NUEVO: Obtiene el rango de posiciones según la posición apostada
-     * ✅ MODIFICADO: Posición 10 busca 2-10, posición 20 busca 2-20
+     * ✅ MODIFICADO: Posiciones 5, 10, 20 ahora incluyen posición 1
      * Posición 1 → solo posición 1
-     * Posición 5 → rango 2-5
-     * Posición 10 → rango 2-10
-     * Posición 20 → rango 2-20
+     * Posición 5 → rango 1-5 (ahora incluye posición 1)
+     * Posición 10 → rango 1-10 (ahora incluye posición 1)
+     * Posición 20 → rango 1-20 (ahora incluye posición 1)
      * 
      * @param int $position Posición apostada
      * @return array Array con 'min' y 'max' del rango
@@ -173,17 +173,17 @@ class CalculateLotteryResults implements ShouldQueue
         if ($position == 1) {
             return ['min' => 1, 'max' => 1];
         } elseif ($position == 5) {
-            return ['min' => 2, 'max' => 5];
+            return ['min' => 1, 'max' => 5];
         } elseif ($position == 10) {
-            return ['min' => 2, 'max' => 10];
+            return ['min' => 1, 'max' => 10];
         } elseif ($position == 20) {
-            return ['min' => 2, 'max' => 20];
+            return ['min' => 1, 'max' => 20];
         } elseif ($position >= 2 && $position <= 5) {
-            return ['min' => 2, 'max' => 5];
+            return ['min' => 1, 'max' => 5];
         } elseif ($position >= 6 && $position <= 10) {
-            return ['min' => 2, 'max' => 10];
+            return ['min' => 1, 'max' => 10];
         } elseif ($position >= 11 && $position <= 20) {
-            return ['min' => 2, 'max' => 20];
+            return ['min' => 1, 'max' => 20];
         }
         
         return ['min' => $position, 'max' => $position];

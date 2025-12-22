@@ -157,14 +157,14 @@ class LotteryResultProcessor
                         // Quiniela: solo posición 1
                         $searchPositions = [1];
                     } elseif ($apu->position >= 2 && $apu->position <= 5) {
-                        // Tabla 2-5
-                        $searchPositions = range(2, 5);
+                        // Tabla 2-5: ahora incluye posición 1
+                        $searchPositions = range(1, 5);
                     } elseif ($apu->position >= 6 && $apu->position <= 10) {
-                        // Tabla 6-10
-                        $searchPositions = range(6, 10);
+                        // Tabla 6-10: ahora incluye posición 1
+                        $searchPositions = range(1, 10);
                     } elseif ($apu->position >= 11 && $apu->position <= 20) {
-                        // Tabla 11-20
-                        $searchPositions = range(11, 20);
+                        // Tabla 11-20: ahora incluye posición 1
+                        $searchPositions = range(1, 20);
                     }
                     
                     $numDigitsPlayed = strlen($playedNumberClean);
@@ -210,21 +210,23 @@ class LotteryResultProcessor
                             // Para quiniela (posición 1), no se multiplica por veces (solo puede salir una vez)
                             $aciertValue = (float)$apu->import * (float)$multiplier;
                         } elseif ($ticketType === 'prizes') {
-                            // Calcular premio basado en la posición donde realmente salió
-                            if ($actualWinningPosition <= 5) $multiplier = $prizes->cobra_5;
-                            elseif ($actualWinningPosition <= 10) $multiplier = $prizes->cobra_10;
+                            // ✅ CORREGIDO: Calcular premio basado en la posición APOSTADA, no donde salió
+                            if ($apu->position <= 5) $multiplier = $prizes->cobra_5;
+                            elseif ($apu->position <= 10) $multiplier = $prizes->cobra_10;
                             else $multiplier = $prizes->cobra_20;
                             // ✅ CORREGIDO: Multiplicar premio base × veces que salió × importe
                             $aciertValue = (float)$apu->import * (float)$multiplier * $winningCount;
                         } elseif ($ticketType === 'figureOne') {
-                            if ($actualWinningPosition <= 5) $multiplier = $figureOne->cobra_5;
-                            elseif ($actualWinningPosition <= 10) $multiplier = $figureOne->cobra_10;
+                            // ✅ CORREGIDO: Calcular premio basado en la posición APOSTADA, no donde salió
+                            if ($apu->position <= 5) $multiplier = $figureOne->cobra_5;
+                            elseif ($apu->position <= 10) $multiplier = $figureOne->cobra_10;
                             else $multiplier = $figureOne->cobra_20;
                             // ✅ CORREGIDO: Multiplicar premio base × veces que salió × importe
                             $aciertValue = (float)$apu->import * (float)$multiplier * $winningCount;
                         } elseif ($ticketType === 'figureTwo') {
-                            if ($actualWinningPosition <= 5) $multiplier = $figureTwo->cobra_5;
-                            elseif ($actualWinningPosition <= 10) $multiplier = $figureTwo->cobra_10;
+                            // ✅ CORREGIDO: Calcular premio basado en la posición APOSTADA, no donde salió
+                            if ($apu->position <= 5) $multiplier = $figureTwo->cobra_5;
+                            elseif ($apu->position <= 10) $multiplier = $figureTwo->cobra_10;
                             else $multiplier = $figureTwo->cobra_20;
                             // ✅ CORREGIDO: Multiplicar premio base × veces que salió × importe
                             $aciertValue = (float)$apu->import * (float)$multiplier * $winningCount;
@@ -498,8 +500,7 @@ class LotteryResultProcessor
      */
     private function isPositionCorrect($playedPosition, $winningPosition, $isRedoblona = false): bool
     {
-        // ✅ CORREGIDO: Para redoblonas, usar rangos 2-5, 2-10, 2-20
-        // Para jugadas normales, usar rangos 2-5, 6-10, 11-20
+        // ✅ MODIFICADO: Posiciones 5, 10, 20 ahora incluyen posición 1 para jugadas normales
         
         switch ($playedPosition) {
             case 1:
@@ -507,16 +508,16 @@ class LotteryResultProcessor
                 return $winningPosition == 1;
                 
             case 5:
-                // A los 5: gana si sale en posiciones 2-5 (igual para normal y redoblona)
-                return $winningPosition >= 2 && $winningPosition <= 5;
+                // A los 5: gana si sale en posiciones 1-5 (ahora incluye posición 1)
+                return $winningPosition >= 1 && $winningPosition <= 5;
                 
             case 10:
                 if ($isRedoblona) {
                     // Redoblona: gana si sale en posiciones 2-10
                     return $winningPosition >= 2 && $winningPosition <= 10;
                 } else {
-                    // Jugada normal: gana si sale en posiciones 6-10
-                    return $winningPosition >= 6 && $winningPosition <= 10;
+                    // Jugada normal: gana si sale en posiciones 1-10 (ahora incluye posición 1)
+                    return $winningPosition >= 1 && $winningPosition <= 10;
                 }
                 
             case 20:
@@ -524,8 +525,8 @@ class LotteryResultProcessor
                     // Redoblona: gana si sale en posiciones 2-20
                     return $winningPosition >= 2 && $winningPosition <= 20;
                 } else {
-                    // Jugada normal: gana si sale en posiciones 11-20
-                    return $winningPosition >= 11 && $winningPosition <= 20;
+                    // Jugada normal: gana si sale en posiciones 1-20 (ahora incluye posición 1)
+                    return $winningPosition >= 1 && $winningPosition <= 20;
                 }
                 
             default:
