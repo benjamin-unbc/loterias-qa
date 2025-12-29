@@ -134,11 +134,17 @@ class QuinielasManager extends Component
             }
             
             // Agregar estado a cada horario
+            // ✅ CORREGIDO: Usar extract_id de la BD para determinar el turno, no el horario
             $schedulesWithState = [];
             foreach ($schedules as $schedule) {
-                $state = $this->getScheduleState($schedule);
-                // Obtener el ID de la ciudad para este horario específico
-                $cityId = $cityData->where('time', $schedule)->first()->id ?? null;
+                // Obtener el registro completo de la ciudad para este horario específico
+                $cityRecord = $cityData->where('time', $schedule)->first();
+                $cityId = $cityRecord->id ?? null;
+                
+                // ✅ IMPORTANTE: Determinar el turno desde el extract_id de la BD, no desde el horario
+                // Esto asegura que si cambias el horario, el turno se mantiene según extract_id
+                $state = $this->getStateByExtractId($cityRecord->extract_id ?? null);
+                
                 $schedulesWithState[] = [
                     'time' => $schedule,
                     'state' => $state,
@@ -234,7 +240,25 @@ class QuinielasManager extends Component
     }
 
     /**
+     * Obtiene los horarios por defecto según el extract_id (turno)
+     * ✅ NUEVO: Define los horarios originales por defecto para cada turno
+     */
+    protected function getDefaultTimeByExtractId($extractId)
+    {
+        $defaultTimes = [
+            1 => '10:15',  // Previa
+            2 => '12:00',  // Primera
+            3 => '15:00',  // Matutina
+            4 => '18:00',  // Vespertina
+            5 => '21:00',  // Nocturna
+        ];
+
+        return $defaultTimes[$extractId] ?? null;
+    }
+
+    /**
      * Aplica la configuración por defecto (solo las loterías principales)
+     * ✅ MODIFICADO: Ahora también restaura los horarios editados a sus valores por defecto
      */
     public function applyDefaultConfiguration()
     {
@@ -250,16 +274,73 @@ class QuinielasManager extends Component
             'MONTEVIDEO'   // ORO
         ];
         
-        foreach ($this->citySchedules as $cityName => $schedules) {
-            if (in_array($cityName, $defaultSelectedLotteries)) {
-                $this->selectedCitySchedules[$cityName] = array_column($schedules, 'time');
-            } else {
-                $this->selectedCitySchedules[$cityName] = [];
+        try {
+            // ✅ NUEVO: Restaurar horarios editados a sus valores por defecto
+            // Obtener todas las ciudades de las loterías por defecto
+            $cities = City::with('extract')
+                ->whereIn('name', $defaultSelectedLotteries)
+                ->get();
+            
+            $restoredCount = 0;
+            foreach ($cities as $city) {
+                $defaultTime = $this->getDefaultTimeByExtractId($city->extract_id);
+                
+                // Si el horario actual es diferente al por defecto, restaurarlo
+                if ($defaultTime && $city->time !== $defaultTime) {
+                    $oldTime = $city->time;
+                    $newCode = $this->generateCityCode($city->name, $defaultTime);
+                    
+                    // Verificar que el nuevo código no exista (excepto el actual)
+                    $existingCode = City::where('code', $newCode)
+                        ->where('id', '!=', $city->id)
+                        ->first();
+                    
+                    if (!$existingCode) {
+                        $city->update([
+                            'time' => $defaultTime,
+                            'code' => $newCode
+                        ]);
+                        
+                        // Actualizar la configuración global si existe
+                        $globalConfig = GlobalQuinielasConfiguration::where('city_name', $city->name)->first();
+                        if ($globalConfig && !empty($globalConfig->selected_schedules)) {
+                            $selectedSchedules = $globalConfig->selected_schedules;
+                            $key = array_search($oldTime, $selectedSchedules);
+                            if ($key !== false) {
+                                $selectedSchedules[$key] = $defaultTime;
+                                $globalConfig->update(['selected_schedules' => $selectedSchedules]);
+                            }
+                        }
+                        
+                        $restoredCount++;
+                    }
+                }
             }
+            
+            // Recargar horarios después de restaurar
+            $this->loadCitySchedules();
+            
+            // Aplicar selección de horarios por defecto
+            foreach ($this->citySchedules as $cityName => $schedules) {
+                if (in_array($cityName, $defaultSelectedLotteries)) {
+                    $this->selectedCitySchedules[$cityName] = array_column($schedules, 'time');
+                } else {
+                    $this->selectedCitySchedules[$cityName] = [];
+                }
+            }
+            
+            $this->checkForUnsavedChanges();
+            
+            $message = 'Configuración por defecto aplicada';
+            if ($restoredCount > 0) {
+                $message .= ". {$restoredCount} horario(s) restaurado(s) a sus valores por defecto";
+            }
+            $message .= '. Recuerda guardar los cambios.';
+            
+            $this->dispatch('notify', message: $message, type: 'info');
+        } catch (\Exception $e) {
+            $this->dispatch('notify', message: 'Error al aplicar configuración por defecto: ' . $e->getMessage(), type: 'error');
         }
-        
-        $this->checkForUnsavedChanges();
-        $this->dispatch('notify', message: 'Configuración por defecto aplicada. Recuerda guardar los cambios.', type: 'info');
     }
 
     /**
@@ -305,6 +386,8 @@ class QuinielasManager extends Component
 
     /**
      * Guarda el cambio de horario
+     * ✅ MODIFICADO: Permite cambiar el horario visualmente sin restricción de rango
+     * Mantiene el extract_id original para que siga funcionando con los mismos códigos y mapeos
      */
     public function saveTimeChange()
     {
@@ -318,23 +401,10 @@ class QuinielasManager extends Component
             return;
         }
 
-        // Obtener el estado/turno actual del horario
+        // Obtener el horario anterior
         $oldTime = $this->editingSchedule['oldTime'] ?? '';
         if (empty($oldTime)) {
             $this->dispatch('notify', message: 'No se puede editar un turno vacío', type: 'error');
-            return;
-        }
-        
-        $currentState = $this->getScheduleState($oldTime);
-        
-        // Validar que el nuevo horario esté dentro del rango del turno actual
-        if (!$this->validateTimeForState($this->newTimeValue, $currentState)) {
-            $range = $this->getScheduleStateRange($currentState);
-            if ($range) {
-                $this->dispatch('notify', message: "El horario debe estar entre {$range[0]} y {$range[1]} para el turno {$currentState}", type: 'error');
-            } else {
-                $this->dispatch('notify', message: "El horario no es válido para el turno {$currentState}", type: 'error');
-            }
             return;
         }
 
@@ -342,10 +412,34 @@ class QuinielasManager extends Component
             // Guardar valores antes de limpiar
             $newTime = $this->newTimeValue;
             $cityName = $this->editingSchedule['cityName'];
+            $cityId = $this->editingSchedule['cityId'];
             
-            // Actualizar solo el campo time en la tabla cities usando el id
-            City::where('id', $this->editingSchedule['cityId'])
-                ->update(['time' => $this->newTimeValue]);
+            // ✅ Obtener el registro actual para mantener el extract_id original
+            $currentCity = City::find($cityId);
+            if (!$currentCity) {
+                $this->dispatch('notify', message: 'No se encontró el registro de la ciudad', type: 'error');
+                return;
+            }
+            
+            // ✅ Generar nuevo código basado en el nuevo horario
+            $newCode = $this->generateCityCode($cityName, $newTime);
+            
+            // ✅ Verificar si el nuevo código ya existe para otra ciudad/horario
+            $existingCode = City::where('code', $newCode)
+                ->where('id', '!=', $cityId)
+                ->first();
+            
+            if ($existingCode) {
+                $this->dispatch('notify', message: "El código {$newCode} ya existe para otra ciudad/horario", type: 'error');
+                return;
+            }
+            
+            // ✅ Actualizar time y code, pero MANTENER el extract_id original
+            // Esto asegura que siga funcionando con los mismos códigos y mapeos del turno
+            $currentCity->update([
+                'time' => $newTime,
+                'code' => $newCode
+            ]);
 
             // Actualizar la configuración global si existe
             $globalConfig = GlobalQuinielasConfiguration::where('city_name', $cityName)->first();
@@ -373,7 +467,7 @@ class QuinielasManager extends Component
             $this->editingSchedule = null;
             $this->newTimeValue = '';
             
-            $this->dispatch('notify', message: "Horario actualizado correctamente de {$oldTime} a {$newTime}", type: 'success');
+            $this->dispatch('notify', message: "Horario actualizado correctamente de {$oldTime} a {$newTime}. El turno se mantiene igual.", type: 'success');
         } catch (\Exception $e) {
             $this->dispatch('notify', message: 'Error al actualizar el horario: ' . $e->getMessage(), type: 'error');
         }
@@ -605,6 +699,27 @@ class QuinielasManager extends Component
         ];
 
         return $mapping[$state] ?? null;
+    }
+
+    /**
+     * ✅ NUEVO: Obtiene el estado/turno según el extract_id de la BD
+     * Esto asegura que el turno se determine desde la BD, no desde el horario
+     */
+    protected function getStateByExtractId($extractId)
+    {
+        if ($extractId === null) {
+            return 'Otro';
+        }
+        
+        $mapping = [
+            1 => 'Previa',
+            2 => 'Primera',
+            3 => 'Matutina',
+            4 => 'Vespertina',
+            5 => 'Nocturna',
+        ];
+
+        return $mapping[$extractId] ?? 'Otro';
     }
 
     /**
