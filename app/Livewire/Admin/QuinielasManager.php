@@ -464,10 +464,34 @@ class QuinielasManager extends Component
                 }
             }
             
+            // ✅ NUEVO: Guardar automáticamente la configuración global
+            // Esto asegura que los cambios se apliquen inmediatamente sin necesidad de hacer clic en "Guardar cambios"
+            foreach ($this->selectedCitySchedules as $cityNameToSave => $schedules) {
+                GlobalQuinielasConfiguration::updateOrCreate(
+                    [
+                        'city_name' => $cityNameToSave
+                    ],
+                    [
+                        'selected_schedules' => $schedules
+                    ]
+                );
+            }
+            
+            // Actualizar appliedCitySchedules para que no muestre cambios sin guardar
+            $this->appliedCitySchedules = $this->selectedCitySchedules;
+            $this->hasUnsavedChanges = false;
+            
+            // Invalidar el cache de configuración global para todos los usuarios
+            // Esto asegura que los cambios se reflejen inmediatamente en el Gestor de Jugadas
+            $users = \App\Models\User::pluck('id');
+            foreach ($users as $userId) {
+                \Cache::forget('global_quinielas_config_' . $userId);
+            }
+            
             $this->editingSchedule = null;
             $this->newTimeValue = '';
             
-            $this->dispatch('notify', message: "Horario actualizado correctamente de {$oldTime} a {$newTime}. El turno se mantiene igual.", type: 'success');
+            $this->dispatch('notify', message: "Horario actualizado correctamente de {$oldTime} a {$newTime}. El turno se mantiene igual. Configuración guardada automáticamente.", type: 'success');
         } catch (\Exception $e) {
             $this->dispatch('notify', message: 'Error al actualizar el horario: ' . $e->getMessage(), type: 'error');
         }
