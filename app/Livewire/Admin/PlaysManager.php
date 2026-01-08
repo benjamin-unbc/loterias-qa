@@ -2652,13 +2652,21 @@ public function addRow()
         }
 
         // 2. Verificar que la jugada no es muy antigua (máximo 24 horas)
-        if ($basePlay->created_at < now()->subHours(24)) {
+        // ✅ CORREGIDO: Validar que created_at no sea null antes de usarlo
+        if ($basePlay->created_at && $basePlay->created_at < now()->subHours(24)) {
             \Log::warning("Jugada base muy antigua", [
                 'play_id' => $basePlay->id,
                 'created_at' => $basePlay->created_at,
                 'age_hours' => $basePlay->created_at->diffInHours(now())
             ]);
             return false;
+        }
+        
+        // Si created_at es null, considerar la jugada como válida (puede ser una jugada recién creada)
+        if (!$basePlay->created_at) {
+            \Log::info("Jugada base sin created_at (jugada recién creada)", [
+                'play_id' => $basePlay->id
+            ]);
         }
 
         // 3. Verificar que el número es válido
