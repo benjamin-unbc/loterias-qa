@@ -630,15 +630,15 @@ class AutoUpdateLotteryNumbers extends Command
     
     /**
      * ✅ NUEVO: Verifica si la posición apostada es correcta según las reglas de quiniela
-     * ✅ MODIFICADO: Usa nuevos rangos (posición 10 busca 2-10, posición 20 busca 2-20)
+     * ✅ MODIFICADO: Posiciones 5, 10, 20 ahora buscan desde posición 1 (1-5, 1-10, 1-20)
      */
     private function isPositionCorrect($playedPosition, $winningPosition)
     {
         // ✅ NUEVA LÓGICA:
         // - Posición 1 (Quiniela): Solo gana si sale en posición 1
-        // - Posición 5: Gana si sale en posiciones 2-5
-        // - Posición 10: Gana si sale en posiciones 2-10
-        // - Posición 20: Gana si sale en posiciones 2-20
+        // - Posición 5: Gana si sale en posiciones 1-5 (incluye posición 1)
+        // - Posición 10: Gana si sale en posiciones 1-10 (incluye posición 1)
+        // - Posición 20: Gana si sale en posiciones 1-20 (incluye posición 1)
         
         switch ($playedPosition) {
             case 1:
@@ -646,16 +646,16 @@ class AutoUpdateLotteryNumbers extends Command
                 return $winningPosition == 1;
                 
             case 5:
-                // A los 5: gana si sale en posiciones 2-5
-                return $winningPosition >= 2 && $winningPosition <= 5;
+                // A los 5: gana si sale en posiciones 1-5 (incluye posición 1)
+                return $winningPosition >= 1 && $winningPosition <= 5;
                 
             case 10:
-                // A los 10: gana si sale en posiciones 2-10
-                return $winningPosition >= 2 && $winningPosition <= 10;
+                // A los 10: gana si sale en posiciones 1-10 (incluye posición 1)
+                return $winningPosition >= 1 && $winningPosition <= 10;
                 
             case 20:
-                // A los 20: gana si sale en posiciones 2-20
-                return $winningPosition >= 2 && $winningPosition <= 20;
+                // A los 20: gana si sale en posiciones 1-20 (incluye posición 1)
+                return $winningPosition >= 1 && $winningPosition <= 20;
                 
             default:
                 // Para otras posiciones, verificar coincidencia exacta
@@ -678,6 +678,7 @@ class AutoUpdateLotteryNumbers extends Command
         }
         
         // ✅ Determinar rango permitido según posición apostada
+        // ✅ MODIFICADO: Posiciones 5, 10, 20 ahora buscan desde posición 1
         $allowedIndexes = [];
         
         switch ($playedPosition) {
@@ -686,16 +687,16 @@ class AutoUpdateLotteryNumbers extends Command
                 $allowedIndexes = [1];
                 break;
             case 5:
-                // A los 5: posiciones 2-5
-                $allowedIndexes = range(2, 5);
+                // A los 5: posiciones 1-5 (incluye posición 1)
+                $allowedIndexes = range(1, 5);
                 break;
             case 10:
-                // A los 10: posiciones 2-10
-                $allowedIndexes = range(2, 10);
+                // A los 10: posiciones 1-10 (incluye posición 1)
+                $allowedIndexes = range(1, 10);
                 break;
             case 20:
-                // A los 20: posiciones 2-20
-                $allowedIndexes = range(2, 20);
+                // A los 20: posiciones 1-20 (incluye posición 1)
+                $allowedIndexes = range(1, 20);
                 break;
             default:
                 // Para otras posiciones específicas, solo esa posición
