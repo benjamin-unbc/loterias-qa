@@ -241,13 +241,16 @@ class ClientDetailsModal extends Component
             return 0;
         }
 
-        $query = Result::where('user_id', $this->client->associatedUser->id);
+        // ✅ MODIFICADO: Usar PlaysSentModel igual que getTotalJugadasProperty
+        // Debe mostrar lo mismo que "Total Importe" (suma de amount de PlaysSentModel)
+        $query = PlaysSentModel::where('user_id', $this->client->associatedUser->id)
+                              ->where('status', '!=', 'I');
 
         if ($this->resultadosDate) {
             $query->whereDate('date', $this->resultadosDate);
         }
 
-        return $query->sum('import');
+        return $query->sum('amount');
     }
     
     public function getTotalAciertosResultadosProperty()
