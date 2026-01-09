@@ -1408,9 +1408,12 @@ public function addRow()
             return;
         }
 
-        // ✅ SOLUCIÓN: Recargar rows desde BD después de crear para asegurar sincronización
-        // Esto evita problemas de desincronización entre memoria y BD
-        $this->rows = $this->getAndSortPlays();
+        // ✅ OPTIMIZACIÓN CRÍTICA: Agregar la nueva jugada directamente a la colección en memoria
+        // Esto es mucho más rápido que recargar todas las jugadas desde BD (getAndSortPlays)
+        // Similar a como se hace en addRowWithDerived() para jugadas derivadas
+        $this->rows->push($newPlay);
+        $this->rows = $this->rows->sortBy('id')->values();
+        
         $this->lastImportValue = $importeAGuardar;
         
         // ✅ OPTIMIZADO: Limpiar solo los campos necesarios sin resetFormAdd completo
