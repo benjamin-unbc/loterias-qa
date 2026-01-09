@@ -223,10 +223,17 @@
                                             <p>{{ number_format($comi_deja_sem ?? 0, 2) }}</p>
                                         </div>
                                     @endif
-                                    <div class="flex justify-between">
-                                        <h4 class="font-medium">UD DEJA:</h4>
-                                        <p>{{ number_format($udDeja, 2) }}</p>
-                                    </div>
+                                    @if(($udCobra ?? 0) < 0)
+                                        <div class="flex justify-between">
+                                            <h4 class="font-medium">UD COBRA:</h4>
+                                            <p>{{ number_format($udCobra, 2) }}</p>
+                                        </div>
+                                    @else
+                                        <div class="flex justify-between">
+                                            <h4 class="font-medium">UD DEJA:</h4>
+                                            <p>{{ number_format($udDeja ?? 0, 2) }}</p>
+                                        </div>
+                                    @endif
                                 </div>
 
                                 <div class="flex flex-col pt-3 gap-1 w-full text-sm">

@@ -222,20 +222,25 @@ class Liquidations extends Component
         
         // Calcular arrastre global según día de la semana
         if ($selectedDate->isSaturday()) {
-            // Calcular arrastre del viernes
+            // ✅ NUEVA LÓGICA: Calcular comisión semanal basada en (ANTERI + TOTAL DEJA) × porcentaje
+            // Base para comisión = ANTERI + TOTAL DEJA (suma algebraica)
+            $baseComision = $prevGenerDeja + $totalGanaPase;
+            
+            // Calcular comisión semanal: Base × 30% (fijo para liquidación global)
+            $comiDejaSem = $baseComision * 0.30;
+            
+            // UD DEJA del sábado = Gener DEJA (totalGanaPase) - comiDejaSem
+            $udDeja = $totalGanaPase - $comiDejaSem;
+            
+            // Calcular arrastre del viernes para el arrastre del sábado
             $previousDate = $selectedDate->copy()->subDay();
             $prevArrastre = $this->getArrastreGlobalForDate($previousDate->format('Y-m-d'));
             
-            // Calcular UD Deja temporal del sábado (sin comisión)
+            // Calcular UD Deja temporal del sábado (sin comisión) para el arrastre
             $udDejaTemp = $totalGanaPase + $prevGenerDeja;
             
             // Calcular arrastre del sábado (arrastre del viernes + UD Deja temporal del sábado)
             $arrastre = $prevArrastre + $udDejaTemp;
-            
-            // Calcular comisión semanal basada en el arrastre del sábado (30% fijo para liquidación global)
-            $comiDejaSem = $arrastre * 0.30;
-            // UD DEJA del sábado = Gener DEJA (totalGanaPase) - comiDejaSem
-            $udDeja = $totalGanaPase - $comiDejaSem;
         } else {
             // Cuando no es sábado, la comisión semanal es 0 (no aplica)
             $comiDejaSem = 0;
@@ -326,11 +331,10 @@ class Liquidations extends Component
     }
     
     /**
-     * ✅ NUEVO: Calcula ANTERI según la nueva lógica
-     * ANTERI = ANTERI del día anterior + TOTAL DEJA del día actual
-     * Si es el primer día de liquidación, ANTERI = 0
-     * Si un usuario se activa en un día intermedio, ese día ANTERI = 0
-     * ✅ MODIFICADO: Si es lunes, ANTERI = cálculo semanal + total deja (o - total deja si es negativo)
+     * ✅ MODIFICADO: Calcula ANTERI según la nueva lógica
+     * Si es el primer día de liquidación del usuario: ANTERI = 0
+     * Si no es el primer día: ANTERI = UD DEJA del día anterior (con pagos aplicados)
+     * ✅ EXCEPCIÓN: Si es lunes, ANTERI = cálculo semanal + total deja (o - total deja si es negativo)
      * 
      * @param int $userId ID del usuario
      * @param Carbon $selectedDate Fecha seleccionada
@@ -352,29 +356,6 @@ class Liquidations extends Component
             return $this->anteriorCache[$anteriCacheKey];
         }
         
-        // ✅ NUEVO: Si es lunes, usar cálculo semanal del sábado anterior
-        if ($selectedDate->isMonday()) {
-            // Obtener el sábado anterior (2 días atrás)
-            $lastSaturday = $selectedDate->copy()->subDays(2);
-            $saturdayDateStr = $lastSaturday->format('Y-m-d');
-            
-            // Obtener el cálculo semanal del sábado anterior del cache
-            $cacheKey = 'calculo_semanal_' . $userId . '_' . $saturdayDateStr;
-            $calculoSemanal = Cache::get($cacheKey, 0);
-            
-            // Si el cálculo semanal es negativo: ANTERI = -totalGanaPase
-            // Si el cálculo semanal es positivo o cero: ANTERI = cálculo semanal + totalGanaPase
-            if ($calculoSemanal < 0) {
-                $anteri = -$totalGanaPase;
-            } else {
-                $anteri = $calculoSemanal + $totalGanaPase;
-            }
-            
-            // Guardar en cache
-            $this->anteriorCache[$anteriCacheKey] = $anteri;
-            return $anteri;
-        }
-        
         // Obtener el primer día de liquidación del usuario
         $firstLiquidationDate = $this->getFirstLiquidationDate($userId);
         
@@ -392,10 +373,80 @@ class Liquidations extends Component
             return 0;
         }
         
-        // Si es el primer día de liquidación, ANTERI = 0
+        // ✅ Si es el primer día de liquidación, ANTERI = 0 (día de activación)
         if ($dateStr === $firstLiquidationDate) {
             $this->anteriorCache[$anteriCacheKey] = 0;
             return 0;
+        }
+        
+        // ✅ EXCEPCIÓN: Si es lunes, usar UD DEJA/COBRA del sábado anterior
+        if ($selectedDate->isMonday()) {
+            // Obtener el sábado anterior (2 días atrás)
+            $lastSaturday = $selectedDate->copy()->subDays(2);
+            $saturdayDateStr = $lastSaturday->format('Y-m-d');
+            
+            // Obtener el UD DEJA/COBRA del sábado anterior del cache (con pagos aplicados)
+            $saturdayUdDejaCacheKey = $userId . '_' . $saturdayDateStr . '_uddeja_with_payments';
+            $saturdayUdDeja = null;
+            
+            if (isset($this->udDejaCache[$saturdayUdDejaCacheKey]) && $this->udDejaCache[$saturdayUdDejaCacheKey] !== null) {
+                $saturdayUdDeja = $this->udDejaCache[$saturdayUdDejaCacheKey];
+            } else {
+                // Si no está en cache, calcular el UD DEJA/COBRA del sábado anterior
+                // Calcular datos del sábado anterior
+                $saturdayTotalAciert = (float) Result::query()
+                    ->whereDate('date', $saturdayDateStr)
+                    ->where('user_id', $userId)
+                    ->sum('aciert');
+                
+                $saturdayApusQuery = \App\Models\ApusModel::query()
+                    ->whereDate('created_at', $saturdayDateStr)
+                    ->where('user_id', $userId)
+                    ->whereHas('playsSent', function($query) {
+                        $query->where('status', '!=', 'I');
+                    });
+                $saturdayTotalApus = (float) $saturdayApusQuery->sum('import');
+                
+                $user = \App\Models\User::find($userId);
+                $client = $user ? \App\Models\Client::where('correo', $user->email)->first() : null;
+                $commissionPercentage = $client ? $client->commission_percentage : 20.00;
+                $saturdayComision = $saturdayTotalApus * ($commissionPercentage / 100);
+                $saturdayTotalGanaPase = $saturdayTotalApus - $saturdayComision - $saturdayTotalAciert;
+                
+                // Obtener el ANTERI del sábado anterior
+                $saturdayAnteri = $this->calculateAnteri($userId, $lastSaturday, $saturdayTotalGanaPase);
+                
+                // Calcular COMI DEJA SEM del sábado anterior
+                $weeklyCommissionPercentage = $client ? ($client->weekly_commission_percentage ?? 30.00) : 30.00;
+                $saturdayBaseComision = $saturdayAnteri + $saturdayTotalGanaPase;
+                
+                if ($weeklyCommissionPercentage > 0) {
+                    $saturdayComiDejaSem = $saturdayBaseComision * ($weeklyCommissionPercentage / 100);
+                } else {
+                    $saturdayComiDejaSem = $saturdayBaseComision * 0.30;
+                }
+                
+                // Calcular UD DEJA/COBRA del sábado anterior
+                if ($saturdayTotalGanaPase >= 0) {
+                    $saturdayUdDejaNoPayments = ($saturdayAnteri + $saturdayTotalGanaPase) - $saturdayComiDejaSem;
+                } else {
+                    $saturdayUdDejaNoPayments = ($saturdayAnteri - $saturdayTotalGanaPase) - $saturdayComiDejaSem;
+                }
+                
+                // Aplicar pagos del sábado anterior
+                $saturdayPayments = $this->getPaymentsForCurrentDate($userId, $saturdayDateStr);
+                $saturdayUdDeja = $saturdayUdDejaNoPayments - $saturdayPayments['udDio'] + $saturdayPayments['udRecibe'];
+                
+                // Guardar en cache
+                $this->udDejaCache[$saturdayUdDejaCacheKey] = $saturdayUdDeja;
+            }
+            
+            // ANTERI del lunes = UD DEJA/COBRA del sábado anterior (puede ser positivo o negativo)
+            $anteri = $saturdayUdDeja;
+            
+            // Guardar en cache
+            $this->anteriorCache[$anteriCacheKey] = $anteri;
+            return $anteri;
         }
         
         // Obtener el día anterior (saltando domingos)
@@ -406,52 +457,16 @@ class Liquidations extends Component
         
         $previousDateStr = $previousDate->format('Y-m-d');
         
-        // ✅ CORRECCIÓN: Si el día anterior ES el primer día de liquidación,
-        // usar el ARRASTRE del primer día (que es igual al TOTAL DEJA del primer día)
-        // Según la nueva lógica: si un usuario se activa en un día intermedio (ej: Miércoles),
-        // ese día ANTERI = 0, y el día siguiente (Jueves) toma el ARRASTRE del primer día como base
-        if ($previousDateStr === $firstLiquidationDate) {
-            // Calcular el TOTAL DEJA del primer día de liquidación (que es igual a su ARRASTRE)
-            $firstDayTotalAciert = (float) Result::query()
-                ->whereDate('date', $firstLiquidationDate)
-                ->where('user_id', $userId)
-                ->sum('aciert');
-            
-            $firstDayApusQuery = \App\Models\ApusModel::query()
-                ->whereDate('created_at', $firstLiquidationDate)
-                ->where('user_id', $userId)
-                ->whereHas('playsSent', function($query) {
-                    $query->where('status', '!=', 'I');
-                });
-            $firstDayTotalApus = (float) $firstDayApusQuery->sum('import');
-            
-            $user = \App\Models\User::find($userId);
-            $client = $user ? \App\Models\Client::where('correo', $user->email)->first() : null;
-            $commissionPercentage = $client ? $client->commission_percentage : 20.00;
-            $firstDayComision = $firstDayTotalApus * ($commissionPercentage / 100);
-            $firstDayTotalGanaPase = $firstDayTotalApus - $firstDayComision - $firstDayTotalAciert;
-            
-            // El ARRASTRE del primer día es igual al TOTAL DEJA del primer día
-            // ANTERI = ARRASTRE del primer día (TOTAL DEJA del primer día) + TOTAL DEJA del día actual
-            $anteri = $firstDayTotalGanaPase + $totalGanaPase;
-            $this->anteriorCache[$anteriCacheKey] = $anteri;
-            return $anteri;
-        }
+        // ✅ NUEVA LÓGICA: ANTERI = UD DEJA del día anterior (con pagos aplicados)
+        // Intentar obtener del cache primero
+        $previousUdDejaCacheKey = $userId . '_' . $previousDateStr . '_uddeja_with_payments';
+        $previousUdDeja = null;
         
-        // Si el día anterior es anterior al primer día de liquidación, ANTERI = 0 + TOTAL DEJA actual
-        // (esto no debería pasar normalmente, pero por seguridad)
-        if ($previousDate->lt($firstLiquidationCarbon)) {
-            $anteri = $totalGanaPase;
-            $this->anteriorCache[$anteriCacheKey] = $anteri;
-            return $anteri;
-        }
-        
-        // Obtener el ANTERI del día anterior (ya tenemos previousDateStr de arriba)
-        $previousAnteriCacheKey = $userId . '_' . $previousDateStr . '_anteri_new';
-        
-        // Si el ANTERI del día anterior no está en cache, calcularlo recursivamente
-        if (!isset($this->anteriorCache[$previousAnteriCacheKey]) || $this->anteriorCache[$previousAnteriCacheKey] === null) {
-            // Calcular TOTAL DEJA del día anterior
+        if (isset($this->udDejaCache[$previousUdDejaCacheKey]) && $this->udDejaCache[$previousUdDejaCacheKey] !== null) {
+            $previousUdDeja = $this->udDejaCache[$previousUdDejaCacheKey];
+        } else {
+            // Si no está en cache, calcular el UD DEJA del día anterior completamente
+            // Calcular datos del día anterior
             $previousTotalAciert = (float) Result::query()
                 ->whereDate('date', $previousDateStr)
                 ->where('user_id', $userId)
@@ -471,14 +486,55 @@ class Liquidations extends Component
             $previousComision = $previousTotalApus * ($commissionPercentage / 100);
             $previousTotalGanaPase = $previousTotalApus - $previousComision - $previousTotalAciert;
             
-            // Calcular ANTERI del día anterior recursivamente
+            // Obtener el ANTERI del día anterior (que es el UD DEJA del día anterior al anterior)
             $previousAnteri = $this->calculateAnteri($userId, $previousDate, $previousTotalGanaPase);
-        } else {
-            $previousAnteri = $this->anteriorCache[$previousAnteriCacheKey];
+            
+            // Calcular UD DEJA del día anterior según el día
+            $previousUdDejaNoPayments = 0;
+            if ($previousDate->isSunday()) {
+                $previousUdDejaNoPayments = 0;
+            } elseif ($previousDate->isSaturday()) {
+                // Para sábado, calcular comiDejaSem usando nueva lógica
+                $weeklyCommissionPercentage = $client ? ($client->weekly_commission_percentage ?? 30.00) : 30.00;
+                
+                // ✅ NUEVA LÓGICA: Calcular comisión semanal basada en (ANTERI + TOTAL DEJA) × porcentaje
+                // Base para comisión = ANTERI + TOTAL DEJA (suma algebraica)
+                $baseComision = $previousAnteri + $previousTotalGanaPase;
+                
+                // Calcular comisión semanal: Base × porcentaje
+                if ($weeklyCommissionPercentage > 0) {
+                    $comiDejaSem = $baseComision * ($weeklyCommissionPercentage / 100);
+                } else {
+                    $comiDejaSem = $baseComision * 0.30;
+                }
+                
+                // ✅ NUEVA LÓGICA: UD DEJA/COBRA del sábado según si TOTAL DEJA es positivo o negativo
+                // Si TOTAL DEJA es positivo: UD DEJA = (ANTERI + TOTAL DEJA) - COMI DEJA SEM
+                // Si TOTAL DEJA es negativo: UD DEJA/COBRA = (ANTERI - TOTAL DEJA) - COMI DEJA SEM
+                if ($previousTotalGanaPase >= 0) {
+                    $previousUdDejaNoPayments = ($previousAnteri + $previousTotalGanaPase) - $comiDejaSem;
+                } else {
+                    $previousUdDejaNoPayments = ($previousAnteri - $previousTotalGanaPase) - $comiDejaSem;
+                }
+            } elseif ($previousTotalApus == 0) {
+                $previousUdDejaNoPayments = 0;
+            } else {
+                // Para otros días, UD DEJA = totalGanaPase + anterior
+                $previousUdDejaNoPayments = $previousTotalGanaPase + $previousAnteri;
+            }
+            
+            // Obtener los pagos del día anterior
+            $previousPayments = $this->getPaymentsForCurrentDate($userId, $previousDateStr);
+            
+            // Calcular UD DEJA con pagos: UD DEJA - UD.DIO + UD.RECIBE
+            $previousUdDeja = $previousUdDejaNoPayments - $previousPayments['udDio'] + $previousPayments['udRecibe'];
+            
+            // Guardar en cache para uso futuro
+            $this->udDejaCache[$previousUdDejaCacheKey] = $previousUdDeja;
         }
         
-        // ANTERI = ANTERI del día anterior + TOTAL DEJA del día actual
-        $anteri = $previousAnteri + $totalGanaPase;
+        // ANTERI = UD DEJA del día anterior (con pagos aplicados)
+        $anteri = $previousUdDeja;
         
         // Guardar en cache
         $this->anteriorCache[$anteriCacheKey] = $anteri;
@@ -615,33 +671,60 @@ class Liquidations extends Component
             $arrastre = 0;
             $comiDejaSem = 0; // No aplica en domingo
         }
-        // Si es sábado, SIEMPRE calcular comisión semanal basada en el arrastre (incluso si no hay apuestas)
+        // Si es sábado, SIEMPRE calcular comisión semanal basada en ANTERI + TOTAL DEJA
         elseif ($selectedDate->isSaturday()) {
-            // Calcular arrastre del viernes
+            // ✅ NUEVA LÓGICA: Calcular comisión semanal basada en (ANTERI + TOTAL DEJA) × porcentaje
+            // Base para comisión = ANTERI + TOTAL DEJA (suma algebraica)
+            $baseComision = $prevClientDeja + $totalGanaPase;
+            
+            // Calcular comisión semanal: Base × porcentaje
+            // Por defecto es el 30% si no está configurado
+            if ($weeklyCommissionPercentage > 0) {
+                $comiDejaSem = $baseComision * ($weeklyCommissionPercentage / 100);
+            } else {
+                // Si no hay porcentaje configurado, usar 30% por defecto
+                $comiDejaSem = $baseComision * 0.30;
+            }
+            
+            // ✅ NUEVA LÓGICA: UD DEJA/COBRA del sábado según si TOTAL DEJA es positivo o negativo
+            // Si TOTAL DEJA es positivo: UD DEJA = (ANTERI + TOTAL DEJA) - COMI DEJA SEM
+            // Si TOTAL DEJA es negativo: UD DEJA/COBRA = (ANTERI - TOTAL DEJA) - COMI DEJA SEM
+            if ($totalGanaPase >= 0) {
+                $udDejaCalculado = ($prevClientDeja + $totalGanaPase) - $comiDejaSem;
+            } else {
+                // Cuando TOTAL DEJA es negativo: (ANTERI - TOTAL DEJA) - COMI DEJA SEM
+                // Nota: Si TOTAL DEJA = -200,000, entonces ANTERI - (-200,000) = ANTERI + 200,000
+                $udDejaCalculado = ($prevClientDeja - $totalGanaPase) - $comiDejaSem;
+            }
+            
+            // Calcular arrastre del viernes para el arrastre del sábado
             $previousDate = $selectedDate->copy()->subDay();
             $prevArrastre = $this->getArrastreForDate($previousDate->format('Y-m-d'), $user->id);
             
-            // Calcular UD Deja temporal del sábado (sin comisión)
+            // Calcular UD Deja temporal del sábado (sin comisión) para el arrastre
             $udDejaTemp = $totalGanaPase + $prevClientDeja;
             
             // Calcular arrastre del sábado (arrastre del viernes + UD Deja temporal del sábado)
             $arrastre = $prevArrastre + $udDejaTemp;
             
-            // Calcular comisión semanal basada en el arrastre del sábado
-            // Por defecto es el 30% del arrastre si no está configurado
-            if ($weeklyCommissionPercentage > 0) {
-                $comiDejaSem = $arrastre * ($weeklyCommissionPercentage / 100);
+            // Separar UD DEJA y UD COBRA según el resultado
+            if ($udDejaCalculado >= 0) {
+                $udDeja = $udDejaCalculado;
+                $udCobra = 0;
             } else {
-                // Si no hay porcentaje configurado, usar 30% por defecto
-                $comiDejaSem = $arrastre * 0.30;
+                $udDeja = 0;
+                $udCobra = $udDejaCalculado; // Mantener el valor negativo
             }
             
-            // UD DEJA del sábado = Gener DEJA (totalGanaPase) - comiDejaSem
-            $udDeja = $totalGanaPase - $comiDejaSem;
+            // Para el arrastre, usar el valor calculado
+            $udDejaParaArrastre = $udDejaCalculado;
         }
         // Si no hay apuestas (y no es sábado), UD Deja es 0 pero el arrastre mantiene el del día anterior
         elseif ($totalApus == 0) {
             $udDeja = 0; // UD Deja en 0 cuando no hay apuestas
+            $udCobra = 0; // UD Cobra en 0 cuando no hay apuestas
+            $udDejaCalculado = 0;
+            $udDejaParaArrastre = 0;
             $comiDejaSem = 0; // No aplica cuando no hay apuestas
             
             // El arrastre mantiene el valor del día anterior (acumulativo)
@@ -660,18 +743,32 @@ class Liquidations extends Component
         } else {
             // Cuando no es sábado, la comisión semanal es 0 (no aplica)
             $comiDejaSem = 0;
-            // Calcular UD Deja
-            $udDeja = $totalGanaPase + $prevClientDeja;
+            // ✅ Calcular UD Deja/Cobra: ANTERI + TOTAL DEJA (suma algebraica)
+            // Si el resultado es positivo: UD DEJA
+            // Si el resultado es negativo: UD COBRA (se mostrará con signo negativo)
+            $udDejaCalculado = $prevClientDeja + $totalGanaPase;
+            
+            // Separar UD DEJA y UD COBRA según el resultado
+            if ($udDejaCalculado >= 0) {
+                $udDeja = $udDejaCalculado;
+                $udCobra = 0;
+            } else {
+                $udDeja = 0;
+                $udCobra = $udDejaCalculado; // Mantener el valor negativo
+            }
+            
+            // Para el arrastre, usar el valor calculado (puede ser positivo o negativo)
+            $udDejaParaArrastre = $udDejaCalculado;
             
             // Calcular Arrastre según el día
             if ($selectedDate->isMonday()) {
-                // Lunes: Arrastre = UD Deja (comienza en 0, luego es igual a UD Deja)
-                    $arrastre = $udDeja;
+                // Lunes: Arrastre = UD Deja/Cobra (comienza en 0, luego es igual a UD Deja/Cobra)
+                    $arrastre = $udDejaParaArrastre;
             } else {
-                // Martes a Viernes: Arrastre = Arrastre del día anterior + UD Deja del día actual
+                // Martes a Viernes: Arrastre = Arrastre del día anterior + UD Deja/Cobra del día actual
                 $previousDate = $selectedDate->copy()->subDay();
                 $prevArrastre = $this->getArrastreForDate($previousDate->format('Y-m-d'), $user->id);
-                $arrastre = $prevArrastre + $udDeja;
+                $arrastre = $prevArrastre + $udDejaParaArrastre;
             }
         }
         
@@ -681,19 +778,28 @@ class Liquidations extends Component
         // ✅ ANTERI ya está calculado con la nueva lógica en anteriForDisplay
         // No necesita ajustes adicionales
         
-        // El UD DEJA del día actual se calcula usando el ANTERI (que es el UD DEJA del día anterior)
-        // Los pagos del día actual afectan al UD DEJA del día actual
-        $udDejaWithPayments = $udDeja - $currentPayments['udDio'] + $currentPayments['udRecibe'];
+        // El UD DEJA/COBRA del día actual se calcula usando el ANTERI (que es el UD DEJA/COBRA del día anterior)
+        // Los pagos del día actual afectan al UD DEJA/COBRA del día actual
+        $udDejaCalculadoWithPayments = $udDejaCalculado - $currentPayments['udDio'] + $currentPayments['udRecibe'];
         
-        // Guardar el UD DEJA del día actual (con pagos aplicados) en cache
-        // Este será el ANTERI del día siguiente
+        // Separar UD DEJA y UD COBRA con pagos aplicados
+        if ($udDejaCalculadoWithPayments >= 0) {
+            $udDejaWithPayments = $udDejaCalculadoWithPayments;
+            $udCobraWithPayments = 0;
+        } else {
+            $udDejaWithPayments = 0;
+            $udCobraWithPayments = $udDejaCalculadoWithPayments; // Mantener el valor negativo
+        }
+        
+        // Guardar el UD DEJA/COBRA del día actual (con pagos aplicados) en cache
+        // Este será el ANTERI del día siguiente (puede ser positivo o negativo)
         $udDejaCacheKey = $user->id . '_' . $dateStr . '_uddeja_with_payments';
-        $this->udDejaCache[$udDejaCacheKey] = $udDejaWithPayments;
+        $this->udDejaCache[$udDejaCacheKey] = $udDejaCalculadoWithPayments; // Guardar el valor completo (puede ser negativo)
         
-        // También guardar el UD DEJA sin pagos para referencia
+        // También guardar el UD DEJA/COBRA sin pagos para referencia (valor completo)
         $udDejaCacheKeyNoPayments = $user->id . '_' . $dateStr . '_uddeja';
         if (!isset($this->udDejaCache[$udDejaCacheKeyNoPayments]) || $this->udDejaCache[$udDejaCacheKeyNoPayments] === null) {
-            $this->udDejaCache[$udDejaCacheKeyNoPayments] = $udDeja;
+            $this->udDejaCache[$udDejaCacheKeyNoPayments] = $udDejaCalculado; // Guardar el valor completo
         }
         
         // Guardar el arrastre en cache para uso en días siguientes
@@ -731,6 +837,7 @@ class Liquidations extends Component
             'anteri'            => $anteriForDisplay,
             'udRecibe'          => $totalAciert,
             'udDeja'            => $udDeja,
+            'udCobra'           => $udCobra,
             'arrastre'          => $arrastre,
             'comi_deja_sem'     => $comiDejaSem,
             'calculo_semanal'   => $calculoSemanal,
@@ -877,30 +984,33 @@ class Liquidations extends Component
         
         // Calcular UD DEJA según el día
         if ($selectedDate->isSaturday()) {
-            // Para sábado, calcular comiDejaSem y restar de totalGanaPase
+            // Para sábado, calcular comiDejaSem usando nueva lógica
             $weeklyCommissionPercentage = $client ? ($client->weekly_commission_percentage ?? 30.00) : 30.00;
             
-            // Calcular arrastre del viernes
-            $fridayDate = $selectedDate->copy()->subDay();
-            $prevArrastre = $this->getArrastreForDate($fridayDate->format('Y-m-d'), $userId);
+            // ✅ NUEVA LÓGICA: Calcular comisión semanal basada en (ANTERI + TOTAL DEJA) × porcentaje
+            // Base para comisión = ANTERI + TOTAL DEJA (suma algebraica)
+            $baseComision = $prevClientDeja + $totalGanaPase;
             
-            // Calcular arrastre del sábado
-            $udDejaTemp = $totalGanaPase + $prevClientDeja;
-            $arrastre = $prevArrastre + $udDejaTemp;
-            
-            // Calcular comiDejaSem (usar 30% por defecto si no está configurado)
+            // Calcular comisión semanal: Base × porcentaje
             if ($weeklyCommissionPercentage > 0) {
-                $comiDejaSem = $arrastre * ($weeklyCommissionPercentage / 100);
+                $comiDejaSem = $baseComision * ($weeklyCommissionPercentage / 100);
             } else {
-                // Si no hay porcentaje configurado, usar 30% por defecto
-                $comiDejaSem = $arrastre * 0.30;
+                $comiDejaSem = $baseComision * 0.30;
             }
             
-            // UD DEJA = Gener DEJA - comiDejaSem
-            $udDeja = $totalGanaPase - $comiDejaSem;
+            // ✅ NUEVA LÓGICA: UD DEJA/COBRA del sábado según si TOTAL DEJA es positivo o negativo
+            // Si TOTAL DEJA es positivo: UD DEJA = (ANTERI + TOTAL DEJA) - COMI DEJA SEM
+            // Si TOTAL DEJA es negativo: UD DEJA/COBRA = (ANTERI - TOTAL DEJA) - COMI DEJA SEM
+            if ($totalGanaPase >= 0) {
+                $udDeja = ($prevClientDeja + $totalGanaPase) - $comiDejaSem;
+            } else {
+                $udDeja = ($prevClientDeja - $totalGanaPase) - $comiDejaSem;
+            }
         } else {
-            // Para otros días, UD DEJA = totalGanaPase + prevClientDeja
-            $udDeja = $totalGanaPase + $prevClientDeja;
+            // ✅ Para otros días, UD DEJA = ANTERI + TOTAL DEJA (suma algebraica)
+            // Si totalGanaPase es positivo: UD DEJA = ANTERI + totalGanaPase
+            // Si totalGanaPase es negativo: UD DEJA = ANTERI + totalGanaPase (suma algebraica)
+            $udDeja = $prevClientDeja + $totalGanaPase;
         }
         
         // Guardar en cache
@@ -1138,26 +1248,25 @@ class Liquidations extends Component
             $prevWeeklyCommissionPercentage = $client ? ($client->weekly_commission_percentage ?? 30.00) : 30.00;
             
             if ($previousDate->isSaturday()) {
-                // Calcular arrastre del viernes anterior
-                $fridayDate = $previousDate->copy()->subDay();
-                $prevArrastre = $this->getArrastreForDate($fridayDate->format('Y-m-d'), $userId);
+                // ✅ NUEVA LÓGICA: Calcular comisión semanal basada en (ANTERI + TOTAL DEJA) × porcentaje
+                // Base para comisión = ANTERI + TOTAL DEJA (suma algebraica)
+                $baseComision = $prevPrevDeja + $prevTotalGanaPase;
                 
-                // Calcular UD Deja temporal del sábado (sin comisión)
-                $udDejaTemp = $prevTotalGanaPase + $prevPrevDeja;
-                
-                // Calcular arrastre del sábado (arrastre del viernes + UD Deja temporal del sábado)
-                $arrastreSabado = $prevArrastre + $udDejaTemp;
-                
-                // Calcular comisión semanal basada en el arrastre del sábado
-                // Por defecto es el 30% del arrastre si no está configurado
+                // Calcular comisión semanal: Base × porcentaje
                 if ($prevWeeklyCommissionPercentage > 0) {
-                    $comiDejaSem = $arrastreSabado * ($prevWeeklyCommissionPercentage / 100);
+                    $comiDejaSem = $baseComision * ($prevWeeklyCommissionPercentage / 100);
                 } else {
-                    // Si no hay porcentaje configurado, usar 30% por defecto
-                    $comiDejaSem = $arrastreSabado * 0.30;
+                    $comiDejaSem = $baseComision * 0.30;
                 }
-                // UD DEJA del sábado = Gener DEJA (prevTotalGanaPase) - comiDejaSem
-                $prevUdDeja = $prevTotalGanaPase - $comiDejaSem;
+                
+                // ✅ NUEVA LÓGICA: UD DEJA/COBRA del sábado según si TOTAL DEJA es positivo o negativo
+                // Si TOTAL DEJA es positivo: UD DEJA = (ANTERI + TOTAL DEJA) - COMI DEJA SEM
+                // Si TOTAL DEJA es negativo: UD DEJA/COBRA = (ANTERI - TOTAL DEJA) - COMI DEJA SEM
+                if ($prevTotalGanaPase >= 0) {
+                    $prevUdDeja = ($prevPrevDeja + $prevTotalGanaPase) - $comiDejaSem;
+                } else {
+                    $prevUdDeja = ($prevPrevDeja - $prevTotalGanaPase) - $comiDejaSem;
+                }
             } else {
                 $prevUdDeja = $prevTotalGanaPase + $prevPrevDeja;
             }
