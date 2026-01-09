@@ -1212,7 +1212,8 @@ public function updateRow()
         return;
     }
 
-    $validatedData = $this->validate();
+    // ✅ OPTIMIZACIÓN: Validación manual más rápida que $this->validate()
+    $validatedData = $this->fastValidate();
     
     // Validación personalizada para redoblona
     try {
@@ -1349,16 +1350,22 @@ public function addRow()
     ]);
     
     $validationStart = microtime(true);
-    $validatedData = $this->validate();
-        $validationTime = (microtime(true) - $validationStart) * 1000;
-        \Log::info('[PERFORMANCE] addRow() - Validación básica completada', [
-            'tiempo_ms' => round($validationTime, 2),
-        ]);
+    
+    // ✅ OPTIMIZACIÓN: Validación manual más rápida que $this->validate()
+    // Solo validar lo esencial sin toda la sobrecarga de Laravel Validation
+    $validatedData = $this->fastValidate();
+    
+    $validationTime = (microtime(true) - $validationStart) * 1000;
+    \Log::info('[PERFORMANCE] addRow() - Validación básica completada', [
+        'tiempo_ms' => round($validationTime, 2),
+    ]);
+    if (config('app.debug') || env('APP_DEBUG', false)) {
         $this->dispatch('performance-log', [
             'method' => 'addRow()',
             'status' => 'Validación básica',
             'data' => ['tiempo_ms' => round($validationTime, 2)]
         ]);
+    }
     
     // Validación personalizada para redoblona
     $redoblonaStart = microtime(true);
@@ -1579,8 +1586,9 @@ public function addRow()
         $saveValidationStart = microtime(true);
         try {
 
-            // Validar solo al guardar, no en cada cambio
-            $validatedData = $this->validate();
+            // ✅ OPTIMIZACIÓN: Validación manual más rápida que $this->validate()
+            // Solo validar lo esencial sin toda la sobrecarga de Laravel Validation
+            $validatedData = $this->fastValidate();
             
             // Validación personalizada para redoblona
             try {
@@ -3152,6 +3160,80 @@ public function addRow()
      * Validación personalizada para redoblona
      * Verifica que solo se pueda hacer redoblona con números de 2 cifras
      */
+    /**
+     * ✅ OPTIMIZACIÓN: Validación manual más rápida que $this->validate()
+     * Evita la sobrecarga de Laravel Validation y solo valida lo esencial
+     */
+    private function fastValidate(): array
+    {
+        $errors = [];
+        
+        // Validar número (required + regex)
+        if (empty($this->number)) {
+            $errors['number'] = 'El campo "Número" es requerido.';
+        } elseif (!preg_match('/^[\d*]+$/', $this->number)) {
+            $errors['number'] = 'El campo "Número" solo permite números y asteriscos (*).';
+        }
+        
+        // Validar posición (nullable + numeric + in)
+        if ($this->position !== null && $this->position !== '') {
+            if (!is_numeric($this->position)) {
+                $errors['position'] = 'El campo "Posición" debe ser un número.';
+            } elseif (!in_array((int)$this->position, [1, 5, 10, 20], true)) {
+                $errors['position'] = 'El campo "Posición" solo permite los valores: 1, 5, 10 y 20.';
+            }
+        }
+        
+        // Validar importe (required + numeric + min)
+        if (empty($this->import)) {
+            $errors['import'] = 'El campo "Importe" es requerido.';
+        } elseif (!is_numeric($this->import)) {
+            $errors['import'] = 'El campo "Importe" debe ser un número.';
+        } elseif ((float)$this->import < 0.01) {
+            $errors['import'] = 'El campo "Importe" debe ser mayor o igual a 0.01.';
+        }
+        
+        // Validar numberR (nullable + numeric + min/max + required_with)
+        if ($this->numberR !== null && $this->numberR !== '') {
+            if (!is_numeric($this->numberR)) {
+                $errors['numberR'] = 'El campo "Número Redoblona" debe ser un número.';
+            } else {
+                $numR = (float)$this->numberR;
+                if ($numR < 0 || $numR > 99) {
+                    $errors['numberR'] = 'El campo "Número Redoblona" debe estar entre 0 y 99.';
+                }
+            }
+            
+            // Si hay numberR, debe haber positionR
+            if (empty($this->positionR)) {
+                $errors['positionR'] = 'El campo "Posición Redoblona" es requerido cuando hay número de redoblona.';
+            }
+        }
+        
+        // Validar positionR (nullable + numeric + in + required_with)
+        if ($this->positionR !== null && $this->positionR !== '') {
+            if (!is_numeric($this->positionR)) {
+                $errors['positionR'] = 'El campo "Posición Redoblona" debe ser un número.';
+            } elseif (!in_array((int)$this->positionR, [1, 5, 10, 20], true)) {
+                $errors['positionR'] = 'El campo "Posición Redoblona" solo permite los valores: 1, 5, 10 y 20.';
+            }
+        }
+        
+        // Si hay errores, lanzar excepción
+        if (!empty($errors)) {
+            throw \Illuminate\Validation\ValidationException::withMessages($errors);
+        }
+        
+        // Retornar datos validados (similar a validate())
+        return [
+            'number' => $this->number,
+            'position' => $this->position ? (int)$this->position : null,
+            'import' => (float)$this->import,
+            'numberR' => $this->numberR ? (int)$this->numberR : null,
+            'positionR' => $this->positionR ? (int)$this->positionR : null,
+        ];
+    }
+
     private function validateRedoblona($validatedData)
     {
         // Si no hay número de redoblona, no validar

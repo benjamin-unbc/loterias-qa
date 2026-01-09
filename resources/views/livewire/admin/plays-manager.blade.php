@@ -588,8 +588,9 @@
                     }
                     
                     // Mostrar en consola del navegador
+                    const tiempoTotal = logData.data.tiempo_total_ms || logData.data.tiempo_ms || 0;
                     console.group(`%c[PERFORMANCE] ${logData.method} - ${logData.status}`, 'color: #fbbf24; font-weight: bold;');
-                    console.log('%cTiempo Total:', 'color: #60a5fa; font-weight: bold;', logData.data.tiempo_total_ms + 'ms');
+                    console.log('%cTiempo:', 'color: #60a5fa; font-weight: bold;', tiempoTotal + 'ms');
                     if (logData.data.desglose) {
                         console.table(logData.data.desglose);
                     }
@@ -618,7 +619,7 @@
                 }
                 
                 container.innerHTML = performanceLogs.map(log => {
-                    const totalTime = log.data.tiempo_total_ms;
+                    const totalTime = log.data.tiempo_total_ms || log.data.tiempo_ms || 0;
                     const colorClass = totalTime > 100 ? 'text-red-400' : totalTime > 50 ? 'text-yellow-400' : 'text-green-400';
                     
                     let desgloseHtml = '';
