@@ -1342,21 +1342,39 @@ public function updateRow()
 
 public function addRow()
 {
+    $startTime = microtime(true);
+    \Log::info('[PERFORMANCE] addRow() - INICIO', [
+        'timestamp' => now()->format('Y-m-d H:i:s.u'),
+        'user_id' => auth()->id(),
+    ]);
+    
+    $validationStart = microtime(true);
     $validatedData = $this->validate();
+    $validationTime = (microtime(true) - $validationStart) * 1000;
+    \Log::info('[PERFORMANCE] addRow() - Validación básica completada', [
+        'tiempo_ms' => round($validationTime, 2),
+    ]);
     
     // Validación personalizada para redoblona
+    $redoblonaStart = microtime(true);
     try {
         $this->validateRedoblona($validatedData);
     } catch (\Exception $e) {
         // La validación de redoblona falló, ya se mostró la notificación
         return;
     }
+    $redoblonaTime = (microtime(true) - $redoblonaStart) * 1000;
+    \Log::info('[PERFORMANCE] addRow() - Validación redoblona completada', [
+        'tiempo_ms' => round($redoblonaTime, 2),
+    ]);
 
     // Verificar si se ha seleccionado al menos una lotería
+    $lotteryCheckStart = microtime(true);
     if (empty($this->checkboxCodes) || empty(array_filter($this->checkboxCodes))) {
         $this->dispatch('show-lottery-alert');
         return;
     }
+    $lotteryCheckTime = (microtime(true) - $lotteryCheckStart) * 1000;
 
     try {
         $importeAGuardar = $validatedData['import'];
@@ -1364,12 +1382,18 @@ public function addRow()
         // ✅ OPTIMIZACIÓN CRÍTICA: Usar mapeo pre-calculado (similar a código antiguo)
         // En lugar de validar en cada addRow(), usa el mapeo pre-calculado en mount()
         // Esto es tan rápido como el código antiguo que usa arrays hardcodeados
+        $codeFilterStart = microtime(true);
         $validCodes = array_filter($this->checkboxCodes, function($code) {
             // Acceso O(1) directo al mapeo pre-calculado - sin validaciones complejas
             return isset($this->validCodesMap[$code]) && $this->validCodesMap[$code] === true;
         });
         
         $currentLotteryString = implode(',', array_unique($validCodes, SORT_STRING));
+        $codeFilterTime = (microtime(true) - $codeFilterStart) * 1000;
+        \Log::info('[PERFORMANCE] addRow() - Filtrado de códigos completado', [
+            'tiempo_ms' => round($codeFilterTime, 2),
+            'codigos_validos' => count($validCodes),
+        ]);
         
         // Verificar que hay al menos un código válido
         if (empty($validCodes)) {
@@ -1392,6 +1416,7 @@ public function addRow()
 
         // ✅ OPTIMIZADO: Eliminados bloqueos de tiempo y verificaciones de duplicados con límites temporales
         // Crear la nueva jugada directamente
+        $dbCreateStart = microtime(true);
         try {
             $newPlay = Play::create($playDataToCreate);
             
@@ -1407,12 +1432,23 @@ public function addRow()
             $this->dispatch('notify', message: 'Error al guardar la jugada. Intenta nuevamente.', type: 'error');
             return;
         }
+        $dbCreateTime = (microtime(true) - $dbCreateStart) * 1000;
+        \Log::info('[PERFORMANCE] addRow() - Creación en BD completada', [
+            'tiempo_ms' => round($dbCreateTime, 2),
+            'play_id' => $newPlay->id,
+        ]);
 
         // ✅ OPTIMIZACIÓN CRÍTICA: Agregar la nueva jugada directamente a la colección en memoria
         // Esto es mucho más rápido que recargar todas las jugadas desde BD (getAndSortPlays)
         // Similar a como se hace en addRowWithDerived() para jugadas derivadas
+        $collectionStart = microtime(true);
         $this->rows->push($newPlay);
         $this->rows = $this->rows->sortBy('id')->values();
+        $collectionTime = (microtime(true) - $collectionStart) * 1000;
+        \Log::info('[PERFORMANCE] addRow() - Actualización de colección completada', [
+            'tiempo_ms' => round($collectionTime, 2),
+            'total_jugadas_en_memoria' => $this->rows->count(),
+        ]);
         
         $this->lastImportValue = $importeAGuardar;
         
@@ -1435,12 +1471,28 @@ public function addRow()
         
         // ✅ OPTIMIZADO: Dispatch sin bloquear - Livewire procesará después del return
         // Esto permite que el método termine más rápido
+        $dispatchStart = microtime(true);
         $this->dispatch('play-added-success', [
             'playId' => $newPlay->id,
             'message' => 'Jugada agregada.',
             'type' => 'success',
             'selector' => '#number'
         ]); // El evento se envía automáticamente al componente actual
+        $dispatchTime = (microtime(true) - $dispatchStart) * 1000;
+        
+        $totalTime = (microtime(true) - $startTime) * 1000;
+        \Log::info('[PERFORMANCE] addRow() - COMPLETADO', [
+            'tiempo_total_ms' => round($totalTime, 2),
+            'desglose' => [
+                'validacion_basica_ms' => round($validationTime, 2),
+                'validacion_redoblona_ms' => round($redoblonaTime, 2),
+                'filtrado_codigos_ms' => round($codeFilterTime, 2),
+                'creacion_bd_ms' => round($dbCreateTime, 2),
+                'actualizacion_coleccion_ms' => round($collectionTime, 2),
+                'dispatch_ms' => round($dispatchTime, 2),
+            ],
+            'play_id' => $newPlay->id,
+        ]);
 
         // MEJORA: Reactivar las bajadas si se creó una nueva jugada base (3 o 4 dígitos)
         $cleanNumber = str_replace('*', '', $validatedData['number']);
@@ -1491,14 +1543,21 @@ public function addRow()
     public function saveRow()
 
     {
+        $saveStartTime = microtime(true);
+        \Log::info('[PERFORMANCE] saveRow() - INICIO', [
+            'timestamp' => now()->format('Y-m-d H:i:s.u'),
+            'user_id' => auth()->id(),
+            'editing_row_id' => $this->editingRowId,
+        ]);
 
         if ($this->isSaving) {
-
             return;
         }
 
 
 
+        $saveValidationTime = 0;
+        $saveValidationStart = microtime(true);
         try {
 
             // Validar solo al guardar, no en cada cambio
@@ -1509,10 +1568,22 @@ public function addRow()
                 $this->validateRedoblona($validatedData);
             } catch (\Exception $e) {
                 // La validación de redoblona falló, ya se mostró la notificación
+                $saveValidationTime = (microtime(true) - $saveValidationStart) * 1000;
+                \Log::info('[PERFORMANCE] saveRow() - Validación falló (redoblona)', [
+                    'tiempo_ms' => round($saveValidationTime, 2),
+                ]);
                 return;
             }
+            $saveValidationTime = (microtime(true) - $saveValidationStart) * 1000;
+            \Log::info('[PERFORMANCE] saveRow() - Validaciones completadas', [
+                'tiempo_ms' => round($saveValidationTime, 2),
+            ]);
             
         } catch (\Illuminate\Validation\ValidationException $e) {
+            $saveValidationTime = (microtime(true) - $saveValidationStart) * 1000;
+            \Log::info('[PERFORMANCE] saveRow() - Validación falló (exception)', [
+                'tiempo_ms' => round($saveValidationTime, 2),
+            ]);
             $this->dispatch('focus-on-input', id: 'number');
             throw $e;
         }
@@ -1521,8 +1592,7 @@ public function addRow()
 
         $this->isSaving = true;
 
-
-
+        $operationStart = microtime(true);
         if ($this->editingRowId) {
             try {
                 $this->updateRow();
@@ -1540,10 +1610,16 @@ public function addRow()
                 throw $e;
             }
         }
+        $operationTime = (microtime(true) - $operationStart) * 1000;
+        \Log::info('[PERFORMANCE] saveRow() - Operación (addRow/updateRow) completada', [
+            'tiempo_ms' => round($operationTime, 2),
+            'tipo' => $this->editingRowId ? 'update' : 'add',
+        ]);
 
 
 
         // ✅ OPTIMIZADO: Combinar todas las operaciones de limpieza y dispatches
+        $cleanupStart = microtime(true);
         $this->reset('raw');
         $this->isSaving = false;
         
@@ -1552,6 +1628,17 @@ public function addRow()
         $this->dispatch('play-saved-complete', [
             'focusSelector' => '#number',
             'message' => 'Jugada guardada correctamente'
+        ]);
+        $cleanupTime = (microtime(true) - $cleanupStart) * 1000;
+        
+        $saveTotalTime = (microtime(true) - $saveStartTime) * 1000;
+        \Log::info('[PERFORMANCE] saveRow() - COMPLETADO', [
+            'tiempo_total_ms' => round($saveTotalTime, 2),
+            'desglose' => [
+                'validaciones_ms' => round($saveValidationTime, 2),
+                'operacion_ms' => round($operationTime, 2),
+                'limpieza_ms' => round($cleanupTime, 2),
+            ],
         ]);
     }
 
