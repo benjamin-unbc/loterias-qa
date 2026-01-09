@@ -25,6 +25,22 @@ class ClientSimpleLiquidation extends Component
     public $paymentsToday = []; // Todos los pagos registrados hoy
     public $nextLiquidationDate = null; // Fecha en la que se verá reflejado el pago (mañana)
     
+    /**
+     * Obtiene todos los pagos registrados del cliente (ordenados por fecha más reciente)
+     */
+    public function getAllPaymentsProperty()
+    {
+        if (!$this->client) {
+            return collect();
+        }
+        
+        return ClientPayment::where('client_id', $this->client->id)
+            ->with('creator')
+            ->orderBy('payment_date', 'desc')
+            ->orderBy('created_at', 'desc')
+            ->get();
+    }
+    
     public function mount($id)
     {
         $this->clientId = $id;

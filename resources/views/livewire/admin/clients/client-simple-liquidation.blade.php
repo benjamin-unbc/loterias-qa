@@ -98,6 +98,65 @@
         </div>
     </div>
 
+    <!-- Tabla de Pagos Registrados -->
+    <div class="bg-[#22272b] rounded-lg p-4 border border-gray-600">
+        <h3 class="text-white font-semibold mb-4">Pagos Registrados</h3>
+        
+        @if($this->allPayments->count() > 0)
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-gray-600 text-gray-400">
+                            <th class="text-left py-2 px-3">Fecha de Pago</th>
+                            <th class="text-left py-2 px-3">Monto</th>
+                            <th class="text-left py-2 px-3">Tipo</th>
+                            <th class="text-left py-2 px-3">Notas</th>
+                            <th class="text-left py-2 px-3">Registrado</th>
+                            <th class="text-left py-2 px-3">Por</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($this->allPayments as $payment)
+                            <tr class="border-b border-gray-700 text-white hover:bg-[#2a2f35]">
+                                <td class="py-2 px-3">
+                                    {{ \Carbon\Carbon::parse($payment->payment_date)->format('d/m/Y') }}
+                                </td>
+                                <td class="py-2 px-3 font-medium">
+                                    ${{ number_format($payment->amount, 2, ',', '.') }}
+                                </td>
+                                <td class="py-2 px-3">
+                                    @if($payment->type === 'paid_to_client')
+                                        <span class="px-2 py-1 rounded text-xs bg-red-900/30 text-red-400 border border-red-700">
+                                            UD.DIO
+                                        </span>
+                                    @else
+                                        <span class="px-2 py-1 rounded text-xs bg-green-900/30 text-green-400 border border-green-700">
+                                            UD.RECIBE
+                                        </span>
+                                    @endif
+                                </td>
+                                <td class="py-2 px-3 text-gray-400">
+                                    {{ $payment->notes ?: '-' }}
+                                </td>
+                                <td class="py-2 px-3 text-gray-400 text-xs">
+                                    {{ $payment->created_at->format('d/m/Y H:i') }}
+                                </td>
+                                <td class="py-2 px-3 text-gray-400 text-xs">
+                                    {{ $payment->creator->name ?? 'N/A' }}
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @else
+            <div class="text-center py-8 text-gray-400">
+                <i class="fa-solid fa-inbox text-4xl mb-2"></i>
+                <p>No hay pagos registrados</p>
+            </div>
+        @endif
+    </div>
+
     <!-- Modal de Pago -->
     @if($showPaymentModal)
     <div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
