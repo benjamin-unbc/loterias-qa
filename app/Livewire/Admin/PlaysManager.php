@@ -1350,10 +1350,15 @@ public function addRow()
     
     $validationStart = microtime(true);
     $validatedData = $this->validate();
-    $validationTime = (microtime(true) - $validationStart) * 1000;
-    \Log::info('[PERFORMANCE] addRow() - Validación básica completada', [
-        'tiempo_ms' => round($validationTime, 2),
-    ]);
+        $validationTime = (microtime(true) - $validationStart) * 1000;
+        \Log::info('[PERFORMANCE] addRow() - Validación básica completada', [
+            'tiempo_ms' => round($validationTime, 2),
+        ]);
+        $this->dispatch('performance-log', [
+            'method' => 'addRow()',
+            'status' => 'Validación básica',
+            'data' => ['tiempo_ms' => round($validationTime, 2)]
+        ]);
     
     // Validación personalizada para redoblona
     $redoblonaStart = microtime(true);
@@ -1437,6 +1442,11 @@ public function addRow()
             'tiempo_ms' => round($dbCreateTime, 2),
             'play_id' => $newPlay->id,
         ]);
+        $this->dispatch('performance-log', [
+            'method' => 'addRow()',
+            'status' => 'Creación BD',
+            'data' => ['tiempo_ms' => round($dbCreateTime, 2), 'play_id' => $newPlay->id]
+        ]);
 
         // ✅ OPTIMIZACIÓN CRÍTICA: Agregar la nueva jugada directamente a la colección en memoria
         // Esto es mucho más rápido que recargar todas las jugadas desde BD (getAndSortPlays)
@@ -1481,7 +1491,7 @@ public function addRow()
         $dispatchTime = (microtime(true) - $dispatchStart) * 1000;
         
         $totalTime = (microtime(true) - $startTime) * 1000;
-        \Log::info('[PERFORMANCE] addRow() - COMPLETADO', [
+        $performanceData = [
             'tiempo_total_ms' => round($totalTime, 2),
             'desglose' => [
                 'validacion_basica_ms' => round($validationTime, 2),
@@ -1492,6 +1502,15 @@ public function addRow()
                 'dispatch_ms' => round($dispatchTime, 2),
             ],
             'play_id' => $newPlay->id,
+        ];
+        
+        \Log::info('[PERFORMANCE] addRow() - COMPLETADO', $performanceData);
+        
+        // Enviar a consola del navegador
+        $this->dispatch('performance-log', [
+            'method' => 'addRow()',
+            'status' => 'COMPLETADO',
+            'data' => $performanceData
         ]);
 
         // MEJORA: Reactivar las bajadas si se creó una nueva jugada base (3 o 4 dígitos)
@@ -1632,13 +1651,22 @@ public function addRow()
         $cleanupTime = (microtime(true) - $cleanupStart) * 1000;
         
         $saveTotalTime = (microtime(true) - $saveStartTime) * 1000;
-        \Log::info('[PERFORMANCE] saveRow() - COMPLETADO', [
+        $savePerformanceData = [
             'tiempo_total_ms' => round($saveTotalTime, 2),
             'desglose' => [
                 'validaciones_ms' => round($saveValidationTime, 2),
                 'operacion_ms' => round($operationTime, 2),
                 'limpieza_ms' => round($cleanupTime, 2),
             ],
+        ];
+        
+        \Log::info('[PERFORMANCE] saveRow() - COMPLETADO', $savePerformanceData);
+        
+        // Enviar a consola del navegador
+        $this->dispatch('performance-log', [
+            'method' => 'saveRow()',
+            'status' => 'COMPLETADO',
+            'data' => $savePerformanceData
         ]);
     }
 

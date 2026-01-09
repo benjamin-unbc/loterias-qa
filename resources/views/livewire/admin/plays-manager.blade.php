@@ -530,10 +530,157 @@
 
         </div>
     </div>
+    <!-- Panel de Debug de Rendimiento (solo visible si APP_DEBUG=true) -->
+    @if(config('app.debug'))
+    <div id="performance-debug-panel" class="fixed bottom-4 right-4 w-96 max-h-96 bg-[#1b1f22] border-2 border-yellow-500 rounded-lg shadow-2xl z-50 hidden overflow-hidden flex flex-col" style="display: none;">
+        <div class="bg-yellow-600 px-4 py-2 flex justify-between items-center cursor-pointer" onclick="togglePerformancePanel()">
+            <h3 class="text-white font-bold text-sm">🔍 Debug Rendimiento</h3>
+            <button class="text-white hover:text-gray-200" onclick="clearPerformanceLogs()">
+                <i class="fa-solid fa-trash"></i>
+            </button>
+        </div>
+        <div id="performance-logs-container" class="flex-1 overflow-y-auto p-3 text-xs font-mono space-y-1 bg-[#22272b]">
+            <div class="text-gray-400 text-center py-4">Esperando logs...</div>
+        </div>
+        <div class="bg-[#1b1f22] px-3 py-2 border-t border-gray-600 flex justify-between items-center">
+            <button onclick="togglePerformancePanel()" class="text-gray-400 hover:text-white text-xs">
+                <i class="fa-solid fa-chevron-down"></i> Minimizar
+            </button>
+            <span id="performance-log-count" class="text-gray-400 text-xs">0 logs</span>
+        </div>
+    </div>
+    <button id="performance-debug-toggle" onclick="togglePerformancePanel()" class="fixed bottom-4 right-4 w-12 h-12 bg-yellow-600 hover:bg-yellow-700 text-white rounded-full shadow-lg z-50 flex items-center justify-center" title="Ver Debug de Rendimiento">
+        <i class="fa-solid fa-bug"></i>
+    </button>
+    @endif
+
     @push('scripts')
         <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
         <script>
+            // ========== SISTEMA DE LOGS DE RENDIMIENTO ==========
+            @if(config('app.debug'))
+            let performanceLogs = [];
+            let maxLogs = 50; // Máximo de logs a mantener
+            
+            // Escuchar eventos de rendimiento de Livewire
+            document.addEventListener('livewire:init', () => {
+                Livewire.on('performance-log', (data) => {
+                    const logData = data[0];
+                    const timestamp = new Date().toLocaleTimeString('es-ES', { 
+                        hour: '2-digit', 
+                        minute: '2-digit', 
+                        second: '2-digit',
+                        fractionalSecondDigits: 3
+                    });
+                    
+                    // Agregar a array de logs
+                    performanceLogs.unshift({
+                        timestamp: timestamp,
+                        method: logData.method,
+                        status: logData.status,
+                        data: logData.data
+                    });
+                    
+                    // Limitar cantidad de logs
+                    if (performanceLogs.length > maxLogs) {
+                        performanceLogs = performanceLogs.slice(0, maxLogs);
+                    }
+                    
+                    // Mostrar en consola del navegador
+                    console.group(`%c[PERFORMANCE] ${logData.method} - ${logData.status}`, 'color: #fbbf24; font-weight: bold;');
+                    console.log('%cTiempo Total:', 'color: #60a5fa; font-weight: bold;', logData.data.tiempo_total_ms + 'ms');
+                    if (logData.data.desglose) {
+                        console.table(logData.data.desglose);
+                    }
+                    console.log('%cDatos completos:', 'color: #34d399;', logData.data);
+                    console.groupEnd();
+                    
+                    // Actualizar panel visual
+                    updatePerformancePanel();
+                });
+            });
+            
+            function updatePerformancePanel() {
+                const container = document.getElementById('performance-logs-container');
+                const countElement = document.getElementById('performance-log-count');
+                
+                if (!container) return;
+                
+                if (performanceLogs.length === 0) {
+                    container.innerHTML = '<div class="text-gray-400 text-center py-4">Esperando logs...</div>';
+                    if (countElement) countElement.textContent = '0 logs';
+                    return;
+                }
+                
+                if (countElement) {
+                    countElement.textContent = `${performanceLogs.length} log${performanceLogs.length !== 1 ? 's' : ''}`;
+                }
+                
+                container.innerHTML = performanceLogs.map(log => {
+                    const totalTime = log.data.tiempo_total_ms;
+                    const colorClass = totalTime > 100 ? 'text-red-400' : totalTime > 50 ? 'text-yellow-400' : 'text-green-400';
+                    
+                    let desgloseHtml = '';
+                    if (log.data.desglose) {
+                        desgloseHtml = '<div class="ml-4 mt-1 space-y-0.5 text-gray-500">';
+                        for (const [key, value] of Object.entries(log.data.desglose)) {
+                            desgloseHtml += `<div class="text-xs">${key}: <span class="text-gray-300">${value}ms</span></div>`;
+                        }
+                        desgloseHtml += '</div>';
+                    }
+                    
+                    return `
+                        <div class="bg-[#1b1f22] border-l-4 border-yellow-500 p-2 rounded mb-2">
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-gray-400 text-xs">${log.timestamp}</span>
+                                        <span class="text-yellow-400 font-bold text-xs">${log.method}</span>
+                                        <span class="text-green-400 text-xs">${log.status}</span>
+                                    </div>
+                                    <div class="mt-1">
+                                        <span class="text-gray-400 text-xs">Total: </span>
+                                        <span class="${colorClass} font-bold">${totalTime}ms</span>
+                                    </div>
+                                    ${desgloseHtml}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+                // Auto-scroll al inicio
+                container.scrollTop = 0;
+            }
+            
+            function togglePerformancePanel() {
+                const panel = document.getElementById('performance-debug-panel');
+                const toggle = document.getElementById('performance-debug-toggle');
+                
+                if (panel && toggle) {
+                    if (panel.style.display === 'none' || !panel.classList.contains('hidden')) {
+                        panel.style.display = 'flex';
+                        panel.classList.remove('hidden');
+                        toggle.style.display = 'none';
+                    } else {
+                        panel.style.display = 'none';
+                        panel.classList.add('hidden');
+                        toggle.style.display = 'flex';
+                    }
+                }
+            }
+            
+            function clearPerformanceLogs() {
+                performanceLogs = [];
+                updatePerformancePanel();
+                console.clear();
+                console.log('%c[PERFORMANCE] Logs limpiados', 'color: #fbbf24; font-weight: bold;');
+            }
+            @endif
+            // ========== FIN SISTEMA DE LOGS DE RENDIMIENTO ==========
+            
+            // Esperar a que Livewire esté completamente cargado
             // Esperar a que Livewire esté completamente cargado
             let initAttempts = 0;
             const maxAttempts = 50; // Máximo 5 segundos (50 * 100ms)
