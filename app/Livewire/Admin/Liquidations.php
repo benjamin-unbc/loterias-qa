@@ -384,7 +384,7 @@ class Liquidations extends Component
             // Obtener el sábado anterior (2 días atrás)
             $lastSaturday = $selectedDate->copy()->subDays(2);
             $saturdayDateStr = $lastSaturday->format('Y-m-d');
-            
+        
             // Obtener el UD DEJA/COBRA del sábado anterior del cache (con pagos aplicados)
             $saturdayUdDejaCacheKey = $userId . '_' . $saturdayDateStr . '_uddeja_with_payments';
             $saturdayUdDeja = null;
@@ -396,23 +396,23 @@ class Liquidations extends Component
                 // Calcular datos del sábado anterior
                 $saturdayTotalAciert = (float) Result::query()
                     ->whereDate('date', $saturdayDateStr)
-                    ->where('user_id', $userId)
-                    ->sum('aciert');
-                
+                ->where('user_id', $userId)
+                ->sum('aciert');
+            
                 $saturdayApusQuery = \App\Models\ApusModel::query()
                     ->whereDate('created_at', $saturdayDateStr)
-                    ->where('user_id', $userId)
-                    ->whereHas('playsSent', function($query) {
-                        $query->where('status', '!=', 'I');
-                    });
+                ->where('user_id', $userId)
+                ->whereHas('playsSent', function($query) {
+                    $query->where('status', '!=', 'I');
+                });
                 $saturdayTotalApus = (float) $saturdayApusQuery->sum('import');
-                
-                $user = \App\Models\User::find($userId);
-                $client = $user ? \App\Models\Client::where('correo', $user->email)->first() : null;
-                $commissionPercentage = $client ? $client->commission_percentage : 20.00;
+            
+            $user = \App\Models\User::find($userId);
+            $client = $user ? \App\Models\Client::where('correo', $user->email)->first() : null;
+            $commissionPercentage = $client ? $client->commission_percentage : 20.00;
                 $saturdayComision = $saturdayTotalApus * ($commissionPercentage / 100);
                 $saturdayTotalGanaPase = $saturdayTotalApus - $saturdayComision - $saturdayTotalAciert;
-                
+            
                 // Obtener el ANTERI del sábado anterior
                 $saturdayAnteri = $this->calculateAnteri($userId, $lastSaturday, $saturdayTotalGanaPase);
                 
@@ -431,8 +431,8 @@ class Liquidations extends Component
                     $saturdayUdDejaNoPayments = ($saturdayAnteri + $saturdayTotalGanaPase) - $saturdayComiDejaSem;
                 } else {
                     $saturdayUdDejaNoPayments = ($saturdayAnteri - $saturdayTotalGanaPase) - $saturdayComiDejaSem;
-                }
-                
+        }
+        
                 // Aplicar pagos del sábado anterior
                 $saturdayPayments = $this->getPaymentsForCurrentDate($userId, $saturdayDateStr);
                 $saturdayUdDeja = $saturdayUdDejaNoPayments - $saturdayPayments['udDio'] + $saturdayPayments['udRecibe'];
@@ -504,7 +504,7 @@ class Liquidations extends Component
                 // Calcular comisión semanal: Base × porcentaje
                 if ($weeklyCommissionPercentage > 0) {
                     $comiDejaSem = $baseComision * ($weeklyCommissionPercentage / 100);
-                } else {
+        } else {
                     $comiDejaSem = $baseComision * 0.30;
                 }
                 
@@ -515,7 +515,7 @@ class Liquidations extends Component
                     $previousUdDejaNoPayments = ($previousAnteri + $previousTotalGanaPase) - $comiDejaSem;
                 } else {
                     $previousUdDejaNoPayments = ($previousAnteri - $previousTotalGanaPase) - $comiDejaSem;
-                }
+        }
             } elseif ($previousTotalApus == 0) {
                 $previousUdDejaNoPayments = 0;
             } else {
@@ -668,6 +668,9 @@ class Liquidations extends Component
         // Si es domingo, todo en 0 (no se juega)
         if ($selectedDate->isSunday()) {
             $udDeja = 0;
+            $udCobra = 0;
+            $udDejaCalculado = 0;
+            $udDejaParaArrastre = 0;
             $arrastre = 0;
             $comiDejaSem = 0; // No aplica en domingo
         }
@@ -1003,7 +1006,7 @@ class Liquidations extends Component
             // Si TOTAL DEJA es negativo: UD DEJA/COBRA = (ANTERI - TOTAL DEJA) - COMI DEJA SEM
             if ($totalGanaPase >= 0) {
                 $udDeja = ($prevClientDeja + $totalGanaPase) - $comiDejaSem;
-            } else {
+        } else {
                 $udDeja = ($prevClientDeja - $totalGanaPase) - $comiDejaSem;
             }
         } else {
