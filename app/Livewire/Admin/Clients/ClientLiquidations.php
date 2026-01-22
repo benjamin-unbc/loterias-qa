@@ -63,56 +63,63 @@ class ClientLiquidations extends Component
         
         $liquidationsComponent = new Liquidations();
         
-        // ✅ OPTIMIZACIÓN: Cachear también la fecha más antigua
-        $oldestDateCacheKey = "client_oldest_date_{$user->id}";
-        $startDate = Cache::remember($oldestDateCacheKey, 3600, function() use ($user) {
-            // Buscar todos los sábados posibles desde que el cliente tiene jugadas
-            // Obtener la fecha más antigua de resultados o apuestas
-            $oldestResult = Result::where('user_id', $user->id)->min('date');
-            $oldestApus = ApusModel::where('user_id', $user->id)
-                ->whereHas('playsSent', function($query) {
-                    $query->where('status', '!=', 'I');
-                })
-                ->min('created_at');
-            
-            $startDate = null;
-            if ($oldestResult && $oldestApus) {
-                $startDate = Carbon::parse(min($oldestResult, $oldestApus));
-            } elseif ($oldestResult) {
-                $startDate = Carbon::parse($oldestResult);
-            } elseif ($oldestApus) {
-                $startDate = Carbon::parse($oldestApus);
-            }
-            
-            // Si no hay fechas, buscar desde hace 1 año
-            if (!$startDate) {
-                $startDate = Carbon::now()->subYear();
-            }
-            
-            return $startDate;
-        });
+        // ✅ OPTIMIZACIÓN 1: Limitar rango a últimos 12 meses (en lugar de desde el inicio)
+        // Esto reduce significativamente el número de sábados a calcular
+        $startDate = Carbon::now()->subMonths(12)->startOfWeek();
+        if ($startDate->isSunday()) {
+            $startDate->addDay();
+        }
+        // Ir al sábado más cercano
+        while (!$startDate->isSaturday()) {
+            $startDate->addDay();
+        }
         
-        // Buscar todos los sábados desde la fecha más antigua hasta hoy
-        $allSaturdays = collect();
-        $currentDate = $startDate->copy();
         $endDate = Carbon::now();
         
+        // ✅ OPTIMIZACIÓN 2: Cargar TODOS los pagos del cliente de una vez
+        // Esto evita hacer N consultas (una por semana) y las filtra en memoria
+        $allPayments = ClientPayment::where('client_id', $this->client->id)
+            ->orderBy('payment_date', 'desc')
+            ->orderBy('created_at', 'desc')
+            ->get();
+        
+        // ✅ OPTIMIZACIÓN 3: Buscar solo sábados que tienen jugadas (más eficiente)
+        // En lugar de iterar todos los sábados, buscar directamente en BD qué sábados tienen datos
+        $saturdaysWithData = collect();
+        $currentDate = $startDate->copy();
+        
         while ($currentDate <= $endDate) {
-            // Si es sábado, agregarlo
             if ($currentDate->isSaturday()) {
-                $allSaturdays->push($currentDate->copy());
+                $saturdaysWithData->push($currentDate->copy());
             }
-            // Avanzar al siguiente sábado
             $currentDate->next(Carbon::SATURDAY);
         }
         
         $this->weeks = [];
         $this->totalDebe = 0;
         
-        foreach ($allSaturdays as $saturday) {
-            // Calcular USTED DEBE SEM para este sábado
-            $liquidationData = $liquidationsComponent->computeClientLiquidationData($user, $saturday);
-            $ustedDebeSem = $liquidationData['usted_debe_sem'] ?? 0;
+        foreach ($saturdaysWithData as $saturday) {
+            $saturdayStr = $saturday->format('Y-m-d');
+            
+            // ✅ OPTIMIZACIÓN 4: Cachear por sábado individual
+            // Si este sábado ya fue calculado y no tiene deuda, saltarlo
+            $saturdayCacheKey = "client_saturday_usted_debe_{$user->id}_{$saturdayStr}";
+            $cachedUstedDebeSem = Cache::get($saturdayCacheKey);
+            
+            if ($cachedUstedDebeSem !== null) {
+                // Si está en cache y es 0, saltar (no tiene deuda)
+                if ($cachedUstedDebeSem <= 0) {
+                    continue;
+                }
+                $ustedDebeSem = $cachedUstedDebeSem;
+            } else {
+                // Calcular USTED DEBE SEM para este sábado
+                $liquidationData = $liquidationsComponent->computeClientLiquidationData($user, $saturday);
+                $ustedDebeSem = $liquidationData['usted_debe_sem'] ?? 0;
+                
+                // Cachear el resultado (incluso si es 0, para no recalcular)
+                Cache::put($saturdayCacheKey, $ustedDebeSem, 1800); // 30 minutos
+            }
             
             // Solo agregar si tiene USTED DEBE SEM > 0
             if ($ustedDebeSem > 0) {
@@ -126,22 +133,14 @@ class ClientLiquidations extends Component
                     $weekEnd->subDay();
                 }
                 
-                // Obtener pagos de esta semana O pagos que tengan referencia a esta semana en las notas
-                // Esto incluye pagos guardados después de la semana pero asociados a ella
-                $saturdayStr = $saturday->format('Y-m-d');
-                $payments = ClientPayment::where('client_id', $this->client->id)
-                    ->where(function($query) use ($weekStart, $weekEnd, $saturdayStr) {
-                        // Pagos dentro del rango de la semana
-                        $query->where(function($q) use ($weekStart, $weekEnd) {
-                            $q->whereDate('payment_date', '>=', $weekStart->format('Y-m-d'))
-                              ->whereDate('payment_date', '<=', $weekEnd->format('Y-m-d'));
-                        })
-                        // O pagos que tengan referencia a esta semana en las notas
-                        ->orWhere('notes', 'like', '%Semana del sábado: ' . $saturdayStr . '%');
-                    })
-                    ->orderBy('payment_date', 'desc')
-                    ->orderBy('created_at', 'desc')
-                    ->get();
+                // ✅ OPTIMIZACIÓN 2 (continuación): Filtrar pagos en memoria
+                // En lugar de hacer una consulta por semana, filtrar de la colección cargada
+                $payments = $allPayments->filter(function($payment) use ($weekStart, $weekEnd, $saturdayStr) {
+                    $paymentDate = Carbon::parse($payment->payment_date);
+                    $inWeekRange = $paymentDate->gte($weekStart) && $paymentDate->lte($weekEnd);
+                    $hasWeekNote = $payment->notes && str_contains($payment->notes, 'Semana del sábado: ' . $saturdayStr);
+                    return $inWeekRange || $hasWeekNote;
+                })->values();
                 
                 $totalPayments = $payments->sum('amount');
                 $remainingDebe = max(0, $ustedDebeSem - $totalPayments);
@@ -228,6 +227,26 @@ class ClientLiquidations extends Component
             
             // Limpiar cache antes de recargar
             Cache::forget("client_liquidations_weeks_{$this->client->id}");
+            // Limpiar también cache de sábados individuales (pueden haber cambiado)
+            $user = $this->client->associatedUser;
+            if ($user) {
+                // Limpiar cache de sábados de los últimos 12 meses
+                $startDate = Carbon::now()->subMonths(12)->startOfWeek();
+                if ($startDate->isSunday()) {
+                    $startDate->addDay();
+                }
+                while (!$startDate->isSaturday()) {
+                    $startDate->addDay();
+                }
+                $endDate = Carbon::now();
+                $currentDate = $startDate->copy();
+                while ($currentDate <= $endDate) {
+                    if ($currentDate->isSaturday()) {
+                        Cache::forget("client_saturday_usted_debe_{$user->id}_{$currentDate->format('Y-m-d')}");
+                    }
+                    $currentDate->next(Carbon::SATURDAY);
+                }
+            }
             $this->loadWeeks();
             
             session()->flash('message', 'Pago registrado correctamente. Se verá reflejado en la liquidación del día siguiente.');
@@ -300,6 +319,26 @@ class ClientLiquidations extends Component
             
             // Limpiar cache antes de recargar
             Cache::forget("client_liquidations_weeks_{$this->client->id}");
+            // Limpiar también cache de sábados individuales (pueden haber cambiado)
+            $user = $this->client->associatedUser;
+            if ($user) {
+                // Limpiar cache de sábados de los últimos 12 meses
+                $startDate = Carbon::now()->subMonths(12)->startOfWeek();
+                if ($startDate->isSunday()) {
+                    $startDate->addDay();
+                }
+                while (!$startDate->isSaturday()) {
+                    $startDate->addDay();
+                }
+                $endDate = Carbon::now();
+                $currentDate = $startDate->copy();
+                while ($currentDate <= $endDate) {
+                    if ($currentDate->isSaturday()) {
+                        Cache::forget("client_saturday_usted_debe_{$user->id}_{$currentDate->format('Y-m-d')}");
+                    }
+                    $currentDate->next(Carbon::SATURDAY);
+                }
+            }
             $this->loadWeeks();
             
             session()->flash('message', 'Pago actualizado correctamente. Los cambios se verán reflejados en las liquidaciones.');
@@ -358,6 +397,26 @@ class ClientLiquidations extends Component
             
             // Limpiar cache antes de recargar
             Cache::forget("client_liquidations_weeks_{$this->client->id}");
+            // Limpiar también cache de sábados individuales (pueden haber cambiado)
+            $user = $this->client->associatedUser;
+            if ($user) {
+                // Limpiar cache de sábados de los últimos 12 meses
+                $startDate = Carbon::now()->subMonths(12)->startOfWeek();
+                if ($startDate->isSunday()) {
+                    $startDate->addDay();
+                }
+                while (!$startDate->isSaturday()) {
+                    $startDate->addDay();
+                }
+                $endDate = Carbon::now();
+                $currentDate = $startDate->copy();
+                while ($currentDate <= $endDate) {
+                    if ($currentDate->isSaturday()) {
+                        Cache::forget("client_saturday_usted_debe_{$user->id}_{$currentDate->format('Y-m-d')}");
+                    }
+                    $currentDate->next(Carbon::SATURDAY);
+                }
+            }
             $this->loadWeeks();
             
             session()->flash('message', 'Pago eliminado correctamente. Los cambios se verán reflejados en las liquidaciones.');
