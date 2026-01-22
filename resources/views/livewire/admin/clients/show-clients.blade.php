@@ -124,19 +124,21 @@
                                 {{ $client->is_active ? 'Activo' : 'Inactivo' }}
                             </span>
                         </td>
-                        <td class="px-6 py-4 text-left flex space-x-2 text-lg">
+                        <td class="px-6 py-4 text-left flex space-x-2 text-lg items-center">
                             @can('ver clientes')
                             <a href="{{ route('clients.details', $client->id) }}"
                                 class="font-medium text-white hover:text-yellow-200 transition-colors duration-200"
                                 title="Ver detalles del cliente">
                                 <i class="fa-solid fa-eye"></i>
                             </a>
-                            <a href="{{ route('clients.simple-liquidation', $client->id) }}"
-                                class="font-medium text-white hover:text-green-400 transition-colors duration-200"
-                                title="Liquidación simple - Ver ANTERI y registrar pagos">
+                            @endcan
+                            @role('Administrador')
+                            <a href="{{ route('clients.liquidations', $client->id) }}"
+                                class="font-medium text-green-400 hover:text-green-300 transition-colors duration-200"
+                                title="Liquidaciones y pagos del cliente">
                                 <i class="fa-solid fa-dollar-sign"></i>
                             </a>
-                            @endcan
+                            @endrole
                             @can('editar clientes')
                             <a href="{{ route('clients.store', $client->id) }}"
                                 class="font-medium text-white hover:underline"><i

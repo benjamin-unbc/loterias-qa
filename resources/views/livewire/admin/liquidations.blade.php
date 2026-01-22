@@ -175,34 +175,25 @@
 
                                 <div class="flex flex-col pt-3 gap-1 border-b pb-2 w-full text-sm">
                                     <div class="flex justify-between">
-                                        <h4 class="font-medium">TOTAL DEJA:</h4>
+                                        @if($totalGanaPase < 0)
+                                            <h4 class="font-medium">USTED COBRA:</h4>
+                                        @else
+                                            <h4 class="font-medium">TOTAL DEJA:</h4>
+                                        @endif
                                         <p>{{ number_format($totalGanaPase, 2) }}</p>
                                     </div>
-                                </div>
-
-                                <div class="flex flex-col pt-3 gap-1 border-b pb-2 w-full text-sm">
-                                    <div class="flex justify-between">
-                                        <h4 class="font-medium">GENER. DEJA:</h4>
-                                        <p>{{ number_format($totalGanaPase, 2) }}</p>
-                                    </div>
-                                    @if($totalGanaPase < 0)
-                                        <div class="flex justify-between">
-                                            <h4 class="font-medium">USTED GANA:</h4>
-                                            <p>{{ number_format($totalGanaPase, 2) }}</p>
-                                        </div>
-                                    @endif
                                     <div class="flex justify-between">
                                         <h4 class="font-medium">ANTERI:</h4>
                                         <p>{{ number_format($anteri, 2) }}</p>
                                     </div>
                                     @if(($udDio ?? 0) > 0)
                                         <div class="flex justify-between">
-                                            <h4 class="font-medium">UD.DIO:</h4>
+                                            <h4 class="font-medium">Usted dio:</h4>
                                             <p>{{ number_format($udDio, 2) }}</p>
                                         </div>
                                         @if(isset($paymentDateDio) && $paymentDateDio)
                                             <div class="text-xs text-gray-500 italic pl-2 -mt-1">
-                                                La fecha de ingreso fue: {{ $paymentDateDio }}. Se verá reflejado en la liquidación del día siguiente.
+                                                Fecha del pago: {{ $paymentDateDio }}
                                             </div>
                                         @endif
                                     @endif
@@ -217,26 +208,25 @@
                                             </div>
                                         @endif
                                     @endif
+                                    <div class="flex justify-between">
+                                        <h4 class="font-medium">UD DEJA:</h4>
+                                        <p>{{ number_format($udDeja ?? 0, 2) }}</p>
+                                    </div>
                                     @if(\Carbon\Carbon::parse($date)->isSaturday())
                                         <div class="flex justify-between">
                                             <h4 class="font-medium">COMI DEJA SEM:</h4>
                                             <p>{{ number_format($comi_deja_sem ?? 0, 2) }}</p>
                                         </div>
                                     @endif
-                                    @if(($udCobra ?? 0) < 0)
-                                        <div class="flex justify-between">
-                                            <h4 class="font-medium">UD COBRA:</h4>
-                                            <p>{{ number_format($udCobra, 2) }}</p>
-                                        </div>
-                                    @else
-                                        <div class="flex justify-between">
-                                            <h4 class="font-medium">UD DEJA:</h4>
-                                            <p>{{ number_format($udDeja ?? 0, 2) }}</p>
-                                        </div>
-                                    @endif
                                 </div>
 
                                 <div class="flex flex-col pt-3 gap-1 w-full text-sm">
+                                    @if(\Carbon\Carbon::parse($date)->isSaturday())
+                                        <div class="flex justify-between">
+                                            <h4 class="font-medium">USTED DEBE SEM:</h4>
+                                            <p>{{ number_format($usted_debe_sem ?? 0, 2) }}</p>
+                                        </div>
+                                    @endif
                                     <div class="flex justify-between">
                                         <h4 class="font-medium">ARRASTRE:</h4>
                                         <p>{{ number_format($arrastre, 2) }}</p>

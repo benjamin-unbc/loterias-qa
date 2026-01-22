@@ -650,16 +650,6 @@
                                                 <!-- Gener. deja y arrastre -->
                                                 <div class="flex flex-col pt-3 gap-1 border-b pb-2 w-full text-sm">
                                                     <div class="flex justify-between">
-                                                        <h4 class="font-medium">GENER. DEJA:</h4>
-                                                        <p>{{ number_format($liquidacionData['totalGanaPase'], 2) }}</p>
-                                                    </div>
-                                                    @if($liquidacionData['totalGanaPase'] < 0)
-                                                        <div class="flex justify-between">
-                                                            <h4 class="font-medium">USTED GANA:</h4>
-                                                            <p>{{ number_format($liquidacionData['totalGanaPase'], 2) }}</p>
-                                                        </div>
-                                                    @endif
-                                                    <div class="flex justify-between">
                                                         <h4 class="font-medium">ANTERI:</h4>
                                                         <p>{{ number_format($liquidacionData['anteri'], 2) }}</p>
                                                     </div>

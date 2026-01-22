@@ -61,9 +61,9 @@ Route::middleware([
             Route::get('/clients/{id}/details', \App\Livewire\Admin\Clients\ClientDetailsModal::class)->name('clients.details');
         });
         
-        //Clients simple liquidation
-        Route::group(['middleware' => ['permission:ver clientes']], function () {
-            Route::get('/clients/{id}/simple-liquidation', \App\Livewire\Admin\Clients\ClientSimpleLiquidation::class)->name('clients.simple-liquidation');
+        //Clients liquidations (solo administradores)
+        Route::middleware(['role:Administrador'])->group(function () {
+            Route::get('/clients/{id}/liquidations', \App\Livewire\Admin\Clients\ClientLiquidations::class)->name('clients.liquidations');
         });
 
       

@@ -77,4 +77,5 @@ class ShowClients extends Component
         $this->deletingClientId = $clientId;
         $this->showConfirmationModal = true;
     }
+    
 }
