@@ -22,6 +22,14 @@ class ClientLiquidations extends Component
     public $weeks = [];
     public $totalDebe = 0;
     
+    // Variables para editar pago
+    public $editingPaymentId = null;
+    public $editingPaymentAmount = '';
+    public $editingPaymentNotes = '';
+    public $editingPaymentDate = '';
+    public $showDeleteConfirm = false;
+    public $paymentToDelete = null;
+    
     protected $listeners = ['paymentSaved' => 'loadWeeks'];
     
     #[Layout('layouts.app')]
@@ -205,6 +213,135 @@ class ClientLiquidations extends Component
             ]);
             session()->flash('error', 'Error al guardar el pago: ' . $e->getMessage());
         }
+    }
+    
+    public function editPayment($paymentId)
+    {
+        $payment = ClientPayment::findOrFail($paymentId);
+        
+        // Verificar que el pago pertenezca al cliente
+        if ($payment->client_id != $this->client->id) {
+            session()->flash('error', 'El pago no pertenece a este cliente');
+            return;
+        }
+        
+        $this->editingPaymentId = $paymentId;
+        $this->editingPaymentAmount = $payment->amount;
+        $this->editingPaymentNotes = $payment->notes;
+        $this->editingPaymentDate = $payment->payment_date->format('Y-m-d');
+    }
+    
+    public function updatePayment()
+    {
+        try {
+            if (!$this->editingPaymentId) {
+                session()->flash('error', 'No se ha seleccionado un pago para editar');
+                return;
+            }
+            
+            $this->validate([
+                'editingPaymentAmount' => 'required|numeric|min:0.01',
+                'editingPaymentDate' => 'required|date',
+            ], [
+                'editingPaymentAmount.required' => 'El monto del pago es requerido',
+                'editingPaymentAmount.numeric' => 'El monto debe ser un número',
+                'editingPaymentAmount.min' => 'El monto debe ser mayor a 0',
+                'editingPaymentDate.required' => 'La fecha del pago es requerida',
+                'editingPaymentDate.date' => 'La fecha debe ser válida',
+            ]);
+            
+            $payment = ClientPayment::findOrFail($this->editingPaymentId);
+            
+            // Verificar que el pago pertenezca al cliente
+            if ($payment->client_id != $this->client->id) {
+                session()->flash('error', 'El pago no pertenece a este cliente');
+                return;
+            }
+            
+            // Actualizar el pago
+            $payment->update([
+                'amount' => (float) $this->editingPaymentAmount,
+                'payment_date' => $this->editingPaymentDate,
+                'notes' => $this->editingPaymentNotes ?: $payment->notes,
+            ]);
+            
+            // Limpiar variables de edición
+            $this->editingPaymentId = null;
+            $this->editingPaymentAmount = '';
+            $this->editingPaymentNotes = '';
+            $this->editingPaymentDate = '';
+            
+            $this->loadWeeks();
+            
+            session()->flash('message', 'Pago actualizado correctamente. Los cambios se verán reflejados en las liquidaciones.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            \Log::error('Error al actualizar pago: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+            session()->flash('error', 'Error al actualizar el pago: ' . $e->getMessage());
+        }
+    }
+    
+    public function cancelEdit()
+    {
+        $this->editingPaymentId = null;
+        $this->editingPaymentAmount = '';
+        $this->editingPaymentNotes = '';
+        $this->editingPaymentDate = '';
+    }
+    
+    public function confirmDeletePayment($paymentId)
+    {
+        $payment = ClientPayment::findOrFail($paymentId);
+        
+        // Verificar que el pago pertenezca al cliente
+        if ($payment->client_id != $this->client->id) {
+            session()->flash('error', 'El pago no pertenece a este cliente');
+            return;
+        }
+        
+        $this->paymentToDelete = $paymentId;
+        $this->showDeleteConfirm = true;
+    }
+    
+    public function deletePayment()
+    {
+        try {
+            if (!$this->paymentToDelete) {
+                session()->flash('error', 'No se ha seleccionado un pago para eliminar');
+                return;
+            }
+            
+            $payment = ClientPayment::findOrFail($this->paymentToDelete);
+            
+            // Verificar que el pago pertenezca al cliente
+            if ($payment->client_id != $this->client->id) {
+                session()->flash('error', 'El pago no pertenece a este cliente');
+                return;
+            }
+            
+            $payment->delete();
+            
+            $this->paymentToDelete = null;
+            $this->showDeleteConfirm = false;
+            
+            $this->loadWeeks();
+            
+            session()->flash('message', 'Pago eliminado correctamente. Los cambios se verán reflejados en las liquidaciones.');
+        } catch (\Exception $e) {
+            \Log::error('Error al eliminar pago: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+            session()->flash('error', 'Error al eliminar el pago: ' . $e->getMessage());
+        }
+    }
+    
+    public function cancelDelete()
+    {
+        $this->paymentToDelete = null;
+        $this->showDeleteConfirm = false;
     }
     
     public function render()

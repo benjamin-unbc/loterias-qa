@@ -117,21 +117,88 @@
                                     <th class="text-left text-gray-400 p-2">Fecha de Registro</th>
                                     <th class="text-right text-gray-400 p-2">Monto</th>
                                     <th class="text-left text-gray-400 p-2">Notas</th>
+                                    <th class="text-center text-gray-400 p-2">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach($week['payments'] as $payment)
                                 <tr class="border-b border-gray-700">
-                                    <td class="text-white p-2">{{ $payment->payment_date->format('d/m/Y') }}</td>
-                                    <td class="text-gray-400 p-2">{{ $payment->created_at->format('d/m/Y H:i') }}</td>
-                                    <td class="text-green-400 text-right p-2 font-semibold">{{ number_format($payment->amount, 2) }}</td>
-                                    <td class="text-gray-400 p-2">{{ $payment->notes ?? '-' }}</td>
+                                    @if($editingPaymentId == $payment->id)
+                                        <!-- Modo edición -->
+                                        <td class="p-2">
+                                            <input 
+                                                type="date" 
+                                                wire:model="editingPaymentDate"
+                                                class="w-full bg-[#1b1f22] border border-gray-600 text-white rounded-md p-1 text-xs"
+                                            >
+                                        </td>
+                                        <td class="text-gray-400 p-2 text-xs">{{ $payment->created_at->format('d/m/Y H:i') }}</td>
+                                        <td class="p-2">
+                                            <input 
+                                                type="number" 
+                                                step="0.01" 
+                                                min="0.01"
+                                                wire:model="editingPaymentAmount"
+                                                class="w-full bg-[#1b1f22] border border-gray-600 text-white rounded-md p-1 text-xs text-right"
+                                            >
+                                        </td>
+                                        <td class="p-2">
+                                            <input 
+                                                type="text" 
+                                                wire:model="editingPaymentNotes"
+                                                class="w-full bg-[#1b1f22] border border-gray-600 text-white rounded-md p-1 text-xs"
+                                                placeholder="Notas..."
+                                            >
+                                        </td>
+                                        <td class="p-2">
+                                            <div class="flex gap-2 justify-center">
+                                                <button 
+                                                    wire:click="updatePayment"
+                                                    class="bg-green-500 text-white px-2 py-1 rounded text-xs hover:bg-green-600"
+                                                    title="Guardar"
+                                                >
+                                                    <i class="fa-solid fa-check"></i>
+                                                </button>
+                                                <button 
+                                                    wire:click="cancelEdit"
+                                                    class="bg-gray-500 text-white px-2 py-1 rounded text-xs hover:bg-gray-600"
+                                                    title="Cancelar"
+                                                >
+                                                    <i class="fa-solid fa-times"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    @else
+                                        <!-- Modo visualización -->
+                                        <td class="text-white p-2">{{ $payment->payment_date->format('d/m/Y') }}</td>
+                                        <td class="text-gray-400 p-2">{{ $payment->created_at->format('d/m/Y H:i') }}</td>
+                                        <td class="text-green-400 text-right p-2 font-semibold">{{ number_format($payment->amount, 2) }}</td>
+                                        <td class="text-gray-400 p-2">{{ $payment->notes ?? '-' }}</td>
+                                        <td class="p-2">
+                                            <div class="flex gap-2 justify-center">
+                                                <button 
+                                                    wire:click="editPayment({{ $payment->id }})"
+                                                    class="bg-blue-500 text-white px-2 py-1 rounded text-xs hover:bg-blue-600"
+                                                    title="Editar"
+                                                >
+                                                    <i class="fa-solid fa-pen"></i>
+                                                </button>
+                                                <button 
+                                                    wire:click="confirmDeletePayment({{ $payment->id }})"
+                                                    class="bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600"
+                                                    title="Eliminar"
+                                                >
+                                                    <i class="fa-solid fa-trash"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    @endif
                                 </tr>
                                 @endforeach
                             </tbody>
                             <tfoot>
                                 <tr class="border-t border-gray-600">
-                                    <td colspan="2" class="text-white font-semibold p-2">Total Pagado:</td>
+                                    <td colspan="3" class="text-white font-semibold p-2">Total Pagado:</td>
                                     <td class="text-green-400 text-right font-bold p-2">{{ number_format($week['total_payments'], 2) }}</td>
                                     <td></td>
                                 </tr>
@@ -156,5 +223,29 @@
         </div>
         @endforelse
     </div>
+
+    <!-- Modal de confirmación para eliminar pago -->
+    @if($showDeleteConfirm)
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-[#22272b] rounded-lg p-6 max-w-md w-full mx-4 border border-gray-600">
+            <h3 class="text-white font-semibold text-lg mb-4">Confirmar Eliminación</h3>
+            <p class="text-gray-300 mb-6">¿Estás seguro de que deseas eliminar este pago? Esta acción no se puede deshacer y afectará las liquidaciones relacionadas.</p>
+            <div class="flex gap-3 justify-end">
+                <button 
+                    wire:click="cancelDelete"
+                    class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600"
+                >
+                    Cancelar
+                </button>
+                <button 
+                    wire:click="deletePayment"
+                    class="bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600"
+                >
+                    Eliminar
+                </button>
+            </div>
+        </div>
+    </div>
+    @endif
 </div>
 
