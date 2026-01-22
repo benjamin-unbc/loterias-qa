@@ -433,14 +433,10 @@ class Liquidations extends Component
         // Obtener los pagos registrados para la fecha actual (para mostrar en la vista)
         $currentPayments = $this->getPaymentsForCurrentDate($user->id, $dateStr);
         
-        // Obtener pagos del día anterior que se aplican al ANTERI del día actual
-        $previousDate = $selectedDate->copy()->subDay();
-        if ($previousDate->isSunday()) {
-            $previousDate = $previousDate->copy()->subDay();
-        }
-        $previousDateStr = $previousDate->format('Y-m-d');
-        $previousPayments = $this->getPaymentsForCurrentDate($user->id, $previousDateStr);
-        $totalPaymentsFromPreviousDay = $previousPayments['udDio'] ?? 0;
+        // Obtener pagos del mismo día de la liquidación que se aplican al ANTERI
+        // Si ingresas pagos el 21-01-2026, se verán en la liquidación del 21-01-2026
+        $paymentsForLiquidation = $this->getPaymentsForCurrentDate($user->id, $dateStr);
+        $totalPaymentsForDay = $paymentsForLiquidation['udDio'] ?? 0;
         
         // ANTERI: 
         // - Domingo: ANTERI = 0
@@ -466,8 +462,8 @@ class Liquidations extends Component
                 $anteriForDisplay = $this->udDejaCache[$cacheKeyUstedDebeSem];
             }
             
-            // Aplicar pagos del día anterior (domingo) al ANTERI del lunes
-            $anteriForDisplay = max(0, $anteriForDisplay - $totalPaymentsFromPreviousDay);
+            // Aplicar pagos del mismo día al ANTERI del lunes
+            $anteriForDisplay = max(0, $anteriForDisplay - $totalPaymentsForDay);
         } elseif ($selectedDate->isSaturday()) {
             // Sábado: ANTERI = UD DEJA del viernes
             // Calcularlo aquí para asegurar que se use el mismo valor en toda la función
@@ -519,8 +515,8 @@ class Liquidations extends Component
                 }
             }
             
-            // Aplicar pagos del día anterior al ANTERI del día actual
-            $anteriForDisplay = max(0, $anteriForDisplay - $totalPaymentsFromPreviousDay);
+            // Aplicar pagos del mismo día al ANTERI del día actual
+            $anteriForDisplay = max(0, $anteriForDisplay - $totalPaymentsForDay);
         }
         
         // UD DEJA: De Lunes a Viernes = Total Deja + Anteri
@@ -679,9 +675,9 @@ class Liquidations extends Component
             'comi_deja_sem'     => $comiDejaSem,
             'usted_debe_sem'    => $ustedDebeSem,
             'calculo_semanal'   => $calculoSemanal,
-            'udDio'             => $previousPayments['udDio'] ?? 0, // Pagos del día anterior que se aplican hoy
+            'udDio'             => $paymentsForLiquidation['udDio'] ?? 0, // Pagos del mismo día de la liquidación
             'udRecibePayment'   => $currentPayments['udRecibe'],
-            'paymentDateDio'    => $previousPayments['paymentDateDio'] ?? null, // Fecha del pago del día anterior
+            'paymentDateDio'    => $paymentsForLiquidation['paymentDateDio'] ?? null, // Fecha del pago del mismo día
             'paymentDateRecibe' => $currentPayments['paymentDateRecibe'],
         ];
     }
