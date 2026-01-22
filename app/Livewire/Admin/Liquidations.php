@@ -62,11 +62,15 @@ class Liquidations extends Component
         
         for ($i = 0; $i <= 30; $i++) {
             $dateToClear = $paymentDateCarbon->copy()->addDays($i);
-            $cacheKey = $userId . '_' . $dateToClear->format('Y-m-d');
-            $cacheKeyWithPayments = $userId . '_' . $dateToClear->format('Y-m-d') . '_with_payments';
+            $dateStr = $dateToClear->format('Y-m-d');
+            $cacheKey = $userId . '_' . $dateStr;
+            $cacheKeyWithPayments = $userId . '_' . $dateStr . '_with_payments';
             
             unset($this->anteriorCache[$cacheKey]);
             unset($this->anteriorCache[$cacheKeyWithPayments]);
+            
+            // ✅ OPTIMIZACIÓN: Limpiar también cache de Laravel
+            Cache::forget("liquidation_data_{$userId}_{$dateStr}");
         }
         
         // También limpiar cache de arrastre y UD DEJA
@@ -76,6 +80,13 @@ class Liquidations extends Component
             $udDejaCacheKey = $userId . '_' . $dateToClear->format('Y-m-d') . '_uddeja';
             unset($this->arrastreCache[$arrastreCacheKey]);
             unset($this->udDejaCache[$udDejaCacheKey]);
+        }
+        
+        // ✅ OPTIMIZACIÓN: Limpiar cache de semanas del cliente (si existe)
+        // Necesitamos obtener el client_id desde el user_id
+        $user = \App\Models\User::find($userId);
+        if ($user && $user->associatedClient) {
+            Cache::forget("client_liquidations_weeks_{$user->associatedClient->id}");
         }
         
         // Forzar recarga del componente para que se recalculen los valores
@@ -309,6 +320,18 @@ class Liquidations extends Component
         // Usar la fecha del selectedDate en lugar de $this->date para evitar problemas cuando se calcula arrastre
         $dateStr = $selectedDate->format('Y-m-d');
         
+        // ✅ OPTIMIZACIÓN: Cache de Laravel para persistir entre requests
+        $cacheKey = "liquidation_data_{$user->id}_{$dateStr}";
+        
+        // Intentar obtener del cache de Laravel primero (persiste entre requests)
+        $cached = Cache::get($cacheKey);
+        if ($cached !== null) {
+            // También actualizar cache de instancia para uso inmediato en este request
+            $this->udDejaCache[$user->id . '_' . $dateStr . '_uddeja_arrastre'] = $cached['udDeja'] ?? 0;
+            $this->arrastreCache[$user->id . '_' . $dateStr . '_arrastre'] = $cached['arrastre'] ?? 0;
+            return $cached;
+        }
+        
         // IMPORTANTE: Limpiar el cache de UD DEJA y ARRASTRE de la semana anterior para TODOS los días
         // Solo mantener el USTED DEBE SEM del sábado anterior (necesario para el lunes)
         // Esto asegura que cada semana comience limpia y no use valores antiguos
@@ -319,8 +342,8 @@ class Liquidations extends Component
             $mondayOfCurrentWeek->addDay(); // Si es domingo, el lunes es el día siguiente
         }
         
-        // Limpiar cache de UD DEJA y ARRASTRE de la semana anterior (7 días antes del lunes actual)
-        // Limpiar más días para asegurar que no queden valores antiguos
+        // Limpiar cache de Laravel de la semana anterior (solo limpiar si es necesario)
+        // Limpiar cache de instancia de la semana anterior
         for ($i = 1; $i <= 13; $i++) {
             $previousWeekDate = $mondayOfCurrentWeek->copy()->subDays($i);
             $previousWeekDateStr = $previousWeekDate->format('Y-m-d');
@@ -328,6 +351,8 @@ class Liquidations extends Component
             $cacheKeyArrastre = $user->id . '_' . $previousWeekDateStr . '_arrastre';
             unset($this->udDejaCache[$cacheKeyUdDeja]);
             unset($this->arrastreCache[$cacheKeyArrastre]);
+            // Limpiar también cache de Laravel de la semana anterior (solo si es necesario)
+            // Cache::forget("liquidation_data_{$user->id}_{$previousWeekDateStr}");
         }
         // NO limpiar el USTED DEBE SEM del sábado anterior, ese se necesita para el ANTERI del lunes
         
@@ -662,7 +687,7 @@ class Liquidations extends Component
         
         $calculoSemanal = 0;
         
-        return [
+        $result = [
             'results'           => $results,
             'totalAciert'       => $totalAciert,
             'totalApus'         => $totalApus,
@@ -687,6 +712,13 @@ class Liquidations extends Component
             'paymentDateRecibe' => $currentPayments['paymentDateRecibe'],
             'anteriBeforePayment' => $anteriBeforePayment ?? 0, // ANTERI antes de restar el pago (para mostrar cálculo)
         ];
+        
+        // ✅ OPTIMIZACIÓN: Guardar en cache de Laravel (persiste entre requests)
+        // TTL de 1 hora (3600 segundos) - suficiente para evitar recálculos innecesarios
+        // Los pagos invalidarán el cache cuando sea necesario
+        Cache::put($cacheKey, $result, 3600);
+        
+        return $result;
     }
     
     /**

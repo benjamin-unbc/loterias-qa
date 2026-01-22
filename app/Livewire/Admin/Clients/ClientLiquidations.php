@@ -10,6 +10,7 @@ use App\Livewire\Admin\Liquidations;
 use Livewire\Component;
 use Livewire\Attributes\Layout;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Carbon\Carbon;
 
 class ClientLiquidations extends Component
@@ -49,30 +50,47 @@ class ClientLiquidations extends Component
         }
         
         $user = $this->client->associatedUser;
+        
+        // ✅ OPTIMIZACIÓN: Cache de Laravel para la lista de semanas
+        // Cachear por 30 minutos - suficiente para evitar recálculos frecuentes
+        $cacheKey = "client_liquidations_weeks_{$this->client->id}";
+        $cached = Cache::get($cacheKey);
+        if ($cached !== null) {
+            $this->weeks = $cached['weeks'];
+            $this->totalDebe = $cached['totalDebe'];
+            return;
+        }
+        
         $liquidationsComponent = new Liquidations();
         
-        // Buscar todos los sábados posibles desde que el cliente tiene jugadas
-        // Obtener la fecha más antigua de resultados o apuestas
-        $oldestResult = Result::where('user_id', $user->id)->min('date');
-        $oldestApus = ApusModel::where('user_id', $user->id)
-            ->whereHas('playsSent', function($query) {
-                $query->where('status', '!=', 'I');
-            })
-            ->min('created_at');
-        
-        $startDate = null;
-        if ($oldestResult && $oldestApus) {
-            $startDate = Carbon::parse(min($oldestResult, $oldestApus));
-        } elseif ($oldestResult) {
-            $startDate = Carbon::parse($oldestResult);
-        } elseif ($oldestApus) {
-            $startDate = Carbon::parse($oldestApus);
-        }
-        
-        // Si no hay fechas, buscar desde hace 1 año
-        if (!$startDate) {
-            $startDate = Carbon::now()->subYear();
-        }
+        // ✅ OPTIMIZACIÓN: Cachear también la fecha más antigua
+        $oldestDateCacheKey = "client_oldest_date_{$user->id}";
+        $startDate = Cache::remember($oldestDateCacheKey, 3600, function() use ($user) {
+            // Buscar todos los sábados posibles desde que el cliente tiene jugadas
+            // Obtener la fecha más antigua de resultados o apuestas
+            $oldestResult = Result::where('user_id', $user->id)->min('date');
+            $oldestApus = ApusModel::where('user_id', $user->id)
+                ->whereHas('playsSent', function($query) {
+                    $query->where('status', '!=', 'I');
+                })
+                ->min('created_at');
+            
+            $startDate = null;
+            if ($oldestResult && $oldestApus) {
+                $startDate = Carbon::parse(min($oldestResult, $oldestApus));
+            } elseif ($oldestResult) {
+                $startDate = Carbon::parse($oldestResult);
+            } elseif ($oldestApus) {
+                $startDate = Carbon::parse($oldestApus);
+            }
+            
+            // Si no hay fechas, buscar desde hace 1 año
+            if (!$startDate) {
+                $startDate = Carbon::now()->subYear();
+            }
+            
+            return $startDate;
+        });
         
         // Buscar todos los sábados desde la fecha más antigua hasta hoy
         $allSaturdays = collect();
@@ -143,6 +161,12 @@ class ClientLiquidations extends Component
         
         // Ordenar por fecha (más reciente primero)
         $this->weeks = collect($this->weeks)->sortByDesc('saturday_str')->values()->toArray();
+        
+        // ✅ OPTIMIZACIÓN: Guardar en cache de Laravel
+        Cache::put($cacheKey, [
+            'weeks' => $this->weeks,
+            'totalDebe' => $this->totalDebe,
+        ], 1800); // 30 minutos
     }
     
     public function selectWeek($saturdayDate)
@@ -201,6 +225,9 @@ class ClientLiquidations extends Component
             
             $this->paymentAmount = '';
             $this->paymentNotes = '';
+            
+            // Limpiar cache antes de recargar
+            Cache::forget("client_liquidations_weeks_{$this->client->id}");
             $this->loadWeeks();
             
             session()->flash('message', 'Pago registrado correctamente. Se verá reflejado en la liquidación del día siguiente.');
@@ -271,6 +298,8 @@ class ClientLiquidations extends Component
             $this->editingPaymentNotes = '';
             $this->editingPaymentDate = '';
             
+            // Limpiar cache antes de recargar
+            Cache::forget("client_liquidations_weeks_{$this->client->id}");
             $this->loadWeeks();
             
             session()->flash('message', 'Pago actualizado correctamente. Los cambios se verán reflejados en las liquidaciones.');
@@ -327,6 +356,8 @@ class ClientLiquidations extends Component
             $this->paymentToDelete = null;
             $this->showDeleteConfirm = false;
             
+            // Limpiar cache antes de recargar
+            Cache::forget("client_liquidations_weeks_{$this->client->id}");
             $this->loadWeeks();
             
             session()->flash('message', 'Pago eliminado correctamente. Los cambios se verán reflejados en las liquidaciones.');
