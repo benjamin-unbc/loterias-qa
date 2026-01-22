@@ -650,23 +650,46 @@
                                                 <!-- Gener. deja y arrastre -->
                                                 <div class="flex flex-col pt-3 gap-1 border-b pb-2 w-full text-sm">
                                                     <div class="flex justify-between">
+                                                        @if(($liquidacionData['totalGanaPase'] ?? 0) < 0)
+                                                            <h4 class="font-medium">USTED COBRA:</h4>
+                                                        @else
+                                                            <h4 class="font-medium">TOTAL DEJA:</h4>
+                                                        @endif
+                                                        <p>{{ number_format($liquidacionData['totalGanaPase'] ?? 0, 2) }}</p>
+                                                    </div>
+                                                    @if(($liquidacionData['udDio'] ?? 0) > 0)
+                                                        <div class="flex justify-between">
+                                                            <h4 class="font-medium">Usted dio:</h4>
+                                                            <p>{{ number_format($liquidacionData['udDio'], 2) }}</p>
+                                                        </div>
+                                                        @if(isset($liquidacionData['paymentDateDio']) && $liquidacionData['paymentDateDio'])
+                                                            <div class="text-xs text-gray-500 italic pl-2 -mt-1">
+                                                                Fecha del pago: {{ $liquidacionData['paymentDateDio'] }}
+                                                            </div>
+                                                        @endif
+                                                        @if(isset($liquidacionData['anteriBeforePayment']) && $liquidacionData['anteriBeforePayment'] > 0)
+                                                            <div class="text-xs text-gray-500 italic pl-2 -mt-1">
+                                                                {{ number_format($liquidacionData['anteriBeforePayment'], 2) }} - {{ number_format($liquidacionData['udDio'], 2) }} = {{ number_format($liquidacionData['anteri'], 2) }}
+                                                            </div>
+                                                        @endif
+                                                    @endif
+                                                    <div class="flex justify-between">
                                                         <h4 class="font-medium">ANTERI:</h4>
                                                         <p>{{ number_format($liquidacionData['anteri'], 2) }}</p>
                                                     </div>
                                                     @if(\Carbon\Carbon::parse($liquidacionesDate)->isSaturday())
                                                         <div class="flex justify-between">
+                                                            <h4 class="font-medium">UD DEJA:</h4>
+                                                            <p>{{ number_format($liquidacionData['udDeja'], 2) }}</p>
+                                                        </div>
+                                                        <div class="flex justify-between">
                                                             <h4 class="font-medium">COMI DEJA SEM:</h4>
                                                             <p>{{ number_format($liquidacionData['comiDejaSem'] ?? 0, 2) }}</p>
                                                         </div>
-                                                    @endif
-                                                    <div class="flex justify-between">
-                                                        <h4 class="font-medium">UD DEJA:</h4>
-                                                        <p>{{ number_format($liquidacionData['udDeja'], 2) }}</p>
-                                                    </div>
-                                                    @if(($liquidacionData['udDio'] ?? 0) > 0)
+                                                    @else
                                                         <div class="flex justify-between">
-                                                            <h4 class="font-medium">UD.DIO:</h4>
-                                                            <p>{{ number_format($liquidacionData['udDio'], 2) }}</p>
+                                                            <h4 class="font-medium">UD DEJA:</h4>
+                                                            <p>{{ number_format($liquidacionData['udDeja'], 2) }}</p>
                                                         </div>
                                                     @endif
                                                     @if(($liquidacionData['udRecibePayment'] ?? 0) > 0)
