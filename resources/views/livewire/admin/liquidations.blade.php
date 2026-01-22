@@ -182,10 +182,6 @@
                                         @endif
                                         <p>{{ number_format($totalGanaPase, 2) }}</p>
                                     </div>
-                                    <div class="flex justify-between">
-                                        <h4 class="font-medium">ANTERI:</h4>
-                                        <p>{{ number_format($anteri, 2) }}</p>
-                                    </div>
                                     @if(($udDio ?? 0) > 0)
                                         <div class="flex justify-between">
                                             <h4 class="font-medium">Usted dio:</h4>
@@ -196,7 +192,16 @@
                                                 Fecha del pago: {{ $paymentDateDio }}
                                             </div>
                                         @endif
+                                        @if(isset($anteriBeforePayment) && $anteriBeforePayment > 0)
+                                            <div class="text-xs text-gray-500 italic pl-2 -mt-1">
+                                                {{ number_format($anteriBeforePayment, 2) }} - {{ number_format($udDio, 2) }} = {{ number_format($anteri, 2) }}
+                                            </div>
+                                        @endif
                                     @endif
+                                    <div class="flex justify-between">
+                                        <h4 class="font-medium">ANTERI:</h4>
+                                        <p>{{ number_format($anteri, 2) }}</p>
+                                    </div>
                                     @if(($udRecibePayment ?? 0) > 0)
                                         <div class="flex justify-between">
                                             <h4 class="font-medium">UD.RECIBE:</h4>

@@ -462,6 +462,8 @@ class Liquidations extends Component
                 $anteriForDisplay = $this->udDejaCache[$cacheKeyUstedDebeSem];
             }
             
+            // Guardar el ANTERI antes de aplicar pagos (para mostrar el cálculo)
+            $anteriBeforePayment = $anteriForDisplay;
             // Aplicar pagos del mismo día al ANTERI del lunes
             $anteriForDisplay = max(0, $anteriForDisplay - $totalPaymentsForDay);
         } elseif ($selectedDate->isSaturday()) {
@@ -480,6 +482,8 @@ class Liquidations extends Component
                 // Guardar en cache INMEDIATAMENTE después de calcular
                 $this->udDejaCache[$cacheKeyViernes] = $anteriForDisplay;
             }
+            // Guardar el ANTERI antes de aplicar pagos (para mostrar el cálculo)
+            $anteriBeforePayment = $anteriForDisplay;
         } else {
             // Martes a Viernes: ANTERI = UD DEJA del día anterior (optimizado)
             $previousDate = $selectedDate->copy()->subDay();
@@ -515,6 +519,8 @@ class Liquidations extends Component
                 }
             }
             
+            // Guardar el ANTERI antes de aplicar pagos (para mostrar el cálculo)
+            $anteriBeforePayment = $anteriForDisplay;
             // Aplicar pagos del mismo día al ANTERI del día actual
             $anteriForDisplay = max(0, $anteriForDisplay - $totalPaymentsForDay);
         }
@@ -679,6 +685,7 @@ class Liquidations extends Component
             'udRecibePayment'   => $currentPayments['udRecibe'],
             'paymentDateDio'    => $paymentsForLiquidation['paymentDateDio'] ?? null, // Fecha del pago del mismo día
             'paymentDateRecibe' => $currentPayments['paymentDateRecibe'],
+            'anteriBeforePayment' => $anteriBeforePayment ?? 0, // ANTERI antes de restar el pago (para mostrar cálculo)
         ];
     }
     
