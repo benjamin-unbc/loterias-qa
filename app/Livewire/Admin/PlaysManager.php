@@ -638,6 +638,29 @@ class PlaysManager extends Component
         }
     }
 
+    /**
+     * ✅ OPTIMIZACIÓN: Convierte una jugada (modelo o array) a array mínimo para el estado de Livewire.
+     * Reduce el payload serializado y mejora la velocidad al agregar muchas jugadas (especialmente en cPanel).
+     */
+    private function playToMinimalRow($play): array
+    {
+        if (is_array($play)) {
+            return array_intersect_key($play, array_flip(['id', 'user_id', 'type', 'number', 'position', 'import', 'lottery', 'numberR', 'positionR', 'isChecked']));
+        }
+        return [
+            'id' => $play->id,
+            'user_id' => $play->user_id,
+            'type' => $play->type,
+            'number' => $play->number,
+            'position' => $play->position,
+            'import' => $play->import,
+            'lottery' => $play->lottery,
+            'numberR' => $play->numberR,
+            'positionR' => $play->positionR,
+            'isChecked' => (bool) ($play->isChecked ?? false),
+        ];
+    }
+
 
 
     public function updated($propertyName)
@@ -1110,12 +1133,12 @@ class PlaysManager extends Component
 
 
 
-            $this->rows = $this->getAndSortPlays();
+            $this->rows = $this->getAndSortPlays()->map(fn($p) => $this->playToMinimalRow($p))->values();
             $this->needsTotalRecalculation = true;
             $this->calculateTotal();
             if ($this->rows->count() > 0) {
                 $lastRow = $this->rows->last();
-                $this->dispatch('scroll-to-last-play', ['playId' => $lastRow->id]);
+                $this->dispatch('scroll-to-last-play', ['playId' => $lastRow['id']]);
             }
             $this->dispatch('notify', message: 'Jugadas del ticket repetidas con las loterías actuales.', type: 'success');
             $this->showRepeatModal = false;
@@ -1261,7 +1284,7 @@ public function updateRow()
 
         $this->dispatch('notify', message: 'Jugada actualizada.', type: 'success');
 
-        $this->rows = $this->getAndSortPlays();
+        $this->rows = $this->getAndSortPlays()->map(fn($p) => $this->playToMinimalRow($p))->values();
     } catch (\Exception $e) {
         $this->dispatch('notify', message: 'Error al actualizar.', type: 'error');
     }
@@ -1329,7 +1352,7 @@ public function updateRow()
 
             if ($this->editingRowId == $id) $this->resetForm();
 
-            $this->rows = $this->getAndSortPlays();
+            $this->rows = $this->getAndSortPlays()->map(fn($p) => $this->playToMinimalRow($p))->values();
 
             $this->needsTotalRecalculation = true; // Marcar para recalcular total
 
@@ -1455,11 +1478,10 @@ public function addRow()
             'data' => ['tiempo_ms' => round($dbCreateTime, 2), 'play_id' => $newPlay->id]
         ]);
 
-        // ✅ OPTIMIZACIÓN CRÍTICA: Agregar la nueva jugada directamente a la colección en memoria
-        // Esto es mucho más rápido que recargar todas las jugadas desde BD (getAndSortPlays)
-        // Similar a como se hace en addRowWithDerived() para jugadas derivadas
+        // ✅ OPTIMIZACIÓN CRÍTICA: Agregar la nueva jugada como array mínimo para reducir payload de Livewire
+        // (mejora velocidad en cPanel cuando hay muchas jugadas)
         $collectionStart = microtime(true);
-        $this->rows->push($newPlay);
+        $this->rows->push($this->playToMinimalRow($newPlay));
         $this->rows = $this->rows->sortBy('id')->values();
         $collectionTime = (microtime(true) - $collectionStart) * 1000;
         \Log::info('[PERFORMANCE] addRow() - Actualización de colección completada', [
@@ -2617,9 +2639,8 @@ public function addRow()
         
         $newPlay = Play::create($newPlayData);
 
-        // ✅ OPTIMIZADO: Actualizar solo en memoria en lugar de recargar todo desde BD
-        // Esto es mucho más rápido que getAndSortPlays() que consulta toda la BD
-        $this->rows->push($newPlay);
+        // ✅ OPTIMIZADO: Agregar como array mínimo para reducir payload de Livewire
+        $this->rows->push($this->playToMinimalRow($newPlay));
         $this->rows = $this->rows->sortBy('id')->values();
         $this->needsTotalRecalculation = true;
         $this->dispatch('scroll-to-last-play', ['playId' => $newPlay->id]);
@@ -2668,20 +2689,26 @@ public function addRow()
             }
         }
 
-        // 1. Si hay una jugada en edición, buscar primero en memoria
+        // 1. Si hay una jugada en edición, buscar primero en memoria ($rows son arrays mínimos)
         if ($this->editingRowId) {
             $editingPlay = $this->rows->first(function($play) {
-                if ($play->id != $this->editingRowId) return false;
-                $cleanNumber = str_replace('*', '', $play->number);
+                $id = is_array($play) ? ($play['id'] ?? null) : $play->id;
+                $number = is_array($play) ? ($play['number'] ?? '') : $play->number;
+                if ($id != $this->editingRowId) return false;
+                $cleanNumber = str_replace('*', '', (string)$number);
                 return strlen($cleanNumber) >= 3 && strlen($cleanNumber) <= 4;
             });
             
             if ($editingPlay) {
-                $this->cachedBasePlay = $editingPlay;
-                if (config('app.debug')) {
-                    \Log::info("Usando jugada en edición como base (desde memoria)", ['play_id' => $editingPlay->id]);
+                $playId = is_array($editingPlay) ? $editingPlay['id'] : $editingPlay->id;
+                $fullPlay = Play::find($playId);
+                if ($fullPlay) {
+                    $this->cachedBasePlay = $fullPlay;
+                    if (config('app.debug')) {
+                        \Log::info("Usando jugada en edición como base (desde memoria)", ['play_id' => $playId]);
+                    }
+                    return $fullPlay;
                 }
-                return $editingPlay;
             }
             
             // Si no está en memoria, consultar BD
@@ -2699,32 +2726,41 @@ public function addRow()
             }
         }
 
-        // 2. ✅ OPTIMIZADO: Buscar primero en memoria ($this->rows) antes de consultar BD
-        $basePlay = $this->rows
+        // 2. ✅ OPTIMIZADO: Buscar primero en memoria ($this->rows son arrays mínimos)
+        $basePlayRow = $this->rows
             ->filter(function($play) use ($currentUserId) {
-                if ($play->user_id != $currentUserId) return false;
-                $cleanNumber = str_replace('*', '', $play->number);
+                $uid = is_array($play) ? ($play['user_id'] ?? null) : $play->user_id;
+                $number = is_array($play) ? ($play['number'] ?? '') : $play->number;
+                if ($uid != $currentUserId) return false;
+                $cleanNumber = str_replace('*', '', (string)$number);
                 return strlen($cleanNumber) >= 3 && strlen($cleanNumber) <= 4;
             })
             ->sortByDesc('id')
             ->first();
 
+        $basePlay = $basePlayRow ? Play::find(is_array($basePlayRow) ? $basePlayRow['id'] : $basePlayRow->id) : null;
+
         // 3. Si no se encuentra en memoria, consultar BD (solo como último recurso)
         if (!$basePlay) {
             // Si hay una jugada base actual válida, verificar primero
             if ($this->currentBasePlayId) {
-                $currentBasePlay = $this->rows->first(function($play) {
-                    return $play->id === $this->currentBasePlayId;
+                $currentBasePlayRow = $this->rows->first(function($play) {
+                    $id = is_array($play) ? ($play['id'] ?? null) : $play->id;
+                    return $id === $this->currentBasePlayId;
                 });
                 
-                if ($currentBasePlay) {
-                    $cleanNumber = str_replace('*', '', $currentBasePlay->number);
+                if ($currentBasePlayRow) {
+                    $number = is_array($currentBasePlayRow) ? ($currentBasePlayRow['number'] ?? '') : $currentBasePlayRow->number;
+                    $cleanNumber = str_replace('*', '', (string)$number);
                     if (strlen($cleanNumber) >= 3 && strlen($cleanNumber) <= 4) {
-                        $this->cachedBasePlay = $currentBasePlay;
-                        if (config('app.debug')) {
-                            \Log::info("Usando jugada base actual (desde memoria)", ['play_id' => $currentBasePlay->id]);
+                        $fullPlay = Play::find($this->currentBasePlayId);
+                        if ($fullPlay) {
+                            $this->cachedBasePlay = $fullPlay;
+                            if (config('app.debug')) {
+                                \Log::info("Usando jugada base actual (desde memoria)", ['play_id' => $fullPlay->id]);
+                            }
+                            return $fullPlay;
                         }
-                        return $currentBasePlay;
                     }
                 }
             }
@@ -2739,10 +2775,11 @@ public function addRow()
         if ($basePlay) {
             $this->cachedBasePlay = $basePlay;
             if (config('app.debug')) {
+                $inMemory = $this->rows->contains(fn($r) => (is_array($r) ? ($r['id'] ?? null) : $r->id) === $basePlay->id);
                 \Log::info("Usando jugada base encontrada", [
                     'play_id' => $basePlay->id,
                     'number' => $basePlay->number,
-                    'source' => $this->rows->contains('id', $basePlay->id) ? 'memoria' : 'BD'
+                    'source' => $inMemory ? 'memoria' : 'BD'
                 ]);
             }
         } else {
@@ -2832,13 +2869,18 @@ public function addRow()
         // 2. Fueron creadas DESPUÉS de la jugada base (para que cada jugada base tenga sus propias derivadas)
         $existingPlays = $this->rows
             ->filter(function($play) use ($derivedNumbersMap, $basePlay) {
-                // ✅ OPTIMIZADO: Búsqueda O(1) con isset en lugar de in_array O(n)
-                return isset($derivedNumbersMap[$play->number])
-                    && $play->position === $basePlay->position
-                    && $play->lottery === $basePlay->lottery
-                    && $play->numberR === $basePlay->numberR
-                    && $play->positionR === $basePlay->positionR
-                    && $play->id >= $basePlay->id; // Solo derivadas creadas después de la jugada base
+                $num = is_array($play) ? ($play['number'] ?? '') : $play->number;
+                $pos = is_array($play) ? ($play['position'] ?? null) : $play->position;
+                $lot = is_array($play) ? ($play['lottery'] ?? '') : $play->lottery;
+                $nr = is_array($play) ? ($play['numberR'] ?? null) : $play->numberR;
+                $pr = is_array($play) ? ($play['positionR'] ?? null) : $play->positionR;
+                $id = is_array($play) ? ($play['id'] ?? 0) : $play->id;
+                return isset($derivedNumbersMap[$num])
+                    && $pos == $basePlay->position
+                    && $lot === $basePlay->lottery
+                    && $nr == $basePlay->numberR
+                    && $pr == $basePlay->positionR
+                    && $id >= $basePlay->id;
             })
             ->pluck('number')
             ->toArray();
@@ -3062,7 +3104,7 @@ public function addRow()
         $this->showApusModal = false;
 
 
-        $this->rows = $this->getAndSortPlays();
+        $this->rows = $this->getAndSortPlays()->map(fn($p) => $this->playToMinimalRow($p))->values();
     }
 
     public function focusNextInput($nextInputId)
@@ -3104,9 +3146,8 @@ public function addRow()
 
             $mainPlay = $this->rows->first(function ($play) {
 
-                if (!$play || !isset($play->number)) return false;
-
-                $numberStr = (string)$play->number;
+                $numberStr = is_array($play) ? (string)($play['number'] ?? '') : (string)($play->number ?? '');
+                if ($numberStr === '') return false;
 
                 return strlen(str_replace('*', '', $numberStr)) === 4;
             });
@@ -3121,7 +3162,7 @@ public function addRow()
 
             'rows' => $this->rows,
 
-            'mainNumber' => $mainPlay ? $mainPlay->number : null,
+            'mainNumber' => $mainPlay ? (is_array($mainPlay) ? $mainPlay['number'] : $mainPlay->number) : null,
 
             'total' => $total, // Pasar el total calculado
             
@@ -3144,12 +3185,13 @@ public function addRow()
         // ✅ OPTIMIZADO: Calcular total de forma eficiente
         // El explode() es necesario pero solo se ejecuta cuando needsTotalRecalculation = true
         $this->cachedTotal = $this->rows->sum(function($row) {
-            // Optimización: evitar explode() si lottery está vacío
-            if (empty($row->lottery)) {
+            $lottery = is_array($row) ? ($row['lottery'] ?? '') : $row->lottery;
+            $import = is_array($row) ? ($row['import'] ?? 0) : $row->import;
+            if (empty($lottery)) {
                 return 0;
             }
-            $lotteryCount = count(array_filter(explode(',', $row->lottery)));
-            return (float)$row->import * $lotteryCount;
+            $lotteryCount = count(array_filter(explode(',', $lottery)));
+            return (float)$import * $lotteryCount;
         });
         
         $this->needsTotalRecalculation = false;

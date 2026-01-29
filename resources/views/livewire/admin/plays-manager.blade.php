@@ -315,15 +315,15 @@
                                     <tbody class="max-h-[calc(100vh-0rem)] overflow-y-auto">
 
                                         @forelse ($rows  as $row)
-                                            <tr id="row-{{ $row->id }}" tabindex="-1"
+                                            <tr id="row-{{ $row['id'] }}" tabindex="-1"
                                                 class="bg-[#22272b] border-b border-gray-600 ">
-                                                <td class="px-2 py-2">{{ $this->formatNumber($row->number) }}</td>
+                                                <td class="px-2 py-2">{{ $this->formatNumber($row['number']) }}</td>
                                                 <td class="px-2 py-2">{{ $row['position'] }}</td>
                                                 <td class="px-2 py-2">{{ $row['numberR'] }}</td>
                                                 <td class="px-2 py-2">{{ $row['positionR'] }}</td>
-                                                <td class="px-2 py-2">{{ count(explode(',', $row['lottery'])) }}</td>
-                                                <td class="px-2 py-2">{{ $row['isChecked'] ? 'X' : '' }}</td>
-                                                <td class="px-2 py-2">${{ number_format($row->import, 2) }}</td>
+                                                <td class="px-2 py-2">{{ count(explode(',', $row['lottery'] ?? '')) }}</td>
+                                                <td class="px-2 py-2">{{ !empty($row['isChecked']) ? 'X' : '' }}</td>
+                                                <td class="px-2 py-2">${{ number_format($row['import'] ?? 0, 2) }}</td>
                                                 <td class="px-2 py-2 flex gap-1 items-center justify-center">
                                                     <a href="#"
                                                         wire:click.prevent="editRow({{ $row['id'] }})"
