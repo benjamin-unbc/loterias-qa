@@ -215,10 +215,13 @@ class Extracts extends Component
                 }
                 
                 $this->dispatch('notify', message: $message, type: 'success');
+                $totalCount = $totalInserted + $totalUpdated;
+                $this->dispatch('extracts-inserted', count: $totalCount);
                 Log::info("Extracts - detectAndShowNewNumbers: Extraídos {$totalInserted} nuevos, {$totalUpdated} actualizados para {$todayDate}");
                 
             } else {
                 $this->dispatch('notify', message: "⚠️ No se encontraron números nuevos en la web. Las loterías aún no han salido o no hay datos disponibles.", type: 'warning');
+                $this->dispatch('extracts-none-found');
             }
             
             if (!empty($errors)) {

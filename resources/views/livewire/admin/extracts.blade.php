@@ -1,3 +1,4 @@
+<div>
 @can('access_menu_extractos')
     <div class="bg-[#1b1f22] w-full h-full min-h-screen p-4 flex flex-col gap-3">
         <div class="flex flex-col gap-5">
@@ -477,6 +478,8 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 
+<!-- SweetAlert2 para alertas de extractos -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <!-- Scripts para impresión, descarga de imagen y llenar campos de prueba -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
@@ -526,7 +529,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Auto-refresh functionality
     let autoRefreshInterval = null;
 
-    // Escuchar eventos de Livewire para iniciar/detener auto-refresh
+    // Escuchar eventos de Livewire para iniciar/detener auto-refresh y alertas de extractos
     document.addEventListener('livewire:init', () => {
         Livewire.on('start-auto-refresh', (event) => {
             const interval = event.interval || 30000; // 30 segundos por defecto
@@ -548,6 +551,51 @@ document.addEventListener('DOMContentLoaded', function() {
                 autoRefreshInterval = null;
             }
             console.log('Auto-refresh detenido');
+        });
+
+        // SweetAlert: se insertaron nuevos extractos
+        Livewire.on('extracts-inserted', (event) => {
+            const count = event?.count ?? 0;
+            Swal.fire({
+                icon: 'success',
+                title: 'Extractos actualizados',
+                text: 'Se han insertado ' + count + ' nuevos extractos.',
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#22c55e',
+                background: '#1b1f22',
+                color: '#ffffff',
+                iconColor: '#22c55e',
+                customClass: {
+                    popup: 'swal-extracts-popup',
+                    title: 'swal-extracts-title',
+                    htmlContainer: 'swal-extracts-content'
+                },
+                buttonsStyling: true,
+                allowOutsideClick: true,
+                allowEscapeKey: true
+            });
+        });
+
+        // SweetAlert: no se encontraron nuevos extractos
+        Livewire.on('extracts-none-found', () => {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Sin nuevos resultados',
+                text: 'No hemos encontrado nuevos extractos para insertar.',
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#f59e0b',
+                background: '#1b1f22',
+                color: '#ffffff',
+                iconColor: '#f59e0b',
+                customClass: {
+                    popup: 'swal-extracts-popup',
+                    title: 'swal-extracts-title',
+                    htmlContainer: 'swal-extracts-content'
+                },
+                buttonsStyling: true,
+                allowOutsideClick: true,
+                allowEscapeKey: true
+            });
         });
     });
 
@@ -574,3 +622,22 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 </script>
+
+<style>
+/* Estilos SweetAlert para alertas de extractos */
+.swal-extracts-popup {
+    background-color: #1b1f22 !important;
+    border-radius: 12px !important;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5) !important;
+}
+.swal-extracts-title {
+    color: #ffffff !important;
+    font-size: 22px !important;
+    font-weight: bold !important;
+}
+.swal-extracts-content {
+    color: #e5e7eb !important;
+    font-size: 16px !important;
+}
+</style>
+</div>

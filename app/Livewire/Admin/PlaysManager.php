@@ -3267,11 +3267,12 @@ public function addRow()
         }
         
         // Retornar datos validados (similar a validate())
+        // IMPORTANTE: Mantener numberR como string para no perder ceros a la izquierda (ej: "02")
         return [
             'number' => $this->number,
             'position' => $this->position ? (int)$this->position : null,
             'import' => (float)$this->import,
-            'numberR' => $this->numberR ? (int)$this->numberR : null,
+            'numberR' => ($this->numberR !== null && $this->numberR !== '') ? (string)$this->numberR : null,
             'positionR' => $this->positionR ? (int)$this->positionR : null,
         ];
     }

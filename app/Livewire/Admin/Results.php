@@ -2,6 +2,8 @@
 
 namespace App\Livewire\Admin;
 
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use App\Models\PlaysSentModel;
 use App\Models\Result; // Usar el modelo correcto 'Result'
@@ -104,9 +106,34 @@ class Results extends Component
 
     public function resetFilter()
     {
-        $this->date = date('Y-m-d');
-        $this->resetPage();
-        // Livewire se encarga de volver a renderizar automáticamente.
+        $today = Carbon::today()->toDateString();
+
+        try {
+            // Contar resultados de hoy antes de ejecutar el robot
+            $countBefore = Result::whereDate('date', $today)->count();
+
+            // Ejecutar el mismo ciclo que el robot: extraer números y procesar a resultados
+            Artisan::call('lottery:auto-update', ['--force' => true]);
+
+            // Contar resultados después
+            $countAfter = Result::whereDate('date', $today)->count();
+            $newCount = max(0, $countAfter - $countBefore);
+
+            // Fijar fecha a hoy y refrescar vista
+            $this->date = $today;
+            $this->resetPage();
+
+            if ($newCount > 0) {
+                $this->dispatch('results-inserted', count: $newCount);
+            } else {
+                $this->dispatch('results-none-found');
+            }
+        } catch (\Exception $e) {
+            Log::error('Results - Error en resetFilter: ' . $e->getMessage());
+            $this->date = $today;
+            $this->resetPage();
+            $this->dispatch('results-none-found');
+        }
     }
 
     /**

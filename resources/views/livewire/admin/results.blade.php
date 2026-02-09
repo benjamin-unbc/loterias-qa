@@ -17,9 +17,11 @@
                     class="text-sm px-3 py-1 border border-green-500 bg-green-500 text-white rounded-md flex items-center gap-2 hover:border-green-600/90 hover:bg-green-600/90 duration-200">
                     Buscar
                 </button>
-                <button wire:click="resetFilter"
-                    class="bg-[#22272b] w-fit border border-green-300 text-sm px-5 py-1 rounded-md text-green-400 hover:bg-green-100/20 duration-200">
-                    Reiniciar
+                <button wire:click="resetFilter" wire:loading.attr="disabled"
+                    class="bg-[#22272b] w-fit border border-green-300 text-sm px-5 py-1 rounded-md text-green-400 hover:bg-green-100/20 duration-200"
+                    wire:loading.class="opacity-50">
+                    <span wire:loading.remove>Reiniciar</span>
+                    <span wire:loading>Cargando...</span>
                 </button>
             </div>
         </div>
@@ -121,4 +123,57 @@
     </div>
 
     @livewire('show-codes')
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        document.addEventListener('livewire:init', function() {
+            Livewire.on('results-inserted', (event) => {
+                const count = event?.count ?? 0;
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Resultados actualizados',
+                    text: 'Se han insertado ' + count + ' nuevos resultados.',
+                    confirmButtonText: 'Entendido',
+                    confirmButtonColor: '#22c55e',
+                    background: '#1b1f22',
+                    color: '#ffffff',
+                    iconColor: '#22c55e',
+                    customClass: {
+                        popup: 'swal-results-popup',
+                        title: 'swal-results-title',
+                        htmlContainer: 'swal-results-content'
+                    },
+                    buttonsStyling: true,
+                    allowOutsideClick: true,
+                    allowEscapeKey: true
+                });
+            });
+
+            Livewire.on('results-none-found', () => {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Sin nuevos resultados',
+                    text: 'No hemos encontrado nuevos resultados para insertar.',
+                    confirmButtonText: 'Entendido',
+                    confirmButtonColor: '#f59e0b',
+                    background: '#1b1f22',
+                    color: '#ffffff',
+                    iconColor: '#f59e0b',
+                    customClass: {
+                        popup: 'swal-results-popup',
+                        title: 'swal-results-title',
+                        htmlContainer: 'swal-results-content'
+                    },
+                    buttonsStyling: true,
+                    allowOutsideClick: true,
+                    allowEscapeKey: true
+                });
+            });
+        });
+    </script>
+    <style>
+    .swal-results-popup { background-color: #1b1f22 !important; border-radius: 12px !important; box-shadow: 0 10px 40px rgba(0,0,0,0.5) !important; }
+    .swal-results-title { color: #ffffff !important; font-size: 22px !important; font-weight: bold !important; }
+    .swal-results-content { color: #e5e7eb !important; font-size: 16px !important; }
+    </style>
 </main>
