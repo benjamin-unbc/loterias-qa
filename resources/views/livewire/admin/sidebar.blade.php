@@ -30,6 +30,17 @@
                 </a>
             </li>
             @endcan
+            @if(Auth::user()->hasRole('Administrador'))
+            <li>
+                <a href="{{ route('quinielas.manager') }}"
+                    class="flex items-center p-2 text-white rounded-lg dark:text-white {{ request()->routeIs('quinielas.manager') ? 'bg-yellow-200' : 'hover:bg-gray-200/20 group' }}">
+                    <i
+                        class="fas fa-cog w-5 h-5 {{ request()->routeIs('quinielas.manager') ? 'text-gray-600 font-extrabold' : 'text-gray-300 transition duration-75' }}"></i>
+                    <span
+                        class="ms-3 {{ request()->routeIs('quinielas.manager') ? 'text-gray-600 font-extrabold' : '' }}">Quinielas</span>
+                </a>
+            </li>
+            @endif
             @can('access_menu_jugadas_enviadas')
             <li>
                 <a href="{{ route('plays-sent') }}"

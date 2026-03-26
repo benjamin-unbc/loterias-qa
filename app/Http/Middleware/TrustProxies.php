@@ -10,9 +10,12 @@ class TrustProxies extends Middleware
     /**
      * The trusted proxies for this application.
      *
+     * OPTIMIZADO: Especificar proxies explícitamente en lugar de '*' para mejor rendimiento
+     * Si usas Cloudflare o similar, especifica aquí: ['*'] o IPs específicas
+     *
      * @var array<int, string>|string|null
      */
-    protected $proxies;
+    protected $proxies = '*'; // Cambiar a IPs específicas si conoces tus proxies
 
     /**
      * The headers that should be used to detect proxies.

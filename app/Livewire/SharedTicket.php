@@ -23,11 +23,24 @@ class SharedTicket extends Component
     public $totalImport = 0;
 
     public $codes = [
-        '10' => ['AB' => 'N', 'CH1' => 'CH', 'QW' => 'P', 'M10' => 'MZ', '!' => 'Ct', 'ER' => 'S', 'SD' => 'C', 'RT' => 'R'],
-        '12' => ['Q' => 'N', 'CH2' => 'CH', 'W' => 'P', 'M1' => 'MZ', 'M' => 'Ct', 'R' => 'S', 'T' => 'C', 'K' => 'R'],
-        '15' => ['A' => 'N', 'CH3' => 'CH', 'E' => 'P', 'M2' => 'MZ', 'Ct3' => 'Ct', 'D' => 'S', 'L' => 'C', 'J' => 'R', 'S' => 'O'],
-        '18' => ['F' => 'N', 'CH4' => 'CH', 'B' => 'P', 'M3' => 'MZ', 'Z' => 'Ct', 'V' => 'S', 'H' => 'C', 'U' => 'R'],
-        '21' => ['N' => 'N', 'CH5' => 'CH', 'P' => 'P', 'M4' => 'MZ', 'G' => 'Ct', 'I' => 'S', 'C' => 'C', 'Y' => 'R', 'O' => 'O'],
+        'AB' => 'NAC1015', 'CH1' => 'CHA1015', 'QW' => 'PRO1015', 'M10' => 'MZA1015', '!' => 'CTE1015',
+        'ER' => 'SFE1015', 'SD' => 'COR1015', 'RT' => 'RIO1015', 'Q' => 'NAC1200', 'CH2' => 'CHA1200',
+        'W' => 'PRO1200', 'M1' => 'MZA1200', 'M' => 'CTE1200', 'R' => 'SFE1200', 'T' => 'COR1200',
+        'K' => 'RIO1200', 'A' => 'NAC1500', 'CH3' => 'CHA1500', 'E' => 'PRO1500', 'M2' => 'MZA1500',
+        'Ct3' => 'CTE1500', 'D' => 'SFE1500', 'L' => 'COR1500', 'J' => 'RIO1500', 'S' => 'ORO1800',
+        'ORO1500' => 'ORO1800', 'ORO1800' => 'ORO1800',
+        'F' => 'NAC1800', 'CH4' => 'CHA1800', 'B' => 'PRO1800', 'M3' => 'MZA1800', 'Z' => 'CTE1800',
+        'V' => 'SFE1800', 'H' => 'COR1800', 'U' => 'RIO1800', 'N' => 'NAC2100', 'CH5' => 'CHA2100',
+        'P' => 'PRO2100', 'M4' => 'MZA2100', 'G' => 'CTE2100', 'I' => 'SFE2100', 'C' => 'COR2100',
+        'Y' => 'RIO2100', 'O' => 'ORO2100',
+        // Nuevos códigos cortos para las loterías adicionales
+        'NQ1' => 'NQN1015', 'MI1' => 'MIS1030', 'RN1' => 'Rio1015', 'TU1' => 'Tucu1130', 'SG1' => 'San1015',
+        'NQ2' => 'NQN1200', 'MI2' => 'MIS1215', 'JU1' => 'JUJ1200', 'SA1' => 'Salt1130', 'RN2' => 'Rio1200',
+        'TU2' => 'Tucu1430', 'SG2' => 'San1200', 'NQ3' => 'NQN1500', 'MI3' => 'MIS1500', 'JU2' => 'JUJ1500',
+        'SA2' => 'Salt1400', 'RN3' => 'Rio1500', 'TU3' => 'Tucu1730', 'SG3' => 'San1500', 'NQ4' => 'NQN1800',
+        'MI4' => 'MIS1800', 'JU3' => 'JUJ1800', 'SA3' => 'Salt1730', 'RN4' => 'Rio1800', 'TU4' => 'Tucu1930',
+        'SG4' => 'San1945', 'NQ5' => 'NQN2100', 'JU4' => 'JUJ2100', 'RN5' => 'Rio2100', 'SA4' => 'Salt2100',
+        'TU5' => 'Tucu2200', 'MI5' => 'MIS2115', 'SG5' => 'San2200'
     ];
 
     public function mount($token)
@@ -74,11 +87,15 @@ class SharedTicket extends Component
         $matchedLotteries = [];
 
         foreach ($selectedCodes as $code) {
-            foreach ($this->codes as $time => $codes) {
-                if (array_key_exists($code, $codes)) {
-                    $lottery = $codes[$code];
-                    $matchedLotteries[] = "$lottery$time";
-                }
+            $code = trim($code);
+            
+            // Si el código ya es un código del sistema válido (ej: "CHA1800"), usarlo directamente
+            if (preg_match('/^[A-Za-z]+\d{4}$/', $code)) {
+                $matchedLotteries[] = $code;
+            }
+            // Si es un código corto (ej: "CH4"), convertirlo a código completo
+            elseif (isset($this->codes[$code])) {
+                $matchedLotteries[] = $this->codes[$code];
             }
         }
 

@@ -112,4 +112,12 @@ class User extends Authenticatable
         return $query->orderBy('updated_at', 'desc');
     }
 
+    /**
+     * Get the associated client by email
+     */
+    public function associatedClient()
+    {
+        return $this->hasOne(Client::class, 'correo', 'email');
+    }
+
 }

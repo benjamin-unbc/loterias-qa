@@ -215,10 +215,13 @@ class Extracts extends Component
                 }
                 
                 $this->dispatch('notify', message: $message, type: 'success');
+                $totalCount = $totalInserted + $totalUpdated;
+                $this->dispatch('extracts-inserted', count: $totalCount);
                 Log::info("Extracts - detectAndShowNewNumbers: Extraídos {$totalInserted} nuevos, {$totalUpdated} actualizados para {$todayDate}");
                 
             } else {
                 $this->dispatch('notify', message: "⚠️ No se encontraron números nuevos en la web. Las loterías aún no han salido o no hay datos disponibles.", type: 'warning');
+                $this->dispatch('extracts-none-found');
             }
             
             if (!empty($errors)) {
@@ -249,24 +252,40 @@ class Extracts extends Component
 
     public function resetFilters()
     {
-        // Resetear a la fecha de hoy (que es donde se muestran los números actualizados)
-        $today = Carbon::today()->toDateString();
-        $this->filterDate   = $today;
-        $this->selectedDate = $today;
-        
-        // Resetear filtros de ciudad y horarios si es administrador
-        if ($this->isAdmin) {
-            $this->initializeFilters();
-            // Resetear filtros jerárquicos
-            $this->selectedCityLotteries = [];
-            $this->selectedCityFilter = null;
-            $this->selectedAllLotteries = collect($this->allLotteries)->pluck('id')->toArray();
-            $this->savedCityLotteries = [];
-            $this->savedCityFilter = null;
-            $this->hasUnsavedChanges = false;
+        try {
+            // Resetear a la fecha de hoy (que es donde se muestran los números actualizados)
+            $today = Carbon::today()->toDateString();
+            $this->filterDate   = $today;
+            $this->selectedDate = $today;
+            
+            // **SOLUCIÓN MEJORADA: Solo eliminar números si se solicita explícitamente**
+            // Comentado para evitar eliminación accidental de números existentes
+            // $deletedCount = Number::where('date', $today)->delete();
+            
+            Log::info("Extracts - resetFilters: Preservando números existentes para fecha {$today}");
+            
+            // Resetear filtros de ciudad y horarios si es administrador
+            if ($this->isAdmin) {
+                $this->initializeFilters();
+                // Resetear filtros jerárquicos
+                $this->selectedCityLotteries = [];
+                $this->selectedCityFilter = null;
+                $this->selectedAllLotteries = collect($this->allLotteries)->pluck('id')->toArray();
+                $this->savedCityLotteries = [];
+                $this->savedCityFilter = null;
+                $this->hasUnsavedChanges = false;
+            }
+            
+            // EMPEZAR A INSERTAR NUEVAMENTE LOS VALORES DESDE LA WEB
+            $this->dispatch('notify', message: "🔄 Eliminando valores existentes y extrayendo nuevos números desde la web...", type: 'info');
+            
+            // Ejecutar la extracción automática para insertar nuevos valores
+            $this->detectAndShowNewNumbers();
+            
+        } catch (\Exception $e) {
+            Log::error('Error en resetFilters: ' . $e->getMessage());
+            $this->dispatch('notify', message: 'Error al reiniciar: ' . $e->getMessage(), type: 'error');
         }
-        
-        $this->loadData();
     }
     
     /**
@@ -512,14 +531,28 @@ class Extracts extends Component
         $updated = 0;
         
         try {
-            // Mapear nombres de ciudades y turnos a códigos exactos de BD
+            // Mapear nombres de ciudades y turnos a códigos exactos de BD (maneja tanto mayúsculas como formato correcto)
             $cityTurnMapping = [
+                'CIUDAD' => [
+                    'La Previa' => 'NAC1015',
+                    'Primera' => 'NAC1200',
+                    'Matutina' => 'NAC1500',
+                    'Vespertina' => 'NAC1800',
+                    'Nocturna' => 'NAC2100'
+                ],
                 'Ciudad' => [
                     'La Previa' => 'NAC1015',
                     'Primera' => 'NAC1200',
                     'Matutina' => 'NAC1500',
                     'Vespertina' => 'NAC1800',
                     'Nocturna' => 'NAC2100'
+                ],
+                'SANTA FE' => [
+                    'La Previa' => 'SFE1015',
+                    'Primera' => 'SFE1200',
+                    'Matutina' => 'SFE1500',
+                    'Vespertina' => 'SFE1800',
+                    'Nocturna' => 'SFE2100'
                 ],
                 'Santa Fé' => [
                     'La Previa' => 'SFE1015',
@@ -528,12 +561,26 @@ class Extracts extends Component
                     'Vespertina' => 'SFE1800',
                     'Nocturna' => 'SFE2100'
                 ],
+                'PROVINCIA' => [
+                    'La Previa' => 'PRO1015',
+                    'Primera' => 'PRO1200',
+                    'Matutina' => 'PRO1500',
+                    'Vespertina' => 'PRO1800',
+                    'Nocturna' => 'PRO2100'
+                ],
                 'Provincia' => [
                     'La Previa' => 'PRO1015',
                     'Primera' => 'PRO1200',
                     'Matutina' => 'PRO1500',
                     'Vespertina' => 'PRO1800',
                     'Nocturna' => 'PRO2100'
+                ],
+                'ENTRE RIOS' => [
+                    'La Previa' => 'RIO1015',
+                    'Primera' => 'RIO1200',
+                    'Matutina' => 'RIO1500',
+                    'Vespertina' => 'RIO1800',
+                    'Nocturna' => 'RIO2100'
                 ],
                 'Entre Ríos' => [
                     'La Previa' => 'RIO1015',
@@ -542,12 +589,26 @@ class Extracts extends Component
                     'Vespertina' => 'RIO1800',
                     'Nocturna' => 'RIO2100'
                 ],
+                'CORDOBA' => [
+                    'La Previa' => 'COR1015',
+                    'Primera' => 'COR1200',
+                    'Matutina' => 'COR1500',
+                    'Vespertina' => 'COR1800',
+                    'Nocturna' => 'COR2100'
+                ],
                 'Córdoba' => [
                     'La Previa' => 'COR1015',
                     'Primera' => 'COR1200',
                     'Matutina' => 'COR1500',
                     'Vespertina' => 'COR1800',
                     'Nocturna' => 'COR2100'
+                ],
+                'CORRIENTES' => [
+                    'La Previa' => 'CTE1015',
+                    'Primera' => 'CTE1200',
+                    'Matutina' => 'CTE1500',
+                    'Vespertina' => 'CTE1800',
+                    'Nocturna' => 'CTE2100'
                 ],
                 'Corrientes' => [
                     'La Previa' => 'CTE1015',
@@ -556,12 +617,26 @@ class Extracts extends Component
                     'Vespertina' => 'CTE1800',
                     'Nocturna' => 'CTE2100'
                 ],
+                'CHACO' => [
+                    'La Previa' => 'CHA1015',
+                    'Primera' => 'CHA1200',
+                    'Matutina' => 'CHA1500',
+                    'Vespertina' => 'CHA1800',
+                    'Nocturna' => 'CHA2100'
+                ],
                 'Chaco' => [
                     'La Previa' => 'CHA1015',
                     'Primera' => 'CHA1200',
                     'Matutina' => 'CHA1500',
                     'Vespertina' => 'CHA1800',
                     'Nocturna' => 'CHA2100'
+                ],
+                'NEUQUEN' => [
+                    'La Previa' => 'NQN1015',
+                    'Primera' => 'NQN1200',
+                    'Matutina' => 'NQN1500',
+                    'Vespertina' => 'NQN1800',
+                    'Nocturna' => 'NQN2100'
                 ],
                 'Neuquén' => [
                     'La Previa' => 'NQN1015',
@@ -570,12 +645,26 @@ class Extracts extends Component
                     'Vespertina' => 'NQN1800',
                     'Nocturna' => 'NQN2100'
                 ],
+                'MISIONES' => [
+                    'La Previa' => 'MIS1030',
+                    'Primera' => 'MIS1215',
+                    'Matutina' => 'MIS1500',
+                    'Vespertina' => 'MIS1800',
+                    'Nocturna' => 'MIS2115'
+                ],
                 'Misiones' => [
                     'La Previa' => 'MIS1030',
                     'Primera' => 'MIS1215',
                     'Matutina' => 'MIS1500',
                     'Vespertina' => 'MIS1800',
                     'Nocturna' => 'MIS2115'
+                ],
+                'MENDOZA' => [
+                    'La Previa' => 'MZA1015',
+                    'Primera' => 'MZA1200',
+                    'Matutina' => 'MZA1500',
+                    'Vespertina' => 'MZA1800',
+                    'Nocturna' => 'MZA2100'
                 ],
                 'Mendoza' => [
                     'La Previa' => 'MZA1015',
@@ -584,12 +673,26 @@ class Extracts extends Component
                     'Vespertina' => 'MZA1800',
                     'Nocturna' => 'MZA2100'
                 ],
+                'RÍO NEGRO' => [
+                    'La Previa' => 'Rio1015',
+                    'Primera' => 'Rio1200',
+                    'Matutina' => 'Rio1500',
+                    'Vespertina' => 'Rio1800',
+                    'Nocturna' => 'Rio2100'
+                ],
                 'Río Negro' => [
                     'La Previa' => 'Rio1015',
                     'Primera' => 'Rio1200',
                     'Matutina' => 'Rio1500',
                     'Vespertina' => 'Rio1800',
                     'Nocturna' => 'Rio2100'
+                ],
+                'TUCUMAN' => [
+                    'La Previa' => 'Tucu1130',
+                    'Primera' => 'Tucu1430',
+                    'Matutina' => 'Tucu1730',
+                    'Vespertina' => 'Tucu1930',
+                    'Nocturna' => 'Tucu2200'
                 ],
                 'Tucumán' => [
                     'La Previa' => 'Tucu1130',
@@ -598,6 +701,20 @@ class Extracts extends Component
                     'Vespertina' => 'Tucu1930',
                     'Nocturna' => 'Tucu2200'
                 ],
+                'Tucuman' => [
+                    'La Previa' => 'Tucu1130',
+                    'Primera' => 'Tucu1430',
+                    'Matutina' => 'Tucu1730',
+                    'Vespertina' => 'Tucu1930',
+                    'Nocturna' => 'Tucu2200'
+                ],
+                'SANTIAGO' => [
+                    'La Previa' => 'San1015',
+                    'Primera' => 'San1200',
+                    'Matutina' => 'San1500',
+                    'Vespertina' => 'San1945',
+                    'Nocturna' => 'San2200'
+                ],
                 'Santiago' => [
                     'La Previa' => 'San1015',
                     'Primera' => 'San1200',
@@ -605,11 +722,23 @@ class Extracts extends Component
                     'Vespertina' => 'San1945',
                     'Nocturna' => 'San2200'
                 ],
+                'JUJUY' => [
+                    'Primera' => 'JUJ1200',
+                    'Matutina' => 'JUJ1500',
+                    'Vespertina' => 'JUJ1800',
+                    'Nocturna' => 'JUJ2100'
+                ],
                 'Jujuy' => [
                     'Primera' => 'JUJ1200',
                     'Matutina' => 'JUJ1500',
                     'Vespertina' => 'JUJ1800',
                     'Nocturna' => 'JUJ2100'
+                ],
+                'SALTA' => [
+                    'Primera' => 'Salt1130',
+                    'Matutina' => 'Salt1400',
+                    'Vespertina' => 'Salt1730',
+                    'Nocturna' => 'Salt2100'
                 ],
                 'Salta' => [
                     'Primera' => 'Salt1130',
@@ -617,12 +746,26 @@ class Extracts extends Component
                     'Vespertina' => 'Salt1730',
                     'Nocturna' => 'Salt2100'
                 ],
+                'MONTEVIDEO' => [
+                    'La Previa' => 'ORO1015',
+                    'Primera' => 'ORO1200',
+                    'Matutina' => 'ORO1500',    // Matutina de Montevideo va a Matutina (ORO1500 = extract_id 3)
+                    'Vespertina' => 'ORO1800',  // Vespertina de Montevideo va a Vespertina (ORO1800 = extract_id 4)
+                    'Nocturna' => 'ORO2100'     // Nocturna de Montevideo va a Nocturna (ORO2100 = extract_id 5)
+                ],
                 'Montevideo' => [
                     'La Previa' => 'ORO1015',
-                    'Primera' => 'ORO1500',
-                    'Matutina' => 'ORO1500',
-                    'Vespertina' => 'ORO1500',
-                    'Nocturna' => 'ORO2100'
+                    'Primera' => 'ORO1200',
+                    'Matutina' => 'ORO1500',    // Matutina de Montevideo va a Matutina (ORO1500 = extract_id 3)
+                    'Vespertina' => 'ORO1800',  // Vespertina de Montevideo va a Vespertina (ORO1800 = extract_id 4)
+                    'Nocturna' => 'ORO2100'     // Nocturna de Montevideo va a Nocturna (ORO2100 = extract_id 5)
+                ],
+                'SAN LUIS' => [
+                    'La Previa' => 'SLU1015',
+                    'Primera' => 'SLU1200',
+                    'Matutina' => 'SLU1500',
+                    'Vespertina' => 'SLU1800',
+                    'Nocturna' => 'SLU2100'
                 ],
                 'San Luis' => [
                     'La Previa' => 'SLU1015',
@@ -631,12 +774,26 @@ class Extracts extends Component
                     'Vespertina' => 'SLU1800',
                     'Nocturna' => 'SLU2100'
                 ],
+                'CHUBUT' => [
+                    'La Previa' => 'CHU1015',
+                    'Primera' => 'CHU1200',
+                    'Matutina' => 'CHU1500',
+                    'Vespertina' => 'CHU1800',
+                    'Nocturna' => 'CHU2100'
+                ],
                 'Chubut' => [
                     'La Previa' => 'CHU1015',
                     'Primera' => 'CHU1200',
                     'Matutina' => 'CHU1500',
                     'Vespertina' => 'CHU1800',
                     'Nocturna' => 'CHU2100'
+                ],
+                'FORMOSA' => [
+                    'La Previa' => 'FOR1015',
+                    'Primera' => 'FOR1200',
+                    'Matutina' => 'FOR1500',
+                    'Vespertina' => 'FOR1800',
+                    'Nocturna' => 'FOR2100'
                 ],
                 'Formosa' => [
                     'La Previa' => 'FOR1015',
@@ -645,12 +802,26 @@ class Extracts extends Component
                     'Vespertina' => 'FOR1800',
                     'Nocturna' => 'FOR2100'
                 ],
+                'CATAMARCA' => [
+                    'La Previa' => 'CAT1015',
+                    'Primera' => 'CAT1200',
+                    'Matutina' => 'CAT1500',
+                    'Vespertina' => 'CAT1800',
+                    'Nocturna' => 'CAT2100'
+                ],
                 'Catamarca' => [
                     'La Previa' => 'CAT1015',
                     'Primera' => 'CAT1200',
                     'Matutina' => 'CAT1500',
                     'Vespertina' => 'CAT1800',
                     'Nocturna' => 'CAT2100'
+                ],
+                'SAN JUAN' => [
+                    'La Previa' => 'SJU1015',
+                    'Primera' => 'SJU1200',
+                    'Matutina' => 'SJU1500',
+                    'Vespertina' => 'SJU1800',
+                    'Nocturna' => 'SJU2100'
                 ],
                 'San Juan' => [
                     'La Previa' => 'SJU1015',
@@ -672,7 +843,7 @@ class Extracts extends Component
             $city = City::where('code', $cityCode)->first();
             
             if (!$city) {
-                Log::warning("Extracts - No se encontró ciudad en BD: {$cityCode}");
+                Log::warning("Extracts - No se encontró ciudad en BD: {$cityCode} para {$cityName} - {$turnName}");
                 return ['inserted' => 0, 'updated' => 0];
             }
             
@@ -787,8 +958,19 @@ class Extracts extends Component
         $city = \App\Models\City::find($cityId);
         if ($city) {
             $lotteryCode = $city->code;
+            
+            // ✅ VERIFICAR COMPLETITUD: Solo insertar resultados si la lotería tiene 20 números completos
+            if (!\App\Services\LotteryCompletenessService::isLotteryComplete($lotteryCode, $dateToStore)) {
+                \Log::info('Extracts - Lotería incompleta: NO se insertarán resultados hasta tener 20 números', [
+                    'lotteryCode' => $lotteryCode,
+                    'date' => $dateToStore
+                ]);
+                $this->dispatch('notify', message: "Lotería {$lotteryCode} incompleta. Se insertarán resultados cuando tenga 20 números.", type: 'info');
+                return;
+            }
+            
             $cityInitial = substr($lotteryCode, 0, 1);
-            \Log::info('Premiación rápida: buscando jugadas', [
+            \Log::info('Premiación rápida: buscando jugadas (lotería completa)', [
                 'lotteryCode' => $lotteryCode,
                 'cityInitial' => $cityInitial,
                 'index' => $index,
@@ -798,7 +980,10 @@ class Extracts extends Component
             $playsQuery = \App\Models\ApusModel::whereIn('lottery', [$lotteryCode, $cityInitial])
                 ->where('position', $index)
                 ->where('number', $value)
-                ->where('timeApu', $city->time);
+                ->where('timeApu', $city->time)
+                ->whereHas('playsSent', function($query) {
+                    $query->where('status', '!=', 'I'); // Excluir jugadas anuladas
+                });
             
             // Filtrar por cliente si no es administrador
             if (!$this->isAdmin) {
@@ -823,14 +1008,22 @@ class Extracts extends Component
                     'pos_g_r'    => null,
                     'XA'         => null,
                     'import'     => $play->import,
-                    'aciert'     => $play->import,
+                    'aciert'     => 0, // Se calculará correctamente por el sistema automático
+                    'times_won'  => 1, // ✅ Agregar times_won (por defecto 1, se calculará correctamente por el sistema automático)
                     'date'       => isset($this->indexData) ? $this->indexData->date : $dateToStore,
                     'time'       => $play->timeApu,
                 ];
                 \Log::info('Intentando crear Result', $resultData);
                 try {
-                    $result = \App\Models\Result::create($resultData);
-                    \Log::info('Result creado', ['id' => $result->id]);
+                    // Usar inserción segura y evitar premio 0
+                    $resultData['aciert'] = (float) ($resultData['aciert'] ?? 0);
+                    $result = null;
+                    if ($resultData['aciert'] > 0) {
+                        $result = \App\Services\ResultManager::createResultSafely($resultData);
+                    }
+                    if ($result) {
+                        \Log::info('Result creado', ['id' => $result->id]);
+                    }
                 } catch (\Exception $e) {
                     \Log::error('Error al crear Result', ['error' => $e->getMessage()]);
                 }
@@ -885,8 +1078,19 @@ class Extracts extends Component
         $city = $numero->city;
         if ($city) {
             $lotteryCode = $city->code;
+            
+            // ✅ VERIFICAR COMPLETITUD: Solo insertar resultados si la lotería tiene 20 números completos
+            if (!\App\Services\LotteryCompletenessService::isLotteryComplete($lotteryCode, $numero->date)) {
+                \Log::info('Extracts - Lotería incompleta (update): NO se insertarán resultados hasta tener 20 números', [
+                    'lotteryCode' => $lotteryCode,
+                    'date' => $numero->date
+                ]);
+                $this->dispatch('notify', message: "Lotería {$lotteryCode} incompleta. Se insertarán resultados cuando tenga 20 números.", type: 'info');
+                return;
+            }
+            
             $cityInitial = substr($lotteryCode, 0, 1);
-            \Log::info('Premiación rápida (update): buscando jugadas', [
+            \Log::info('Premiación rápida (update): buscando jugadas (lotería completa)', [
                 'lotteryCode' => $lotteryCode,
                 'cityInitial' => $cityInitial,
                 'index' => $numero->index,
@@ -896,7 +1100,10 @@ class Extracts extends Component
             $playsQuery = \App\Models\ApusModel::whereIn('lottery', [$lotteryCode, $cityInitial])
                 ->where('position', $numero->index)
                 ->where('number', $newValue)
-                ->where('timeApu', $city->time);
+                ->where('timeApu', $city->time)
+                ->whereHas('playsSent', function($query) {
+                    $query->where('status', '!=', 'I'); // Excluir jugadas anuladas
+                });
             
             // Filtrar por cliente si no es administrador
             if (!$this->isAdmin) {
@@ -921,14 +1128,22 @@ class Extracts extends Component
                     'pos_g_r'    => null,
                     'XA'         => null,
                     'import'     => $play->import,
-                    'aciert'     => $play->import,
+                    'aciert'     => 0, // Se calculará correctamente por el sistema automático
+                    'times_won'  => 1, // ✅ Agregar times_won (por defecto 1, se calculará correctamente por el sistema automático)
                     'date'       => $numero->date,
                     'time'       => $play->timeApu,
                 ];
                 \Log::info('Intentando crear Result', $resultData);
                 try {
-                    $result = \App\Models\Result::create($resultData);
-                    \Log::info('Result creado', ['id' => $result->id]);
+                    // Usar inserción segura y evitar premio 0
+                    $resultData['aciert'] = (float) ($resultData['aciert'] ?? 0);
+                    $result = null;
+                    if ($resultData['aciert'] > 0) {
+                        $result = \App\Services\ResultManager::createResultSafely($resultData);
+                    }
+                    if ($result) {
+                        \Log::info('Result creado', ['id' => $result->id]);
+                    }
                 } catch (\Exception $e) {
                     \Log::error('Error al crear Result', ['error' => $e->getMessage()]);
                 }
@@ -970,14 +1185,11 @@ class Extracts extends Component
             if (!empty($tableData)) {
                 Log::info("Tabla {$tableIndex} parseada:", ['headers' => $tableData['headers'], 'rows_count' => count($tableData['rows'])]);
                 
-                // Mapear índice de tabla a extract_id (turno)
-                $extractId = $this->mapTableIndexToExtractId($tableIndex);
-                Log::info("Tabla {$tableIndex} mapeada a extract_id: {$extractId}");
-                
-                $numbers = $this->extractNumbersFromTable($tableData, $tableIndex, $extractId);
+                // Extraer números de la tabla (el mapeo se hace dentro del método)
+                $numbers = $this->extractNumbersFromTable($tableData, $tableIndex);
                 $extractedNumbers = array_merge($extractedNumbers, $numbers);
                 
-                Log::info("Números extraídos de tabla {$tableIndex} (extract_id {$extractId}):", ['count' => count($numbers)]);
+                Log::info("Números extraídos de tabla {$tableIndex}:", ['count' => count($numbers)]);
             } else {
                 Log::info("Tabla {$tableIndex} vacía o no parseable");
             }
@@ -990,15 +1202,24 @@ class Extracts extends Component
     /**
      * Mapea el índice de tabla al extract_id correcto
      */
-    private function mapTableIndexToExtractId($tableIndex)
+    private function mapTableIndexToExtractId($tableIndex, $cityName = null)
     {
-        // Mapeo de índice de tabla a extract_id (turno)
+        // Mapeo específico para Montevideo (estructura diferente)
+        if ($cityName && (stripos($cityName, 'Montevideo') !== false)) {
+            $montevideoMapping = [
+                2 => 3, // Tabla 2 = MATUTINA (datos de Matutina van a Matutina, extract_id 3)
+                8 => 5, // Tabla 8 = NOCTURNA (datos de Nocturna van a Nocturna, extract_id 5)
+            ];
+            return $montevideoMapping[$tableIndex] ?? null;
+        }
+        
+        // Mapeo genérico para otras ciudades
         $tableToExtractMapping = [
-            0 => 1, // Tabla 1 = PREVIA
-            1 => 2, // Tabla 2 = PRIMERO  
-            2 => 3, // Tabla 3 = MATUTINA
-            3 => 4, // Tabla 4 = VESPERTINA
-            4 => 5, // Tabla 5 = NOCTURNA
+            0 => 1, // Tabla 0 = PREVIA
+            1 => 2, // Tabla 1 = PRIMERO  
+            2 => 3, // Tabla 2 = MATUTINA
+            3 => 4, // Tabla 3 = VESPERTINA
+            4 => 5, // Tabla 4 = NOCTURNA
         ];
         
         return $tableToExtractMapping[$tableIndex] ?? 1; // Default a PREVIA si no se encuentra
@@ -1048,7 +1269,7 @@ class Extracts extends Component
     /**
      * Extrae números ganadores de una tabla procesada
      */
-    private function extractNumbersFromTable($tableData, $tableIndex = 0, $extractId = 1)
+    private function extractNumbersFromTable($tableData, $tableIndex = 0)
     {
         $numbers = [];
         $headers = $tableData['headers'];
@@ -1083,12 +1304,21 @@ class Extracts extends Component
             'T. del fuego' => 'TDF'
         ];
         
-        Log::info("Procesando tabla {$tableIndex} para extract_id {$extractId}:", ['headers' => $headers, 'rows_count' => count($rows)]);
+        Log::info("Procesando tabla {$tableIndex}:", ['headers' => $headers, 'rows_count' => count($rows)]);
         
         foreach ($rows as $rowIndex => $row) {
             if (empty($row)) continue;
             
             $cityName = trim($row[0]);
+            
+            // Determinar el extract_id basándose en la ciudad y el índice de tabla
+            $extractId = $this->mapTableIndexToExtractId($tableIndex, $cityName);
+            
+            if (!$extractId) {
+                Log::info("No se encontró mapeo para tabla {$tableIndex} y ciudad {$cityName}");
+                continue;
+            }
+            
             Log::info("Tabla {$tableIndex} (extract_id {$extractId}) - Fila {$rowIndex}:", ['city_name' => $cityName, 'row' => $row]);
             
             // Buscar coincidencia exacta primero
@@ -1130,8 +1360,13 @@ class Extracts extends Component
                 for ($i = 1; $i <= 20 && $i < count($row); $i++) {
                     $value = trim($row[$i]);
                     
-                    // Verificar si es un número de 4 dígitos
-                    if (preg_match('/^\d{4}$/', $value)) {
+                    // Verificar si es un número de 4 o 5 dígitos
+                    // Si tiene 5 dígitos, tomar los últimos 4
+                    if (preg_match('/^\d{4,5}$/', $value)) {
+                        // Si tiene 5 dígitos, tomar los últimos 4
+                        if (strlen($value) === 5) {
+                            $value = substr($value, -4);
+                        }
                         $numbers[] = [
                             'city_id' => $city->id,
                             'extract_id' => $city->extract_id, // Usar el extract_id de la ciudad (que debe coincidir con el de la tabla)
@@ -1144,7 +1379,7 @@ class Extracts extends Component
             }
         }
         
-        Log::info("Total números extraídos de tabla {$tableIndex} (extract_id {$extractId}):", ['count' => count($numbers)]);
+        Log::info("Total números extraídos de tabla {$tableIndex}:", ['count' => count($numbers)]);
         return $numbers;
     }
 
@@ -1378,6 +1613,113 @@ class Extracts extends Component
     }
 
 
+
+
+    /**
+     * Verifica si una ciudad está configurada en Quinielas (tiene horarios seleccionados)
+     */
+    public function isCityConfiguredInQuinielas($cityName)
+    {
+        try {
+            $config = \App\Models\GlobalQuinielasConfiguration::where('city_name', $cityName)->first();
+            return $config && !empty($config->selected_schedules);
+        } catch (\Exception $e) {
+            \Log::error("Error verificando configuración de Quinielas para {$cityName}: " . $e->getMessage());
+            return true; // Por defecto, mostrar si hay error
+        }
+    }
+    
+    /**
+     * Verifica si una ciudad y horario específico están configurados en Quinielas
+     */
+    public function isCityAndScheduleConfiguredInQuinielas($cityName, $extractName)
+    {
+        try {
+            $config = \App\Models\GlobalQuinielasConfiguration::where('city_name', $cityName)->first();
+            if (!$config || empty($config->selected_schedules)) {
+                return false;
+            }
+            
+            // Mapeo específico por ciudad y extracto
+            $cityExtractMapping = [
+                'Tucuman' => [
+                    'PREVIA' => ['11:30'],      // Tucu1130
+                    'PRIMERO' => ['14:30'],     // Tucu1430
+                    'MATUTINO' => ['17:30'],    // Tucu1730
+                    'VESPERTINO' => ['19:30'],  // Tucu1930
+                    'NOCTURNO' => ['22:00']     // Tucu2200
+                ],
+                'Santiago' => [
+                    'PREVIA' => ['10:15'],      // San1015
+                    'PRIMERO' => ['12:00'],     // San1200
+                    'MATUTINO' => ['15:00'],    // San1500
+                    'VESPERTINO' => ['19:45'],  // San1945
+                    'NOCTURNO' => ['22:00']     // San2200
+                ],
+                'SALTA' => [
+                    'PREVIA' => ['11:30'],      // Salt1130
+                    'PRIMERO' => ['14:00'],     // Salt1400
+                    'MATUTINO' => ['17:30'],    // Salt1730
+                    'VESPERTINO' => ['21:00'],  // Salt2100
+                    'NOCTURNO' => []
+                ],
+                'JUJUY' => [
+                    'PREVIA' => [],
+                    'PRIMERO' => ['12:00'],     // JUJ1200
+                    'MATUTINO' => ['15:00'],    // JUJ1500
+                    'VESPERTINO' => ['18:00'],  // JUJ1800
+                    'NOCTURNO' => ['21:00']     // JUJ2100
+                ],
+                'MISIONES' => [
+                    'PREVIA' => ['10:30'],      // MIS1030
+                    'PRIMERO' => ['12:15'],     // MIS1215
+                    'MATUTINO' => ['15:00'],    // MIS1500
+                    'VESPERTINO' => ['18:00'],  // MIS1800
+                    'NOCTURNO' => ['21:15']     // MIS2115
+                ],
+                'NEUQUEN' => [
+                    'PREVIA' => ['10:15'],      // NQN1015
+                    'PRIMERO' => ['12:00'],     // NQN1200
+                    'MATUTINO' => ['15:00'],    // NQN1500
+                    'VESPERTINO' => ['18:00'],  // NQN1800
+                    'NOCTURNO' => ['21:00']     // NQN2100
+                ],
+                'Río Negro' => [
+                    'PREVIA' => ['10:15'],      // Rio1015
+                    'PRIMERO' => ['12:00'],     // Rio1200
+                    'MATUTINO' => ['15:00'],    // Rio1500
+                    'VESPERTINO' => ['18:00'],  // Rio1800
+                    'NOCTURNO' => ['21:00']     // Rio2100
+                ]
+            ];
+            
+            // Mapeo por defecto para ciudades estándar
+            $defaultMapping = [
+                'PREVIA' => ['10:15'],
+                'PRIMERO' => ['12:00'],
+                'MATUTINO' => ['15:00'],
+                'VESPERTINO' => ['18:00'],
+                'NOCTURNO' => ['21:00']
+            ];
+            
+            // Obtener el mapeo específico para la ciudad o usar el por defecto
+            $cityMapping = $cityExtractMapping[$cityName] ?? $defaultMapping;
+            $schedulesForExtract = $cityMapping[$extractName] ?? [];
+            
+            // Verificar si alguno de los horarios del extracto está seleccionado
+            foreach ($schedulesForExtract as $schedule) {
+                if (in_array($schedule, $config->selected_schedules)) {
+                    return true;
+                }
+            }
+            
+            return false;
+            
+        } catch (\Exception $e) {
+            \Log::error("Error verificando configuración de Quinielas para {$cityName} - {$extractName}: " . $e->getMessage());
+            return true; // Por defecto, mostrar si hay error
+        }
+    }
 
     public function render()
     {

@@ -7,6 +7,7 @@ use App\Livewire\SharedTicket;
 use App\Livewire\ArticleExtractorInterface;
 use App\Livewire\HeadsExtractorInterface;
 use App\Livewire\WinningNumbersInterface;
+use App\Livewire\Admin\QuinielasManager;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -30,6 +31,9 @@ Route::get('/cabezas', HeadsExtractorInterface::class)->name('heads.interface');
 
 // 20 Ganadores
 Route::get('/20-ganadores', WinningNumbersInterface::class)->name('winning-numbers.interface');
+
+// Configuración de Quinielas - Solo para Administradores
+Route::get('/quinielas', QuinielasManager::class)->name('quinielas.manager')->middleware('role:Administrador');
 
 
 // Rutas para el extractor de artículos
@@ -81,27 +85,40 @@ Route::post('/api/check-new-results', function () {
 })->middleware('auth');
 
 // Endpoint para verificar si un correo pertenece a un cliente
+// Esta ruta debe estar en web.php para evitar problemas con middleware Sanctum en servidores
 Route::get('/api/check-client/{email}', function ($email) {
     $user = \App\Models\User::where('email', $email)->first();
     
-    if ($user && $user->hasRole('Cliente')) {
-        // Buscar el cliente correspondiente para obtener el nombre de fantasía
-        $client = \App\Models\Client::where('correo', $email)->first();
-        $displayName = $client ? $client->nombre_fantasia : $user->first_name;
+    if ($user) {
+        // Limpiar cache de permisos antes de verificar (para servidores con cache persistente)
+        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
         
-        if ($user->profile_photo_path) {
-            return response()->json([
-                'is_client' => true,
-                'has_photo' => true,
-                'photo_path' => $user->profile_photo_path,
-                'name' => $displayName
-            ]);
-        } else {
-            return response()->json([
-                'is_client' => true,
-                'has_photo' => false,
-                'name' => $displayName
-            ]);
+        // Refrescar el modelo y cargar roles desde la base de datos
+        $user->refresh();
+        $user->load('roles');
+        
+        // Verificar si tiene el rol "Cliente" usando la relación directa también
+        $hasClientRole = $user->hasRole('Cliente') || $user->roles->contains('name', 'Cliente');
+        
+        if ($hasClientRole) {
+            // Buscar el cliente correspondiente para obtener el nombre de fantasía
+            $client = \App\Models\Client::where('correo', $email)->first();
+            $displayName = $client ? $client->nombre_fantasia : $user->first_name;
+            
+            if ($user->profile_photo_path) {
+                return response()->json([
+                    'is_client' => true,
+                    'has_photo' => true,
+                    'photo_path' => $user->profile_photo_path,
+                    'name' => $displayName
+                ]);
+            } else {
+                return response()->json([
+                    'is_client' => true,
+                    'has_photo' => false,
+                    'name' => $displayName
+                ]);
+            }
         }
     }
     
@@ -109,7 +126,7 @@ Route::get('/api/check-client/{email}', function ($email) {
         'is_client' => false,
         'has_photo' => false
     ]);
-})->name('api.check-client');
+})->name('api.check-client')->withoutMiddleware([\App\Http\Middleware\VerifyCsrfToken::class]);
 
 // Los clientes ahora usan el login normal y acceden al sistema principal
 // con permisos limitados según su rol "Cliente"

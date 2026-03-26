@@ -23,6 +23,7 @@ class Result extends Model
      */
     protected $fillable = [
         'user_id',
+        'apu_id',
         'ticket',
         'lottery',
         'number',
@@ -36,6 +37,7 @@ class Result extends Model
         'XA',
         'import',
         'aciert',
+        'times_won',
         'date',
         'time',
     ];

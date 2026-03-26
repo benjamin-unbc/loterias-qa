@@ -19,6 +19,8 @@ class StoreClient extends Component
     // Form fields
     public $nombre, $apellido, $correo, $nombre_fantasia, $password;
     public bool $is_active = true;
+    public $commission_percentage = 20.00;
+    public $weekly_commission_percentage = 30.00;
     public $photo;
 
     /**
@@ -32,6 +34,8 @@ class StoreClient extends Component
             'correo' => ['required', 'email', 'regex:/@.+\..+/i'],
             'nombre_fantasia' => ['required', 'string', 'max:255'],
             'is_active' => ['required', 'boolean'],
+            'commission_percentage' => ['required', 'numeric'],
+            'weekly_commission_percentage' => ['required', 'numeric', 'min:0', 'max:100'],
             'photo' => ['nullable', 'mimes:jpg,jpeg,png', 'max:1024'],
         ];
 
@@ -60,6 +64,8 @@ class StoreClient extends Component
             $this->correo = $this->client->correo;
             $this->nombre_fantasia = $this->client->nombre_fantasia;
             $this->is_active = $this->client->is_active;
+            $this->commission_percentage = $this->client->commission_percentage ?? 20.00;
+            $this->weekly_commission_percentage = $this->client->weekly_commission_percentage ?? 30.00;
             $this->password = ''; // Don't pre-fill password
         } else {
             $this->action = 'create';
@@ -80,6 +86,8 @@ class StoreClient extends Component
             'correo' => $this->correo,
             'nombre_fantasia' => $this->nombre_fantasia,
             'is_active' => $this->is_active,
+            'commission_percentage' => $this->commission_percentage,
+            'weekly_commission_percentage' => $this->weekly_commission_percentage,
         ];
 
         // Manejar el logo de perfil
@@ -123,27 +131,46 @@ class StoreClient extends Component
 
             banner_message("Cliente actualizado exitosamente!", 'success');
         } else {
-            // Crear como usuario normal con el rol "Cliente"
-            $userData = [
-                'first_name' => $data['nombre'],
-                'last_name' => $data['apellido'],
-                'email' => $data['correo'],
-                'password' => $data['password'], // Aseguramos que la contraseña esté hasheada
-                'phone' => '0000000000', // Teléfono por defecto
-                'is_active' => $data['is_active'],
-                'rut' => $this->generateUniqueRut(), // RUT único generado
-            ];
+            // Usar transacción para asegurar consistencia de datos
+            \Illuminate\Support\Facades\DB::transaction(function () use ($data) {
+                // Crear como usuario normal con el rol "Cliente"
+                $userData = [
+                    'first_name' => $data['nombre'],
+                    'last_name' => $data['apellido'],
+                    'email' => $data['correo'],
+                    'password' => $data['password'], // Aseguramos que la contraseña esté hasheada
+                    'phone' => '0000000000', // Teléfono por defecto
+                    'is_active' => $data['is_active'],
+                    'rut' => $this->generateUniqueRut(), // RUT único generado
+                ];
 
-            // Agregar logo de perfil si existe
-            if (isset($data['profile_photo_path'])) {
-                $userData['profile_photo_path'] = $data['profile_photo_path'];
-            }
+                // Agregar logo de perfil si existe
+                if (isset($data['profile_photo_path'])) {
+                    $userData['profile_photo_path'] = $data['profile_photo_path'];
+                }
 
-            $user = \App\Models\User::create($userData);
-            $user->assignRole('Cliente');
+                $user = \App\Models\User::create($userData);
+                
+                // Asignar rol antes de limpiar cache
+                $user->assignRole('Cliente');
+                
+                // Forzar recarga de roles desde la base de datos
+                $user->load('roles');
+                $user->refresh();
+                
+                // Limpiar caché de permisos múltiples veces para asegurar que se detecte
+                app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+                
+                // Limpiar cache específico de roles del usuario
+                \Illuminate\Support\Facades\Cache::forget("spatie.permission.cache.user.{$user->id}");
+                
+                // Limpiar cache de permisos nuevamente después de limpiar cache del usuario
+                app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
-            // También crear en la tabla clients para mantener compatibilidad (sin rol)
-            Client::create($data);
+                // También crear en la tabla clients para mantener compatibilidad (sin rol)
+                // IMPORTANTE: Asegurar que el Client se cree con todos los datos, incluyendo profile_photo_path
+                Client::create($data);
+            });
 
             banner_message("Cliente creado exitosamente!", 'success');
         }

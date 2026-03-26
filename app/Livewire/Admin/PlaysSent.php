@@ -5,6 +5,8 @@ namespace App\Livewire\Admin;
 use App\Models\PlaysSentModel;
 use App\Models\ApusModel;
 use App\Models\Ticket;
+use App\Models\City;
+use App\Models\Result;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -58,27 +60,48 @@ class PlaysSent extends Component
      */
     public function viewTicket($ticket)
     {
-        // OPTIMIZACIÓN: Consulta optimizada con select específico
-        $this->selectedTicket = PlaysSentModel::select([
-                'ticket', 'code', 'date', 'time', 'user_id', 'amount', 'type', 'status'
-            ])
-            ->where('ticket', $ticket)
-            ->where('user_id', Auth::user()->id)
-            ->first();
-        $this->showTicketModal = true;
+        try {
+            // Buscar la jugada enviada con relaciones por número de ticket
+            $this->selectedTicket = PlaysSentModel::with(['apus', 'ticket'])
+                ->where('ticket', $ticket)
+                ->where('user_id', Auth::user()->id)
+                ->first();
+            
+            if ($this->selectedTicket) {
+                $this->showTicketModal = true;
+                \Log::info('Ticket modal opened for ticket: ' . $ticket, [
+                    'ticket' => $this->selectedTicket->ticket,
+                    'apus_count' => $this->selectedTicket->apus->count()
+                ]);
+            } else {
+                \Log::warning('Ticket not found for ticket: ' . $ticket);
+            }
+        } catch (\Exception $e) {
+            \Log::error('Error opening ticket modal: ' . $e->getMessage());
+        }
     }
 
-    // Standardized codes array (consistent with LotteryResultProcessor)
+    // Standardized codes array (consistent with LotteryResultProcessor and PlaysManager)
     public $codes = [
         'AB' => 'NAC1015', 'CH1' => 'CHA1015', 'QW' => 'PRO1015', 'M10' => 'MZA1015', '!' => 'CTE1015',
         'ER' => 'SFE1015', 'SD' => 'COR1015', 'RT' => 'RIO1015', 'Q' => 'NAC1200', 'CH2' => 'CHA1200',
         'W' => 'PRO1200', 'M1' => 'MZA1200', 'M' => 'CTE1200', 'R' => 'SFE1200', 'T' => 'COR1200',
         'K' => 'RIO1200', 'A' => 'NAC1500', 'CH3' => 'CHA1500', 'E' => 'PRO1500', 'M2' => 'MZA1500',
-        'Ct3' => 'CTE1500', 'D' => 'SFE1500', 'L' => 'COR1500', 'J' => 'RIO1500', 'S' => 'ORO1500',
+        'Ct3' => 'CTE1500', 'D' => 'SFE1500', 'L' => 'COR1500', 'J' => 'RIO1500', 'S' => 'ORO1800',
+        'ORO1500' => 'ORO1800', // Mapeo especial para Montevideo 18:00
+        'ORO1800' => 'ORO1800', // Mapeo directo para Montevideo 18:00
         'F' => 'NAC1800', 'CH4' => 'CHA1800', 'B' => 'PRO1800', 'M3' => 'MZA1800', 'Z' => 'CTE1800',
         'V' => 'SFE1800', 'H' => 'COR1800', 'U' => 'RIO1800', 'N' => 'NAC2100', 'CH5' => 'CHA2100',
         'P' => 'PRO2100', 'M4' => 'MZA2100', 'G' => 'CTE2100', 'I' => 'SFE2100', 'C' => 'COR2100',
-        'Y' => 'RIO2100', 'O' => 'ORO2100'
+        'Y' => 'RIO2100', 'O' => 'ORO2100',
+        // Nuevos códigos cortos para las loterías adicionales
+        'NQ1' => 'NQN1015', 'MI1' => 'MIS1030', 'RN1' => 'Rio1015', 'TU1' => 'Tucu1130', 'SG1' => 'San1015',
+        'NQ2' => 'NQN1200', 'MI2' => 'MIS1215', 'JU1' => 'JUJ1200', 'SA1' => 'Salt1130', 'RN2' => 'Rio1200',
+        'TU2' => 'Tucu1430', 'SG2' => 'San1200', 'NQ3' => 'NQN1500', 'MI3' => 'MIS1500', 'JU2' => 'JUJ1500',
+        'SA2' => 'Salt1400', 'RN3' => 'Rio1500', 'TU3' => 'Tucu1730', 'SG3' => 'San1500', 'NQ4' => 'NQN1800',
+        'MI4' => 'MIS1800', 'JU3' => 'JUJ1800', 'SA3' => 'Salt1730', 'RN4' => 'Rio1800', 'TU4' => 'Tucu1930',
+        'SG4' => 'San1945', 'NQ5' => 'NQN2100', 'JU4' => 'JUJ2100', 'RN5' => 'Rio2100', 'SA4' => 'Salt2100',
+        'TU5' => 'Tucu2200', 'MI5' => 'MIS2115', 'SG5' => 'San2200'
     ];
 
     // Helper to extract time suffix from system code (e.g., 'NAC1015' -> '1015')
@@ -104,43 +127,25 @@ class PlaysSent extends Component
  */
 public function viewApus($ticket)
 {
-    // OPTIMIZACIÓN 1: Consulta optimizada con select específico y índices
-    $rawApus = ApusModel::select([
-            'id', 'ticket', 'user_id', 'number', 'position', 'import', 
-            'lottery', 'numberR', 'positionR', 'original_play_id'
-        ])
-        ->where('ticket', $ticket)
-        ->where('user_id', Auth::user()->id)
-        ->orderBy('original_play_id', 'asc')
-        ->orderBy('id', 'asc')
-        ->get();
-
-    if ($rawApus->isEmpty()) {
-        $this->apusData = collect();
-        $this->groups = collect();
-        $this->totalImport = 0;
-        // OPTIMIZACIÓN 2: Consulta paralela para el play
-        $this->play = PlaysSentModel::select(['ticket', 'code', 'date', 'time', 'user_id', 'amount'])
+    try {
+        // Buscar la jugada enviada con relaciones por número de ticket (igual que en ClientDetailsModal)
+        $this->selectedTicket = PlaysSentModel::with(['apus', 'ticket'])
             ->where('ticket', $ticket)
             ->where('user_id', Auth::user()->id)
             ->first();
-        $this->showApusModal = true;
-        return;
+        
+        if ($this->selectedTicket) {
+            $this->showApusModal = true;
+            \Log::info('Apus modal opened for ticket: ' . $ticket, [
+                'ticket' => $this->selectedTicket->ticket,
+                'apus_count' => $this->selectedTicket->apus->count()
+            ]);
+        } else {
+            \Log::warning('Ticket not found for ticket: ' . $ticket);
+        }
+    } catch (\Exception $e) {
+        \Log::error('Error opening apus modal: ' . $e->getMessage());
     }
-
-    // OPTIMIZACIÓN 3: Procesamiento optimizado de agrupaciones
-    $this->processApusData($rawApus);
-
-    // OPTIMIZACIÓN 4: Consulta paralela para el play (ya no bloquea el procesamiento)
-    $this->play = PlaysSentModel::select(['ticket', 'code', 'date', 'time', 'user_id', 'amount'])
-        ->where('ticket', $ticket)
-        ->where('user_id', Auth::user()->id)
-        ->first();
-    
-    $this->apusData = $rawApus;
-    // OPTIMIZACIÓN 5: Cálculo optimizado del total
-    $this->totalImport = $rawApus->sum('import');
-    $this->showApusModal = true;
 }
 
 /**
@@ -151,14 +156,14 @@ public function viewApus($ticket)
  */
 private function processApusData($rawApus)
 {
-    // OPTIMIZACIÓN 6: Agrupación optimizada con menos operaciones
+    // Agrupar por original_play_id para mantener las jugadas juntas
     $groupedByPlayId = $rawApus->groupBy('original_play_id');
     
     $processedGroups = $groupedByPlayId->map(function ($groupOfApusFromSameOriginalPlay) {
-        // Tomar la primera apuesta del grupo como representativa
+        // Tomar la primera apuesta del grupo como representativa para los datos básicos
         $representativeApu = $groupOfApusFromSameOriginalPlay->first();
         
-        // OPTIMIZACIÓN 7: Procesamiento más eficiente de códigos de lotería
+        // Obtener TODOS los códigos de lotería únicos de este grupo
         $lotteryCodes = $groupOfApusFromSameOriginalPlay
             ->pluck('lottery')
             ->filter()
@@ -166,6 +171,7 @@ private function processApusData($rawApus)
             ->values()
             ->toArray();
         
+        // Determinar la cadena de loterías para mostrar
         $determinedLotteryKeyString = $this->determineLottery($lotteryCodes);
 
         return [
@@ -180,24 +186,27 @@ private function processApusData($rawApus)
         ];
     });
 
-    // OPTIMIZACIÓN 8: Agrupación final optimizada
+    // Agrupar por la cadena de loterías para mostrar
     $this->groups = $processedGroups
         ->groupBy('codes_display_string')
         ->map(function ($items, $key) {
             return [
-                'codes_display' => explode(', ', $key),
-                'numbers' => $items->pluck('numbers')->flatten(1)->all(),
+                'codes_display' => $this->formatLotteryCodesForDisplay(explode(', ', $key)),
+                'numbers' => collect($items->pluck('numbers')->flatten(1)->all())->values()->all(),
             ];
         })
-        // OPTIMIZACIÓN 9: Ordenamiento optimizado con caché de posiciones
+        // Ordenar por el orden deseado de loterías (usando códigos completos)
         ->sortBy(function ($group, $key) {
-            static $desiredOrder = ['NAC', 'CHA', 'PRO', 'MZA', 'CTE', 'SFE', 'COR', 'RIO', 'ORO'];
+            static $desiredOrder = ['NAC1015', 'CHA1015', 'PRO1015', 'MZA1015', 'CTE1015', 'SFE1015', 'COR1015', 'RIO1015', 'NQN1015', 'MIS1030', 'Rio1015', 'Tucu1130', 'San1015',
+                        'NAC1200', 'CHA1200', 'PRO1200', 'MZA1200', 'CTE1200', 'SFE1200', 'COR1200', 'RIO1200', 'NQN1200', 'MIS1215', 'JUJ1200', 'Salt1130', 'Rio1200', 'Tucu1430', 'San1200',
+                        'NAC1500', 'CHA1500', 'PRO1500', 'MZA1500', 'CTE1500', 'SFE1500', 'COR1500', 'RIO1500', 'ORO1800', 'NQN1500', 'MIS1500', 'JUJ1500', 'Salt1400', 'Rio1500', 'Tucu1730', 'San1500',
+                        'NAC1800', 'CHA1800', 'PRO1800', 'MZA1800', 'CTE1800', 'SFE1800', 'COR1800', 'RIO1800', 'NQN1800', 'MIS1800', 'JUJ1800', 'Salt1730', 'Rio1800', 'Tucu1930', 'San1945',
+                        'NAC2100', 'CHA2100', 'PRO2100', 'MZA2100', 'CTE2100', 'SFE2100', 'COR2100', 'RIO2100', 'ORO2100', 'NQN2100', 'JUJ2100', 'Rio2100', 'Salt2100', 'Tucu2200', 'MIS2115', 'San2200'];
             static $positionCache = [];
             
             if (!isset($positionCache[$key])) {
                 $firstLotteryInGroup = explode(', ', $key)[0];
-                $prefix = substr($firstLotteryInGroup, 0, -2);
-                $positionCache[$key] = array_search($prefix, $desiredOrder) ?: 999;
+                $positionCache[$key] = array_search($firstLotteryInGroup, $desiredOrder) ?: 999;
             }
             
             return $positionCache[$key];
@@ -205,32 +214,47 @@ private function processApusData($rawApus)
         ->values();
 }
 
-    // Use the same determineLottery logic as PlaysManager
-    protected function determineLottery(array $selectedUiCodes): string
+    // Use the same determineLottery logic as PlaysManager but with full codes
+    protected function determineLottery(array $selectedCodes): string
     {
-        $systemCodes = [];
-        foreach ($selectedUiCodes as $uiCode) {
-            $uiCode = trim($uiCode);
-            if (isset($this->codes[$uiCode])) {
-                $systemCodes[] = $this->codes[$uiCode];
+        $displayCodes = [];
+        
+        foreach ($selectedCodes as $code) {
+            $code = trim($code);
+            
+            // Limpiar códigos malformados - extraer solo códigos válidos
+            if (preg_match_all('/[A-Za-z]+\d{4}/', $code, $matches)) {
+                // Si el código contiene múltiples códigos válidos, procesarlos por separado
+                foreach ($matches[0] as $validCode) {
+                    $displayCodes[] = $validCode; // Usar código completo directamente
+                }
+            }
+            // Si el código ya es un código del sistema válido (ej: "CHA1800"), usarlo directamente
+            elseif (preg_match('/^[A-Za-z]+\d{4}$/', $code)) {
+                $displayCodes[] = $code; // Usar código completo directamente
+            }
+            // Si es un código de UI (ej: "CH4"), convertirlo a código completo
+            elseif (isset($this->codes[$code])) {
+                $displayCodes[] = $this->codes[$code]; // Convertir a código completo
             }
         }
-        $displayCodes = [];
-        foreach ($systemCodes as $systemCode) {
-            $prefix = substr($systemCode, 0, -4); // Extracts 'NAC' from 'NAC1015'
-            $timeSuffix = $this->getTimeSuffixFromSystemCode($systemCode); // Gets '10' from 'NAC1015'
-            $displayCodes[] = $prefix . $timeSuffix; // Combines to 'NAC10'
-        }
-        $desiredOrder = ['NAC', 'CHA', 'PRO', 'MZA', 'CTE', 'SFE', 'COR', 'RIO', 'ORO'];
+        
+        $desiredOrder = ['NAC1015', 'CHA1015', 'PRO1015', 'MZA1015', 'CTE1015', 'SFE1015', 'COR1015', 'RIO1015', 'NQN1015', 'MIS1030', 'Rio1015', 'Tucu1130', 'San1015',
+                        'NAC1200', 'CHA1200', 'PRO1200', 'MZA1200', 'CTE1200', 'SFE1200', 'COR1200', 'RIO1200', 'NQN1200', 'MIS1215', 'JUJ1200', 'Salt1130', 'Rio1200', 'Tucu1430', 'San1200',
+                        'NAC1500', 'CHA1500', 'PRO1500', 'MZA1500', 'CTE1500', 'SFE1500', 'COR1500', 'RIO1500', 'ORO1800', 'NQN1500', 'MIS1500', 'JUJ1500', 'Salt1400', 'Rio1500', 'Tucu1730', 'San1500',
+                        'NAC1800', 'CHA1800', 'PRO1800', 'MZA1800', 'CTE1800', 'SFE1800', 'COR1800', 'RIO1800', 'NQN1800', 'MIS1800', 'JUJ1800', 'Salt1730', 'Rio1800', 'Tucu1930', 'San1945',
+                        'NAC2100', 'CHA2100', 'PRO2100', 'MZA2100', 'CTE2100', 'SFE2100', 'COR2100', 'RIO2100', 'ORO2100', 'NQN2100', 'JUJ2100', 'Rio2100', 'Salt2100', 'Tucu2200', 'MIS2115', 'San2200'];
+        
         $uniqueDisplayCodes = array_unique($displayCodes);
+        
         usort($uniqueDisplayCodes, function ($a, $b) use ($desiredOrder) {
-            $prefixA = substr($a, 0, -2);
-            $prefixB = substr($b, 0, -2);
-            $posA = array_search($prefixA, $desiredOrder);
-            $posB = array_search($prefixB, $desiredOrder);
-            if ($posB === false) return -1;
+            $posA = array_search($a, $desiredOrder);
+            $posB = array_search($b, $desiredOrder);
+            if ($posA === false) $posA = 999;
+            if ($posB === false) $posB = 999;
             return $posA - $posB;
         });
+        
         return implode(', ', $uniqueDisplayCodes);
     }
 
@@ -243,25 +267,108 @@ private function processApusData($rawApus)
     public function disablePlay()
     {
         $ticket = $this->disabledTicketId;
-        $currentTime = Carbon::now()->format('H:i');
+        $currentTime = Carbon::now();
 
-        $hasPastApu = ApusModel::where('ticket', $ticket)
+        // Obtener todas las apuestas del ticket con sus códigos de lotería
+        $apusDelTicket = ApusModel::where('ticket', $ticket)
             ->where('user_id', Auth::user()->id)
-            ->where('timeApu', '<', $currentTime)
-            ->exists();
+            ->select('lottery')
+            ->distinct()
+            ->get();
 
-        if ($hasPastApu) {
+        // Si no hay apuestas, no se puede anular
+        if ($apusDelTicket->isEmpty()) {
             $this->showConfirmationModal = false;
-            $this->dispatch('notify', message: 'No se puede cancelar la jugada: ya hay al menos una apuesta con hora anterior a la actual.', type: 'error');
+            $this->dispatch('notify', message: 'No se puede cancelar la jugada: no se encontraron apuestas.', type: 'error');
             return;
         }
 
+        // Extraer todos los códigos de lotería únicos del ticket
+        $codigosLoterias = collect();
+        foreach ($apusDelTicket as $apu) {
+            $lottery = $apu->lottery;
+            if (empty($lottery)) {
+                continue;
+            }
+            
+            // El campo lottery puede contener múltiples códigos separados por comas
+            // Extraer todos los códigos válidos
+            if (preg_match_all('/[A-Za-z]+\d{4}/', $lottery, $matches)) {
+                foreach ($matches[0] as $codigo) {
+                    $codigosLoterias->push(trim($codigo));
+                }
+            }
+        }
+
+        // Eliminar duplicados
+        $codigosLoterias = $codigosLoterias->unique()->values();
+
+        // Si no hay códigos de lotería válidos, no se puede anular
+        if ($codigosLoterias->isEmpty()) {
+            $this->showConfirmationModal = false;
+            $this->dispatch('notify', message: 'No se puede cancelar la jugada: no se encontraron códigos de lotería válidos.', type: 'error');
+            return;
+        }
+
+        // Obtener los horarios del sistema desde la tabla cities
+        $horariosSistema = collect();
+        foreach ($codigosLoterias as $codigoLoteria) {
+            // Buscar la ciudad por código de lotería
+            $city = City::where('code', $codigoLoteria)->first();
+            
+            if ($city && !empty($city->time)) {
+                $horariosSistema->push($city->time);
+            }
+        }
+
+        // Si no hay horarios del sistema, no se puede anular
+        if ($horariosSistema->isEmpty()) {
+            $this->showConfirmationModal = false;
+            $this->dispatch('notify', message: 'No se puede cancelar la jugada: no se encontraron horarios del sistema.', type: 'error');
+            return;
+        }
+
+        // Ordenar horarios y obtener el primer horario (el más temprano)
+        $horariosOrdenados = $horariosSistema->unique()->sort()->values();
+        $primerHorarioString = $horariosOrdenados->first();
+
+        // Convertir el primer horario a Carbon para comparación precisa
+        try {
+            $primerHorario = Carbon::createFromFormat('H:i', $primerHorarioString);
+            $horaActual = Carbon::createFromFormat('H:i', $currentTime->format('H:i'));
+
+            // Verificar si el primer horario ya pasó o está en curso
+            if ($primerHorario <= $horaActual) {
+                $this->showConfirmationModal = false;
+                // Disparar evento para mostrar SweetAlert
+                $this->dispatch('show-cancel-alert', message: 'La jugada contiene loterías que ya comenzaron. No se puede anular el ticket.', horario: $primerHorarioString);
+                return;
+            }
+        } catch (\Exception $e) {
+            Log::error('Error al comparar horarios en disablePlay: ' . $e->getMessage());
+            $this->showConfirmationModal = false;
+            $this->dispatch('notify', message: 'Error al validar el horario de la jugada.', type: 'error');
+            return;
+        }
+
+        // Eliminar todos los resultados (aciertos) asociados al ticket
+        $deletedResults = Result::where('ticket', $ticket)
+            ->where('user_id', Auth::user()->id)
+            ->delete();
+
+        // Actualizar el status de la jugada a inactiva
         PlaysSentModel::where('ticket', $ticket)
             ->where('user_id', Auth::user()->id)
             ->update(['status' => 'I']);
 
         $this->showConfirmationModal = false;
-        $this->dispatch('notify', message: 'Jugada deshabilitada correctamente.', type: 'success');
+        
+        $message = 'Jugada deshabilitada correctamente.';
+        if ($deletedResults > 0) {
+            $message .= " Se eliminaron {$deletedResults} resultado(s) de aciertos.";
+        }
+        
+        $this->dispatch('notify', message: $message, type: 'success');
     }
 
     public function confirmDisablePlay($ticket)
@@ -329,6 +436,15 @@ private function processApusData($rawApus)
         $this->showApusModal = true;
     }
 
+    public function closeTicketModal()
+    {
+        $this->showTicketModal = false;
+        $this->showApusModal = false;
+        $this->selectedTicket = null;
+        $this->play = null;
+    }
+
+
 
 
 
@@ -366,5 +482,25 @@ private function processApusData($rawApus)
             'totalPorPagina' => $totalPorPagina,
             'totalGlobal' => $totalGlobal
         ]);
+    }
+
+    /**
+     * Formatea los códigos de lotería para mostrar solo las primeras letras + hora
+     * Ejemplo: NAC2100 -> NAC21, CHA2100 -> CHA21
+     */
+    private function formatLotteryCodesForDisplay(array $codes): array
+    {
+        return array_map(function($code) {
+            // Si el código tiene 4 dígitos al final (ej: NAC2100), quitar los últimos 2
+            if (preg_match('/^([A-Za-z]+)(\d{4})$/', $code, $matches)) {
+                $letters = $matches[1];
+                $time = $matches[2];
+                // Quitar los últimos 2 dígitos del tiempo
+                $shortTime = substr($time, 0, 2);
+                return $letters . $shortTime;
+            }
+            // Si no coincide el patrón, devolver el código original
+            return $code;
+        }, $codes);
     }
 }

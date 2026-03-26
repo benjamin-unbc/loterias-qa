@@ -1,6 +1,6 @@
 <div class="bg-[#1b1f22] w-full h-full min-h-screen p-4 flex flex-col gap-3">
     <div class="flex items-center gap-3 pb-3">
-        <a href="{{ route('clients.show') }}" class="bg-gray-600 shadow-lg hover:bg-gray-700 duration-75 transition-all ease-in-out text-white hover:text-gray-300 rounded-full px-2 py-1"><i class="fa-solid fa-arrow-left"></i></a>
+        <a href="{{ route('clients.show') }}" class="bg-gray-600 shadow-lg hover:bg-gray-700 duration-75 transition-all ease-in-out text-white hover:text-gray-300 rounded-full px-3 py-1">Volver</a>
         <h2 class="font-semibold text-xl text-white leading-tight">
             {{ $action === 'edit' ? 'Editar cliente' : 'Agregar nuevo cliente' }}
         </h2>
@@ -134,6 +134,18 @@
                 @if($action === 'edit')
                 <p class="mt-1 text-sm text-gray-400">Dejar vacío para mantener la contraseña actual</p>
                 @endif
+            </div>
+            <div class="">
+                <x-label for="commission_percentage" value="{{ __('Porcentaje Comisión Diaria (%)') }}" />
+                <x-input id="commission_percentage" type="number" step="0.01" class="mt-1 block w-full" wire:model.live="commission_percentage" placeholder="20.00" required />
+                <x-input-error for="commission_percentage" class="mt-2" />
+                <p class="mt-1 text-sm text-gray-400">Porcentaje de comisión diaria que se aplicará a las apuestas del cliente</p>
+            </div>
+            <div class="">
+                <x-label for="weekly_commission_percentage" value="{{ __('Porcentaje Comisión Semanal (%)') }}" />
+                <x-input id="weekly_commission_percentage" type="number" step="0.01" min="0" max="100" class="mt-1 block w-full" wire:model.live="weekly_commission_percentage" placeholder="30.00" required />
+                <x-input-error for="weekly_commission_percentage" class="mt-2" />
+                <p class="mt-1 text-sm text-gray-400">Porcentaje de comisión semanal que se aplicará solo los sábados. Debe ser positivo (≥ 0)</p>
             </div>
             <div>
                 <x-label for="is_active" value="{{ __('Estado') }}" />

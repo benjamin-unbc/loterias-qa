@@ -12,12 +12,41 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        $schedule->command('playssent:update-status')->everyMinute();
-        $schedule->command('fetch:plays-sent')->everyMinute();
+        // Solo durante horarios de lotería (10:00-23:59)
+        // ✅ OPTIMIZADO: Ejecutar en segundo plano para no bloquear peticiones HTTP
+        $schedule->command('playssent:update-status')
+                 ->everyMinute()
+                 ->between('10:00', '23:59')
+                 ->withoutOverlapping()
+                 ->runInBackground();
+                 
+        // ✅ OPTIMIZADO: Ejecutar en segundo plano y reducir frecuencia a cada 2 minutos
+        // El procesamiento de resultados no necesita ejecutarse cada minuto
+        $schedule->command('fetch:plays-sent')
+                 ->everyTwoMinutes()
+                 ->between('10:00', '23:59')
+                 ->withoutOverlapping()
+                 ->runInBackground();
         
-        // Actualización automática de números ganadores cada 30 segundos (24/7)
+        // Actualización automática cada 5 minutos (optimizado para mejor rendimiento)
         $schedule->command('lottery:auto-update')
-                 ->everyThirtySeconds()
+                 ->everyFiveMinutes()
+                 ->between('10:00', '23:59')
+                 ->withoutOverlapping()
+                 ->runInBackground();
+                 
+        // Sistema de pagos cada 5 minutos
+        // ✅ OPTIMIZADO: Ejecutar en segundo plano
+        $schedule->command('lottery:auto-payment')
+                 ->everyFiveMinutes()
+                 ->between('10:00', '23:59')
+                 ->withoutOverlapping()
+                 ->runInBackground();
+                 
+        // ✅ NUEVO: Extracción automática de números cada hora con validación
+        $schedule->command('lottery:auto-extract')
+                 ->hourly()
+                 ->between('10:00', '23:59')
                  ->withoutOverlapping()
                  ->runInBackground();
     }

@@ -69,9 +69,6 @@
                         <th scope="col" class="px-6 py-3">Lot</th>
                         <th scope="col" class="px-6 py-3">Pago</th>
                         <th scope="col" class="px-6 py-3">Importe</th>
-                        @if(!Auth::user()->hasRole('Cliente'))
-                            <th scope="col" class="px-6 py-3 text-center">ID Usuario</th>
-                        @endif
                         <th scope="col" class="px-6 py-3 text-center">Acciones</th>
                     </tr>
                 </thead>
@@ -103,17 +100,11 @@
                                     ${{ number_format($playItem->amount ?? 0, 2, ',', '.') }}
                                 @endif
                             </td>
-                            @if(!Auth::user()->hasRole('Cliente'))
-                                <td class="px-6 py-4 {{ $playItem->status === 'I' ? 'line-through' : ''}} text-center">
-                                    <span class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-                                        {{ $playItem->user_id }}
-                                    </span>
-                                </td>
-                            @endif
                             <td class="px-2 py-4 flex gap-1 items-center justify-center">
-                                <button wire:click='viewApus("{{ $playItem->ticket }}")'
+                                <button wire:click='viewTicket("{{ $playItem->ticket }}")'
                                         class="font-medium text-center text-yellow-200 bg-gray-700 p-1 px-2 rounded-md
-                                               hover:underline hover:bg-gray-700/50 duration-200">
+                                               hover:underline hover:bg-gray-700/50 duration-200"
+                                        title="Ver ticket">
                                     <i class="fa-solid fa-rug rotate-90"></i>
                                 </button>
 
@@ -128,7 +119,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ Auth::user()->hasRole('Cliente') ? '8' : '9' }}" class="px-6 py-4 text-center text-gray-500">
+                            <td colspan="8" class="px-6 py-4 text-center text-gray-500">
                                 No hay jugadas enviadas
                             </td>
                         </tr>
@@ -162,17 +153,15 @@
                         </x-confirmation-modal>
                     @endif
 
-                    @if($showApusModal && $play)
-                        <x-ticket-modal wire:model="showApusModal" overlayClasses="bg-gray-500 bg-opacity-25">
+                    @if($showTicketModal && $selectedTicket)
+                        <x-ticket-modal wire:model="showTicketModal" overlayClasses="bg-gray-500 bg-opacity-25">
                             <x-slot name="title">
                                 Información del Ticket
-                                <button onclick="cerrarModal()" id="buttonCancel"
-                                        class="bg-red-500 text-white px-4 py-1 text-sm rounded-md no-print">
+                                <button wire:click="closeTicketModal" class="bg-red-500 text-white px-4 py-1 text-sm rounded-md no-print">
                                     Cerrar
                                 </button>
                             </x-slot>
 
-                            
                             <x-slot name="content">
                                 <div class="flex items-center justify-between gap-2 no-print z-10 mt-3" id="buttonsContainer">
                                     <a href="/"
@@ -180,26 +169,26 @@
                                               items-center gap-2 hover:bg-teal-600/90 duration-200">
                                         <i class="fa-solid fa-rug rotate-90"></i> Nuevo ticket
                                     </a>
-    
+
                                     <button onclick="printTicket()"
                                             class="w-full text-sm px-3 py-1 bg-blue-500 text-white rounded-md
                                                    flex justify-center items-center gap-2 hover:bg-blue-600/90 duration-200">
                                         <i class="fas fa-print"></i> Imprimir
                                     </button>
-    
+
                                     <button onclick="guardarTicket()"
                                             class="w-full text-sm px-3 py-1 bg-green-500 text-white rounded-md
                                                    flex justify-center items-center gap-2 hover:bg-green-600/90 duration-200">
                                         <i class="fas fa-save"></i> Guardar
                                     </button>
-    
-                                    <button wire:click="shareTicket('{{ $play->ticket }}')" onclick="guardarTicket()"
+
+                                    <button wire:click="shareTicket('{{ $selectedTicket->ticket }}')" onclick="guardarTicket()"
                                             class="w-full text-sm px-3 py-1 bg-yellow-200 text-gray-600 rounded-md
                                                    flex justify-center items-center gap-2 hover:bg-yellow-200/85 duration-200">
                                         <i class="fas fa-share"></i> Compartir
                                     </button>
                                 </div>
-                                <div id="ticketContainer" data-code="{{ $play->code }}" data-ticket="{{ $play->ticket }}"
+                                <div id="ticketContainer" data-code="{{ $selectedTicket->code }}" data-ticket="{{ $selectedTicket->ticket }}"
                                      class="w-[80mm] mx-auto p-2 text-black bg-white relative">
                                     <div class="flex items-center justify-center mb-2">
                                         @if(Auth::user()->hasRole('Cliente') && Auth::user()->profile_photo_path)
@@ -217,33 +206,109 @@
                                         @endif
                                     </div>
 
-                                    {{-- <h3 class="text-center font-bold text-lg">
-                                        REIMPRESIÓN
-                                    </h3> --}}
-
                                     <div class="flex justify-between border-b border-gray-400 py-1 text-lg">
-                                        <span>Vendedor: <strong>{{ $play->user_id }}</strong></span>
-                                        <span>Ticket: <strong>{{ $play->ticket }}</strong></span>
+                                        <span>Vendedor: <strong>{{ $selectedTicket->user_id }}</strong></span>
+                                        <span>Ticket: <strong>{{ $selectedTicket->ticket }}</strong></span>
                                     </div><br>
 
-                                    <div class="flex justify-between text-lg py-1"style="border-bottom: 3px solid black;">
+                                    <div class="flex justify-between text-lg py-1" style="border-bottom: 3px solid black;">
                                         <div>
                                             <p class="font-semibold">FECHA:</p>
-                                            <p class="font-semibold">{{ $play->date }}</p>
+                                            <p class="font-semibold">{{ $selectedTicket->date }}</p>
                                         </div>
                                         <div>
                                             <p class="font-semibold">HORA:</p>
-                                            <p class="font-semibold">{{ $play->time }}</p>
+                                            <p class="font-semibold">{{ $selectedTicket->time }}</p>
                                         </div>
                                     </div>
 
                                     <div class="space-y-6">
+                                        @php
+                                            // Replicar la lógica exacta del componente PlaysSent
+                                            $rawApus = $selectedTicket->apus->sortBy('original_play_id')->sortBy('id');
+                                            $groupedByPlayId = $rawApus->groupBy('original_play_id');
+                                            
+                                            // Mapeo de códigos del sistema a códigos cortos (igual que PlaysManager)
+                                            $systemToShortCodes = [
+                                                'NAC1015' => 'AB', 'CHA1015' => 'CH1', 'PRO1015' => 'QW', 'MZA1015' => 'M10', 'CTE1015' => '!',
+                                                'ER' => 'SFE1015', 'SD' => 'COR1015', 'RT' => 'RIO1015', 'Q' => 'NAC1200', 'CH2' => 'CHA1200',
+                                                'W' => 'PRO1200', 'M1' => 'MZA1200', 'M' => 'CTE1200', 'R' => 'SFE1200', 'T' => 'COR1200',
+                                                'K' => 'RIO1200', 'A' => 'NAC1500', 'CH3' => 'CHA1500', 'E' => 'PRO1500', 'M2' => 'MZA1500',
+                                                'Ct3' => 'CTE1500', 'D' => 'SFE1500', 'L' => 'COR1500', 'J' => 'RIO1500', 'S' => 'ORO1800',
+                                                'F' => 'NAC1800', 'CH4' => 'CHA1800', 'B' => 'PRO1800', 'M3' => 'MZA1800', 'Z' => 'CTE1800',
+                                                'V' => 'SFE1800', 'H' => 'COR1800', 'U' => 'RIO1800', 'N' => 'NAC2100', 'CH5' => 'CHA2100',
+                                                'P' => 'PRO2100', 'M4' => 'MZA2100', 'G' => 'CTE2100', 'I' => 'SFE2100', 'C' => 'COR2100',
+                                                'Y' => 'RIO2100', 'O' => 'ORO2100',
+                                                // Nuevos códigos para las loterías adicionales
+                                                'NQN1015' => 'NQ1', 'MIS1030' => 'MI1', 'Rio1015' => 'RN1', 'Tucu1130' => 'TU1', 'San1015' => 'SG1',
+                                                'NQN1200' => 'NQ2', 'MIS1215' => 'MI2', 'JUJ1200' => 'JU1', 'Salt1130' => 'SA1', 'Rio1200' => 'RN2',
+                                                'Tucu1430' => 'TU2', 'San1200' => 'SG2', 'NQN1500' => 'NQ3', 'MIS1500' => 'MI3', 'JUJ1500' => 'JU2',
+                                                'Salt1400' => 'SA2', 'Rio1500' => 'RN3', 'Tucu1730' => 'TU3', 'San1500' => 'SG3', 'NQN1800' => 'NQ4',
+                                                'MIS1800' => 'MI4', 'JUJ1800' => 'JU3', 'Salt1730' => 'SA3', 'Rio1800' => 'RN4', 'Tucu1930' => 'TU4',
+                                                'San1945' => 'SG4', 'NQN2100' => 'NQ5', 'JUJ2100' => 'JU4', 'Rio2100' => 'RN5', 'Salt2100' => 'SA4',
+                                                'Tucu2200' => 'TU5', 'MIS2115' => 'MI5', 'San2200' => 'SG5'
+                                            ];
+                                            
+                                            $processedGroups = $groupedByPlayId->map(function ($groupOfApusFromSameOriginalPlay) use ($systemToShortCodes) {
+                                                $representativeApu = $groupOfApusFromSameOriginalPlay->first();
+                                                
+                                                $lotteryCodes = $groupOfApusFromSameOriginalPlay
+                                                    ->pluck('lottery')
+                                                    ->filter()
+                                                    ->unique()
+                                                    ->values()
+                                                    ->toArray();
+                                                
+                                                $displayCodes = [];
+                                                foreach ($lotteryCodes as $code) {
+                                                    $code = trim($code);
+                                                    if (preg_match_all('/[A-Za-z]+\d{4}/', $code, $matches)) {
+                                                        foreach ($matches[0] as $validCode) {
+                                                            $displayCodes[] = $validCode;
+                                                        }
+                                                    } elseif (preg_match('/^[A-Za-z]+\d{4}$/', $code)) {
+                                                        $displayCodes[] = $code;
+                                                    }
+                                                }
+                                                
+                                                $uniqueDisplayCodes = array_unique($displayCodes);
+                                                $codesDisplayString = implode(', ', $uniqueDisplayCodes);
+                                                
+                                                return [
+                                                    'codes_display_string' => $codesDisplayString,
+                                                    'numbers' => [[
+                                                        'number' => $representativeApu->number,
+                                                        'pos' => $representativeApu->position,
+                                                        'imp' => $representativeApu->import,
+                                                        'numR' => $representativeApu->numberR,
+                                                        'posR' => $representativeApu->positionR,
+                                                    ]],
+                                                ];
+                                            });
+                                            
+                                            $groups = $processedGroups
+                                                ->groupBy('codes_display_string')
+                                                ->map(function ($items, $key) {
+                                                    return [
+                                                        'codes_display' => array_map(function($code) {
+                                                            if (preg_match('/^([A-Za-z]+)(\d{4})$/', $code, $matches)) {
+                                                                $letters = $matches[1];
+                                                                $time = $matches[2];
+                                                                $shortTime = substr($time, 0, 2);
+                                                                return $letters . $shortTime;
+                                                            }
+                                                            return $code;
+                                                        }, explode(', ', $key)),
+                                                        'numbers' => collect($items->pluck('numbers')->flatten(1)->all())->values()->all(),
+                                                    ];
+                                                })
+                                                ->values();
+                                        @endphp
 
                                         @foreach($groups as $block)
                                             {{-- Encabezado de loterías --}}
-                                             <div class="grid grid-cols-6 gap-2 text-sm font-bold text-black py-1" style="border-bottom: 3px solid black;">                                                @foreach($block['codes_display'] as $lot)
-                                                    <div class="text-center">{{ $lot }}</div>
-                                                @endforeach
+                                             <div class="text-left text-black font-bold py-1" style="border-bottom: 3px solid black;">
+                                                {{ implode(' ', $block['codes_display']) }}
                                             </div>
 
                                             {{-- Lista de números --}}
@@ -269,13 +334,13 @@
                                             <h4 class="text-lg">
                                                 TOTAL:
                                                 <span class="font-extrabold">
-                                                    ${{ number_format($totalImport, 2, ',', '.') }}
+                                                    ${{ number_format($selectedTicket->amount ?? 0, 2, ',', '.') }}
                                                 </span>
                                             </h4>
                                         </div>
                                         <div class="flex justify-end">
                                             <p class="text-sm text-gray-500">
-                                                {{ $play->code }}
+                                                {{ $selectedTicket->code }}
                                             </p>
                                         </div>
                                     </div>
@@ -304,10 +369,6 @@
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script>
-    // Función simple para cerrar el modal
-    function cerrarModal() {
-        window.location.reload();
-    }
 
     function printTicket() {
         html2canvas(document.getElementById('ticketContainer'), { scale: 2 }).then(canvas => {
@@ -395,7 +456,119 @@
     });
     </script>
 
+    @push('scripts')
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        // Función para mostrar la alerta de cancelación
+        function showCancelAlert(data) {
+            const message = data?.message || 'La jugada contiene loterías que ya comenzaron. No se puede anular el ticket.';
+            const horario = data?.horario || '';
+            
+            Swal.fire({
+                icon: 'warning',
+                title: 'No se puede anular la jugada',
+                html: `
+                    <p style="color: #ffffff; font-size: 16px; margin-bottom: 10px;">
+                        ${message}
+                    </p>
+                    ${horario ? `<p style="color: #f59e0b; font-size: 14px; font-weight: bold;">
+                        Primer horario: ${horario}
+                    </p>` : ''}
+                    <p style="color: #9ca3af; font-size: 14px; margin-top: 10px;">
+                        Una vez que comienza el primer horario de lotería del ticket, no se puede anular, incluso si hay otras loterías pendientes.
+                    </p>
+                `,
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#f59e0b',
+                background: '#1b1f22',
+                color: '#ffffff',
+                iconColor: '#f59e0b',
+                customClass: {
+                    popup: 'swal-custom-popup',
+                    title: 'swal-custom-title',
+                    htmlContainer: 'swal-custom-content'
+                },
+                buttonsStyling: true,
+                allowOutsideClick: true,
+                allowEscapeKey: true
+            });
+        }
+
+        // Esperar a que Livewire esté completamente cargado
+        document.addEventListener('livewire:init', function() {
+            // Listener para mostrar alerta cuando no se puede anular el ticket
+            Livewire.on('show-cancel-alert', (data) => {
+                showCancelAlert(data);
+            });
+        });
+
+        // Fallback si Livewire ya está cargado
+        if (typeof Livewire !== 'undefined') {
+            Livewire.on('show-cancel-alert', (data) => {
+                showCancelAlert(data);
+            });
+        }
+    </script>
+    @endpush
+
     <style>
+    /* Estilos personalizados para SweetAlert */
+    .swal-custom-popup {
+        background-color: #1b1f22 !important;
+        border: 2px solid #f59e0b !important;
+        border-radius: 12px !important;
+        box-shadow: 0 10px 40px rgba(245, 158, 11, 0.3) !important;
+    }
+
+    .swal-custom-title {
+        color: #ffffff !important;
+        font-size: 24px !important;
+        font-weight: bold !important;
+        margin-bottom: 20px !important;
+    }
+
+    .swal-custom-content {
+        color: #ffffff !important;
+        font-size: 16px !important;
+    }
+
+    .swal2-popup {
+        background: #1b1f22 !important;
+    }
+
+    .swal2-title {
+        color: #ffffff !important;
+    }
+
+    .swal2-html-container {
+        color: #ffffff !important;
+    }
+
+    .swal2-confirm {
+        background-color: #f59e0b !important;
+        border: none !important;
+        border-radius: 8px !important;
+        padding: 12px 30px !important;
+        font-size: 16px !important;
+        font-weight: 600 !important;
+        transition: all 0.3s ease !important;
+    }
+
+    .swal2-confirm:hover {
+        background-color: #d97706 !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4) !important;
+    }
+
+    .swal2-icon.swal2-warning {
+        border-color: #f59e0b !important;
+        color: #f59e0b !important;
+    }
+
+    .swal2-icon.swal2-warning .swal2-icon-content {
+        color: #f59e0b !important;
+    }
+
     @media print {
         .pagina-carta, .pagina-carta * {
             visibility: visible !important;

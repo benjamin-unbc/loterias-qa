@@ -153,14 +153,26 @@ document.addEventListener('DOMContentLoaded', function() {
         startAutoRefresh();
     }
     
-    // Escuchar cambios en el estado de auto-refresh
-    Livewire.on('autoRefreshToggled', function() {
-        if (@this.autoRefresh) {
-            startAutoRefresh();
-        } else {
-            stopAutoRefresh();
+    // Esperar a que Livewire esté completamente cargado
+    function initLivewireEvents() {
+        if (typeof window.Livewire === 'undefined') {
+            setTimeout(initLivewireEvents, 100);
+            return;
         }
-    });
+        
+        // Escuchar cambios en el estado de auto-refresh
+        Livewire.on('autoRefreshToggled', function() {
+            if (@this.autoRefresh) {
+                startAutoRefresh();
+            } else {
+                stopAutoRefresh();
+            }
+        });
+    }
+    
+    // Inicializar cuando Livewire esté listo
+    document.addEventListener('livewire:init', initLivewireEvents);
+    setTimeout(initLivewireEvents, 500);
     
     // Actualizar cada 5 minutos para verificar cambios
     setInterval(function() {

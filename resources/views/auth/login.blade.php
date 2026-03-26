@@ -12,6 +12,12 @@
                 {{ session('status') }}
             </div>
         @endif
+
+        @if (session('error'))
+            <div class="mb-4 font-medium text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3">
+                {{ session('error') }}
+            </div>
+        @endif
         <form method="POST" action="{{ route('login') }}">
             @csrf
 

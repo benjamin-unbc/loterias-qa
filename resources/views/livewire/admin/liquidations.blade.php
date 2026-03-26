@@ -84,7 +84,7 @@
                     </div>
                 </div>
 
-                <div id="liquidationContainer" class="w-[80mm] mx-auto p-2 text-black bg-white relative">
+                <div id="liquidationContainer" class="w-[90mm] mx-auto p-2 text-black bg-white relative">
                     <!-- <img src="{{ asset('assets/images/logo.png') }}" class="w-full opacity-[0.02] absolute top-0 left-0 pointer-events-none" /> -->
 
                     <div class="relative z-10">
@@ -107,27 +107,24 @@
                         <div class="container text-sm mt-2">
                             <div class="flex flex-col items-center w-full">
                                 <div class="grid grid-cols-6 font-bold w-full justify-around">
-                                    <div class="text-start">LOT</div>
-                                    <div class="text-center">NUM</div>
-                                    <div class="text-center">UBI</div>
-                                    <div class="text-center">APO</div>
-                                    <div class="text-end">GANO</div>
+                                    <div class="text-start pl-4">LOT</div>
+                                    <div class="text-center px-4">NUM</div>
+                                    <div class="text-center px-4">UBI</div>
+                                    <div class="text-center px-4">APO</div>
+                                    <div class="text-end pr-4">GANO</div>
                                 </div>
                                 <div class="w-full pb-2 border-b">
                                     @forelse ($results as $result)
                                         <div class="grid grid-cols-6 w-full justify-around text-sm">
-                                            <div class="text-start text-nowrap">
+                                            <div class="text-start text-nowrap pl-4">
                                                 {{ collect(explode(',', $result->lottery))->last() }}
-                                                <span class="font-medium">
-                                                    {{ substr($result->time, 0, 2) }}
-                                                </span>
                                             </div>
-                                            <div class="text-center text-nowrap">{{ $result->number }}</div>
-                                            <div class="text-center text-nowrap">{{ $result->position }}</div>
-                                            <div class="text-center text-nowrap">
+                                            <div class="text-center text-nowrap px-4">{{ $result->number }}</div>
+                                            <div class="text-center text-nowrap px-4">{{ $result->position }}</div>
+                                            <div class="text-center text-nowrap px-4">
                                                 {{ number_format($result->import) }}
                                             </div>
-                                            <div class="text-end text-nowrap">
+                                            <div class="text-end text-nowrap pr-4">
                                                 {{ number_format($result->aciert) }}
                                             </div>
                                         </div>
@@ -163,15 +160,11 @@
 
                                 <div class="flex flex-col pt-3 gap-1 border-b pb-2 w-full text-sm">
                                     <div class="flex justify-between">
-                                        <h4 class="font-medium">JUGADAS:</h4>
-                                        <p>{{ number_format($totalApus, 2) }}</p>
-                                    </div>
-                                    <div class="flex justify-between">
                                         <h4 class="font-medium">TOTAL PASE:</h4>
                                         <p>{{ number_format($totalApus, 2) }}</p>
                                     </div>
                                     <div class="flex justify-between">
-                                        <h4 class="font-medium">COMIS. J. 20%:</h4>
+                                        <h4 class="font-medium">COMIS. J. {{ auth()->user()->hasAnyRole(['Administrador']) ? '20%' : (auth()->user()->associatedClient->commission_percentage ?? 20.00) }}%:</h4>
                                         <p>{{ number_format($comision, 2) }}</p>
                                     </div>
                                     <div class="flex justify-between">
@@ -182,37 +175,63 @@
 
                                 <div class="flex flex-col pt-3 gap-1 border-b pb-2 w-full text-sm">
                                     <div class="flex justify-between">
-                                        <h4 class="font-medium">DEJA PASE:</h4>
+                                        @if($totalGanaPase < 0)
+                                            <h4 class="font-medium">USTED COBRA:</h4>
+                                        @else
+                                            <h4 class="font-medium">TOTAL DEJA:</h4>
+                                        @endif
                                         <p>{{ number_format($totalGanaPase, 2) }}</p>
                                     </div>
-                                    <div class="flex justify-between">
-                                        <h4 class="font-medium">TOTAL DEJA:</h4>
-                                        <p>{{ number_format($totalGanaPase, 2) }}</p>
-                                    </div>
-                                </div>
-
-                                <div class="flex flex-col pt-3 gap-1 border-b pb-2 w-full text-sm">
-                                    <div class="flex justify-between">
-                                        <h4 class="font-medium">GENER. DEJA:</h4>
-                                        <p>{{ number_format($totalGanaPase, 2) }}</p>
-                                    </div>
+                                    @if(($udDio ?? 0) > 0)
+                                        <div class="flex justify-between">
+                                            <h4 class="font-medium">Usted dio:</h4>
+                                            <p>{{ number_format($udDio, 2) }}</p>
+                                        </div>
+                                        @if(isset($paymentDateDio) && $paymentDateDio)
+                                            <div class="text-xs text-gray-500 italic pl-2 -mt-1">
+                                                Fecha del pago: {{ $paymentDateDio }}
+                                            </div>
+                                        @endif
+                                        @if(isset($anteriBeforePayment) && $anteriBeforePayment > 0)
+                                            <div class="text-xs text-gray-500 italic pl-2 -mt-1">
+                                                {{ number_format($anteriBeforePayment, 2) }} - {{ number_format($udDio, 2) }} = {{ number_format($anteri, 2) }}
+                                            </div>
+                                        @endif
+                                    @endif
                                     <div class="flex justify-between">
                                         <h4 class="font-medium">ANTERI:</h4>
                                         <p>{{ number_format($anteri, 2) }}</p>
                                     </div>
-                                    @if(\Carbon\Carbon::parse($date)->isSaturday())
+                                    @if(($udRecibePayment ?? 0) > 0)
                                         <div class="flex justify-between">
-                                            <h4 class="font-medium">COMI DEJA SEM:</h4>
-                                            <p>{{ number_format($comi_deja_sem, 2) }}</p>
+                                            <h4 class="font-medium">UD.RECIBE:</h4>
+                                            <p>{{ number_format($udRecibePayment, 2) }}</p>
                                         </div>
+                                        @if(isset($paymentDateRecibe) && $paymentDateRecibe)
+                                            <div class="text-xs text-gray-500 italic pl-2 -mt-1">
+                                                La fecha de ingreso fue: {{ $paymentDateRecibe }}. Se verá reflejado en la liquidación del día siguiente.
+                                            </div>
+                                        @endif
                                     @endif
                                     <div class="flex justify-between">
                                         <h4 class="font-medium">UD DEJA:</h4>
-                                        <p>{{ number_format($udDeja, 2) }}</p>
+                                        <p>{{ number_format($udDeja ?? 0, 2) }}</p>
                                     </div>
+                                    @if(\Carbon\Carbon::parse($date)->isSaturday())
+                                        <div class="flex justify-between">
+                                            <h4 class="font-medium">COMI DEJA SEM:</h4>
+                                            <p>{{ number_format($comi_deja_sem ?? 0, 2) }}</p>
+                                        </div>
+                                    @endif
                                 </div>
 
                                 <div class="flex flex-col pt-3 gap-1 w-full text-sm">
+                                    @if(\Carbon\Carbon::parse($date)->isSaturday())
+                                        <div class="flex justify-between">
+                                            <h4 class="font-medium">USTED DEBE SEM:</h4>
+                                            <p>{{ number_format($usted_debe_sem ?? 0, 2) }}</p>
+                                        </div>
+                                    @endif
                                     <div class="flex justify-between">
                                         <h4 class="font-medium">ARRASTRE:</h4>
                                         <p>{{ number_format($arrastre, 2) }}</p>
@@ -225,88 +244,88 @@
             </div>
         @endif
     </div>
-</div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
-<script>
-window.addEventListener('printLiquidation', () => {
-    printLiquidation();
-});
-
-window.addEventListener('downloadLiquidation', () => {
-    guardarLiquidacion();
-});
-
-function printLiquidation() {
-    const container = document.getElementById('liquidationContainer');
-    if (!container) return;
-
-    html2canvas(container, { scale: 2 }).then(canvas => {
-        const imgData = canvas.toDataURL('image/png');
-        let iframe = document.createElement('iframe');
-        iframe.style.position = "fixed";
-        iframe.style.right = "0";
-        iframe.style.bottom = "0";
-        iframe.style.width = "0";
-        iframe.style.height = "0";
-        iframe.style.border = "0";
-        document.body.appendChild(iframe);
-        
-        const doc = iframe.contentWindow.document;
-        doc.open();
-        doc.write(`
-          <html>
-            <head>
-              <title>Imprimir Liquidación</title>
-              <style>
-                @page { size: Letter; margin: 0mm; }
-                html, body { margin: 0; padding: 0; }
-                body { background: #fff; }
-                img { width: 100%; height: auto; }
-              </style>
-            </head>
-            <body>
-              <img src="${imgData}" alt="Liquidación" onload="window.focus(); window.print();">
-            </body>
-          </html>
-        `);
-        doc.close();
-        setTimeout(() => {
-            document.body.removeChild(iframe);
-        }, 1000);
+    <script>
+    window.addEventListener('printLiquidation', () => {
+        printLiquidation();
     });
-}
 
-async function guardarLiquidacion() {
-    const container = document.getElementById('liquidationContainer');
-    if (!container) return;
+    window.addEventListener('downloadLiquidation', () => {
+        guardarLiquidacion();
+    });
 
-    const canvas = await html2canvas(container, { scale: 2 });
-    const imgData = canvas.toDataURL("image/png");
+    function printLiquidation() {
+        const container = document.getElementById('liquidationContainer');
+        if (!container) return;
 
-    const link = document.createElement('a');
-    link.href = imgData;
-    link.download = "liquidacion-{{ $date ?? 'sin-fecha' }}.png";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-</script>
-
-<style>
-@media print {
-    @page {
-        size: letter;
-        margin: 0;
+        html2canvas(container, { scale: 2 }).then(canvas => {
+            const imgData = canvas.toDataURL('image/png');
+            let iframe = document.createElement('iframe');
+            iframe.style.position = "fixed";
+            iframe.style.right = "0";
+            iframe.style.bottom = "0";
+            iframe.style.width = "0";
+            iframe.style.height = "0";
+            iframe.style.border = "0";
+            document.body.appendChild(iframe);
+            
+            const doc = iframe.contentWindow.document;
+            doc.open();
+            doc.write(`
+              <html>
+                <head>
+                  <title>Imprimir Liquidación</title>
+                  <style>
+                    @page { size: Letter; margin: 0mm; }
+                    html, body { margin: 0; padding: 0; }
+                    body { background: #fff; }
+                    img { width: 100%; height: auto; }
+                  </style>
+                </head>
+                <body>
+                  <img src="${imgData}" alt="Liquidación" onload="window.focus(); window.print();">
+                </body>
+              </html>
+            `);
+            doc.close();
+            setTimeout(() => {
+                document.body.removeChild(iframe);
+            }, 1000);
+        });
     }
-    html, body {
-        margin: 0;
-        padding: 0;
-        width: 100%;
-        height: 100%;
-        -webkit-print-color-adjust: exact;
-        overflow: hidden;
+
+    async function guardarLiquidacion() {
+        const container = document.getElementById('liquidationContainer');
+        if (!container) return;
+
+        const canvas = await html2canvas(container, { scale: 2 });
+        const imgData = canvas.toDataURL("image/png");
+
+        const link = document.createElement('a');
+        link.href = imgData;
+        link.download = "liquidacion-{{ $date ?? 'sin-fecha' }}.png";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     }
-}
-</style>
+    </script>
+
+    <style>
+    @media print {
+        @page {
+            size: letter;
+            margin: 0;
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            -webkit-print-color-adjust: exact;
+            overflow: hidden;
+        }
+    }
+    </style>
+</div>

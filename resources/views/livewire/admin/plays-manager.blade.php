@@ -1,6 +1,6 @@
 <div>
-    <div class=" bg-[#1b1f22] w-full h-screen max-h-screen p-3 md:p-4 flex flex-col justify-between gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div class="flex flex-col gap-3 rounded-lg item text-sm sm:w-full w-full lg:w-3/6  max-w-4xl">
+    <div class=" bg-[#1b1f22] w-full h-screen max-h-screen p-3 md:p-4 flex flex-col justify-between gap-3 lg:flex-row lg:items-start lg:gap-4">
+        <div class="flex flex-col gap-3 rounded-lg item text-sm w-full lg:w-1/2">
 
             <div class="flex justify-between items-center gap-2 pb-2">
                 <h2 class="font-bold text-xl text-white">Gestor de jugada</h2>
@@ -39,70 +39,101 @@
                 </p>
             </div>
 
+
             <div class="flex flex-col gap-2 border-2 border-transparent rounded-lg duration-200 {{ $editingRowId ? 'bg-[#343f328f] p-3 border-white/20 border-dashed' : '' }}">
                 <div class="flex items-center justify-center">
                     <div id="lottery-selection-box"
-                        class="flex items-center justify-center border-2 border-transparent bg-[#22272b] {{ $editingRowId ? 'p-3 border-white/20 border-dashed' : '' }} rounded-lg p-2 md:p-3 w-full md:max-w-sm 2xl:max-w-md">
-                        <table class="w-full text-center rounded-lg text-xs sm:text-sm max-w-full overflow-x-auto">
-                            <thead>
-                                <tr class="text-[10px] md:text-xs">
-                                    <th class="md:ps-1 py-1 flex items-center gap-1 sm:gap-2">
-                                        <input type="checkbox" id="all"
-                                            class="w-5 h-5 2xl:w-6 2xl:h-6 bg-[#22272b] cursor-pointer border border-gray-300 rounded text-green-400 focus:ring-green-400"
-                                            wire:click="toggleAllCheckboxes($event.target.checked)"
-                                            aria-label="Seleccionar todos los horarios">
-                                        <label for="all"
-                                            class="font-medium select-none text-white text-[11px] sm:text-xs md:text-sm">Todos</label>
-                                    </th>
-                                    @foreach (['NAC', 'CHA', 'PRO', 'MZA', 'CTE', 'SFE', 'COR', 'RIO', 'ORO'] as $col)
-                                        <th class="text-[10px] sm:text-[10px] md:text-xs text-white">{{ $col }}
-                                        </th>
-                                    @endforeach
+                        class="flex items-center justify-center border-2 border-transparent bg-[#22272b] {{ $editingRowId ? 'p-3 border-white/20 border-dashed' : '' }} rounded-lg p-2 md:p-3 max-w-fit mx-auto">
+                        <div class="w-full overflow-x-auto">
+                            <table class="text-center rounded-lg text-xs">
+                        <thead>
+                            <tr class="text-[10px]">
+                                <th class="px-1 py-1 flex items-center gap-1">
+                                    <input type="checkbox" id="all"
+                                        class="w-5 h-5 bg-[#22272b] cursor-pointer border border-gray-300 rounded text-green-400 focus:ring-green-400"
+                                        wire:click="toggleAllCheckboxes($event.target.checked)"
+                                        aria-label="Seleccionar todos los horarios">
+                                    <label for="all"
+                                        class="font-medium select-none text-white text-xs">Todos</label>
+                                </th>
+                                    @if(isset($filteredLotteries) && !empty($filteredLotteries))
+                                        @foreach ($filteredLotteries as $lottery)
+                                            <th class="text-[10px] text-white px-1 py-1">{{ $lottery['abbreviation'] ?? $lottery['name'] }}
+                                            </th>
+                                        @endforeach
+                                    @endif
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($horariosConEstado as $horario)
+                                <tr data-time="{{ $horario['time'] }}">
+                                    <td
+                                        class="px-1 py-1 font-medium flex items-center gap-1">
+                                        <input type="checkbox" id="time-{{ $horario['time'] }}-all"
+                                            class="w-5 h-5 bg-[#22272b] rounded border border-gray-300 {{ $horario['checkboxClass'] }}"
+                                            {{ $horario['disabledAttr'] }}
+                                            wire:model="selected.{{ $horario['time'] }}"
+                                            wire:click="toggleRowCheckboxes('{{ $horario['time'] }}', $event.target.checked)"
+                                            aria-label="Seleccionar horario {{ $horario['time'] }}">
+                                        <label for="time-{{ $horario['time'] }}-all"
+                                            class="select-none text-xs text-white {{ $horario['textClass'] }}">
+                                            {{ $horario['time'] }}
+                                        </label>
+                                    </td>
+                                    @if(isset($lotteryGroups) && !empty($lotteryGroups))
+                                        @php
+                                            // Filtrar solo las ciudades que tienen al menos un horario seleccionado
+                                            $allLotteries = collect($lotteryGroups)->flatten(1)->unique('name');
+                                            
+                                            // Obtener configuración global de quinielas
+                                            $savedPreferences = \App\Models\GlobalQuinielasConfiguration::all()
+                                                ->keyBy('city_name')
+                                                ->map(function($config) {
+                                                    return $config->selected_schedules;
+                                                });
+                                            
+                                            // Filtrar loterías según las preferencias guardadas
+                                            $filteredLotteries = $allLotteries->filter(function($lottery) use ($savedPreferences) {
+                                                $selectedSchedules = $savedPreferences[$lottery['name']] ?? [];
+                                                return !empty($selectedSchedules);
+                                            });
+                                            
+                                            // Ordenar según el orden específico: NAC, CHA, PRO, MZA, CTE, SFE, COR, RIO, ORO
+                                            $desiredOrder = ['CIUDAD', 'CHACO', 'PROVINCIA', 'MENDOZA', 'CORRIENTES', 'SANTA FE', 'CORDOBA', 'ENTRE RIOS', 'MONTEVIDEO'];
+                                            $filteredLotteries = $filteredLotteries->sortBy(function($lottery) use ($desiredOrder) {
+                                                $pos = array_search($lottery['name'], $desiredOrder);
+                                                return $pos === false ? 999 : $pos;
+                                            });
+                                        @endphp
+                                        @foreach ($filteredLotteries as $lottery)
+                                            @php
+                                                // Verificar si esta lotería debe aparecer en este horario usando preferencias guardadas
+                                                $shouldShow = in_array($horario['time'], $savedPreferences[$lottery['name']] ?? []);
+                                                $lotteryInTime = collect($lotteryGroups[$horario['time']] ?? [])->firstWhere('name', $lottery['name']);
+                                                $colIndex = $lotteryInTime ? collect($lotteryGroups[$horario['time']])->search(function($item) use ($lottery) {
+                                                    return $item['name'] === $lottery['name'];
+                                                }) + 1 : null;
+                                            @endphp
+                                            <td class="px-1 py-1">
+                                                @if($shouldShow && $lotteryInTime && $colIndex)
+                                                    <input type="checkbox"
+                                                        id="time-{{ $horario['time'] }}-col-{{ $colIndex }}"
+                                                        class="w-5 h-5 bg-[#22272b] rounded border border-gray-300 {{ $horario['checkboxClass'] }}"
+                                                        {{ $horario['disabledAttr'] }}
+                                                        wire:model="selected.{{ $horario['time'] }}_col_{{ $colIndex }}"
+                                                        wire:click="toggleColumnCheckbox('{{ $horario['time'] }}', {{ $colIndex }}, $event.target.checked)"
+                                                        aria-label="Seleccionar opción {{ $horario['time'] }} - Columna {{ $colIndex }}">
+                                                @else
+                                                    <div class="w-5 h-5"></div>
+                                                @endif
+                                            </td>
+                                        @endforeach
+                                    @endif
                                 </tr>
-                            </thead>
-                            <tbody>
-                                @foreach ($horariosConEstado as $horario)
-                                    <tr data-time="{{ $horario['time'] }}" class="h-full">
-                                        <td
-                                            class="pt-[5px] pb-[4px] me-3 font-medium flex items-center h-full gap-1 sm:gap-2 md:p-1">
-                                            <input type="checkbox" id="time-{{ $horario['time'] }}-all"
-                                                class="w-5 h-5 2xl:w-6 2xl:h-6 bg-[#22272b] rounded border border-gray-300 {{ $horario['checkboxClass'] }}"
-                                                {{ $horario['disabledAttr'] }}
-                                                wire:model="selected.{{ $horario['time'] }}"
-                                                wire:click="toggleRowCheckboxes('{{ $horario['time'] }}', $event.target.checked)"
-                                                aria-label="Seleccionar horario {{ $horario['time'] }}">
-                                            <label for="time-{{ $horario['time'] }}-all"
-                                                class="select-none text-[11px] sm:text-xs md:text-sm text-white {{ $horario['textClass'] }}">
-                                                {{ $horario['time'] }}
-                                            </label>
-                                        </td>
-                                        @for ($col = 1; $col <= 8; $col++)
-                                            <td class="p-1">
-                                                <input type="checkbox"
-                                                    id="time-{{ $horario['time'] }}-col-{{ $col }}"
-                                                    class="w-5 h-5 2xl:w-6 2xl:h-6 bg-[#22272b] rounded border border-gray-300 {{ $horario['checkboxClass'] }}"
-                                                    {{ $horario['disabledAttr'] }}
-                                                    wire:model="selected.{{ $horario['time'] }}_col_{{ $col }}"
-                                                    wire:click="toggleColumnCheckbox('{{ $horario['time'] }}', {{ $col }}, $event.target.checked)"
-                                                    aria-label="Seleccionar opción {{ $horario['time'] }} - Columna {{ $col }}">
-                                            </td>
-                                        @endfor
-                                        @if (in_array($horario['time'], ['15:00', '21:00']))
-                                            <td class="p-1">
-                                                <input type="checkbox" id="time-{{ $horario['time'] }}-col-oro"
-                                                    class="w-5 h-5 2xl:w-6 2xl:h-6 bg-[#22272b] rounded border border-gray-300 {{ $horario['checkboxClass'] }}"
-                                                    {{ $horario['disabledAttr'] }}
-                                                    wire:model="selected.{{ $horario['time'] }}_oro"
-                                                    wire:click="toggleOroCheckbox('{{ $horario['time'] }}', $event.target.checked)"
-                                                    aria-label="Seleccionar opción ORO para {{ $horario['time'] }}">
-                                            </td>
-                                        @else
-                                            <td class="p-1 sm:p-2"></td>
-                                        @endif
-                                    </tr>
-                                @endforeach
-                            </tbody>
+                            @endforeach
+                        </tbody>
                         </table>
+                        </div>
                     </div>
                 </div>
 
@@ -112,7 +143,34 @@
                         <p class="text-gray-400 text-sm">
                             @if (count($checkboxCodes) > 0)
                                 Loterías:
-                                @foreach ($checkboxCodes as $code)
+                                @php
+                                    // Convertir códigos del sistema a códigos cortos
+                                    $systemToShortCodes = [
+                                        'NAC1015' => 'AB', 'CHA1015' => 'CH1', 'PRO1015' => 'QW', 'MZA1015' => 'M10', 'CTE1015' => '!',
+                                        'SFE1015' => 'ER', 'COR1015' => 'SD', 'RIO1015' => 'RT', 'NAC1200' => 'Q', 'CHA1200' => 'CH2',
+                                        'PRO1200' => 'W', 'MZA1200' => 'M1', 'CTE1200' => 'M', 'SFE1200' => 'R', 'COR1200' => 'T',
+                                        'RIO1200' => 'K', 'NAC1500' => 'A', 'CHA1500' => 'CH3', 'PRO1500' => 'E', 'MZA1500' => 'M2',
+                                        'CTE1500' => 'Ct3', 'SFE1500' => 'D', 'COR1500' => 'L', 'RIO1500' => 'J', 'ORO1500' => 'S',
+                                        'NAC1800' => 'F', 'CHA1800' => 'CH4', 'PRO1800' => 'B', 'MZA1800' => 'M3', 'CTE1800' => 'Z',
+                                        'SFE1800' => 'V', 'COR1800' => 'H', 'RIO1800' => 'U', 'NAC2100' => 'N', 'CHA2100' => 'CH5',
+                                        'PRO2100' => 'P', 'MZA2100' => 'M4', 'CTE2100' => 'G', 'SFE2100' => 'I', 'COR2100' => 'C',
+                                        'RIO2100' => 'Y', 'ORO2100' => 'O',
+                                        // Nuevos códigos cortos para las loterías adicionales
+                                        'NQN1015' => 'NQ1', 'MIS1030' => 'MI1', 'Rio1015' => 'RN1', 'Tucu1130' => 'TU1', 'San1015' => 'SG1',
+                                        'NQN1200' => 'NQ2', 'MIS1215' => 'MI2', 'JUJ1200' => 'JU1', 'Salt1130' => 'SA1', 'Rio1200' => 'RN2',
+                                        'Tucu1430' => 'TU2', 'San1200' => 'SG2', 'NQN1500' => 'NQ3', 'MIS1500' => 'MI3', 'JUJ1500' => 'JU2',
+                                        'Salt1400' => 'SA2', 'Rio1500' => 'RN3', 'Tucu1730' => 'TU3', 'San1500' => 'SG3', 'NQN1800' => 'NQ4',
+                                        'MIS1800' => 'MI4', 'JUJ1800' => 'JU3', 'Salt1730' => 'SA3', 'Rio1800' => 'RN4', 'Tucu1930' => 'TU4',
+                                        'San1945' => 'SG4', 'NQN2100' => 'NQ5', 'JUJ2100' => 'JU4', 'Rio2100' => 'RN5', 'Salt2100' => 'SA4',
+                                        'Tucu2200' => 'TU5', 'MIS2115' => 'MI5', 'San2200' => 'SG5'
+                                    ];
+                                    $shortCodes = [];
+                                    foreach ($checkboxCodes as $code) {
+                                        $shortCode = $systemToShortCodes[$code] ?? $code;
+                                        $shortCodes[] = $shortCode;
+                                    }
+                                @endphp
+                                @foreach ($shortCodes as $code)
                                     <span class="text-white font-bold">{{ $code }}</span>
                                 @endforeach
                             @else
@@ -166,12 +224,12 @@
                     <div class="flex justify-between gap-2">
                         <div class="w-full flex flex-col gap-0.5">
                             <label for="numberR" class="text-sm font-medium text-white">Número</label>
-                            <input type="number" id="numberR" wire:model.live="numberR" min="0" max="9999"
+                            <input type="number" id="numberR" wire:model.live="numberR" min="0" max="99"
                                 class="block w-full py-1 px-2 text-sm bg-[#22272b] text-white border border-gray-300 rounded-md
                                        focus:ring-yellow-200 focus:border-yellow-200 disabled:bg-gray-100
                                        disabled:text-white disabled:border-gray-200 disabled:cursor-not-allowed"
-                                placeholder="0" maxlength="4" {{ $inputsDisabled ? 'disabled' : '' }} autocomplete="off"
-                                onkeydown="if(['e','E','+','-','.'].includes(event.key)){event.preventDefault();} if(this.value.length>=4 && event.key.match(/[0-9]/) && !['Backspace','Delete','ArrowLeft','ArrowRight','Tab'].includes(event.key)){event.preventDefault();}" />
+                                placeholder="0" maxlength="2" {{ $inputsDisabled ? 'disabled' : '' }} autocomplete="off"
+                                onkeydown="if(['e','E','+','-','.'].includes(event.key)){event.preventDefault();} if(this.value.length>=2 && event.key.match(/[0-9]/) && !['Backspace','Delete','ArrowLeft','ArrowRight','Tab'].includes(event.key)){event.preventDefault();}" />
                             @error('numberR')
                                 <span class="text-red-400 text-xs">{{ $message }}</span>
                             @enderror
@@ -217,7 +275,7 @@
         </div>
 
         <div
-            class="flex flex-col gap-5 items-center h-full border-gray-600 lg:ps-3 lg:border-s w-full sm:w-full lg:w-3/6 pb-3 lg:p-0">
+            class="flex flex-col gap-5 items-center h-full border-gray-600 lg:ps-3 lg:border-s w-full sm:w-full lg:w-1/2 pb-3 lg:p-0">
             @if ($rows->count() > 0)
                 <div class="w-full flex flex-col justify-between rounded-lg h-full ">
                     <div id="paginated-users" class="flex flex-col relative">
@@ -226,8 +284,20 @@
                             <div class="overflow-x-auto" x-data
                                 x-on:keydown.window="
                                     if (event.key === 'PageDown') { event.preventDefault(); @this.call('sendPlays'); }
-                                    if (event.key === '+' || (event.key === '=' && event.shiftKey)) { event.preventDefault(); @this.call('addRowWithDerived'); }
+                                    if (event.key === '+' || (event.key === '=' && event.shiftKey)) { 
+                                        if (@this.isCreatingDerived) return;
+                                        event.preventDefault(); 
+                                        @this.call('addRowWithDerived'); 
+                                    }
                                 ">
+                                @if($isCreatingDerived)
+                                    <div class="bg-blue-500/20 border border-blue-500/50 rounded-md p-2 mb-2 mx-2">
+                                        <div class="flex items-center justify-center gap-2 text-blue-300">
+                                            <i class="fa-solid fa-spinner fa-spin"></i>
+                                            <span class="text-sm font-medium">Creando jugada derivada...</span>
+                                        </div>
+                                    </div>
+                                @endif
                                 <table
                                     class="w-full text-sm text-left rtl:text-right text-white dark:text-gray-400 relative">
                                     <thead class="text-xs text-white uppercase bg-gray-600 sticky top-0 z-10">
@@ -245,15 +315,15 @@
                                     <tbody class="max-h-[calc(100vh-0rem)] overflow-y-auto">
 
                                         @forelse ($rows  as $row)
-                                            <tr id="row-{{ $row->id }}" tabindex="-1"
+                                            <tr id="row-{{ $row['id'] }}" tabindex="-1"
                                                 class="bg-[#22272b] border-b border-gray-600 ">
-                                                <td class="px-2 py-2">{{ $this->formatNumber($row->number) }}</td>
+                                                <td class="px-2 py-2">{{ $this->formatNumber($row['number']) }}</td>
                                                 <td class="px-2 py-2">{{ $row['position'] }}</td>
                                                 <td class="px-2 py-2">{{ $row['numberR'] }}</td>
                                                 <td class="px-2 py-2">{{ $row['positionR'] }}</td>
-                                                <td class="px-2 py-2">{{ count(explode(',', $row['lottery'])) }}</td>
-                                                <td class="px-2 py-2">{{ $row['isChecked'] ? 'X' : '' }}</td>
-                                                <td class="px-2 py-2">${{ number_format($row->import, 2) }}</td>
+                                                <td class="px-2 py-2">{{ count(explode(',', $row['lottery'] ?? '')) }}</td>
+                                                <td class="px-2 py-2">{{ !empty($row['isChecked']) ? 'X' : '' }}</td>
+                                                <td class="px-2 py-2">${{ number_format($row['import'] ?? 0, 2) }}</td>
                                                 <td class="px-2 py-2 flex gap-1 items-center justify-center">
                                                     <a href="#"
                                                         wire:click.prevent="editRow({{ $row['id'] }})"
@@ -421,11 +491,8 @@
                                 </div>
                                 <div class="space-y-4">
                                     @foreach ($groups as $block)
-                                        <div class="grid grid-cols-6 gap-2 text-sm font-bold text-black py-1"
-                                            style="border-bottom: 3px solid black;">
-                                            @foreach ($block['codes_display'] as $lot)
-                                                <div class="text-center">{{ $lot }}</div>
-                                            @endforeach
+                                        <div class="text-left text-black font-bold py-1" style="border-bottom: 3px solid black;">
+                                            {{ implode(' ', $block['codes_display']) }}
                                         </div>
                                         <div class="space-y-1 text-sm">
                                             @foreach ($block['numbers'] as $item)
@@ -463,159 +530,358 @@
 
         </div>
     </div>
+
     @push('scripts')
         <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
         <script>
-            document.addEventListener("keydown", function(event) {
-                const inputs = {
-                    number: document.getElementById("number"),
-                    position: document.getElementById("position"),
-                    import: document.getElementById("import"),
-                    numberR: document.getElementById("numberR"),
-                    positionR: document.getElementById("positionR")
-                };
-                const activeElement = document.activeElement;
-                const key = event.key;
-                console.log("keydown detected", key, activeElement ? activeElement.id : null);
-
-                const alpineShortcutKeys = ['PageDown', '+', '='];
-                if (alpineShortcutKeys.includes(key) && (key !== '=' || event.shiftKey)) {
+            // Esperar a que Livewire esté completamente cargado
+            // Esperar a que Livewire esté completamente cargado
+            let initAttempts = 0;
+            const maxAttempts = 50; // Máximo 5 segundos (50 * 100ms)
+            
+            function initPlaysManagerScripts() {
+                if (typeof window.Livewire === 'undefined') {
+                    initAttempts++;
+                    if (initAttempts < maxAttempts) {
+                        setTimeout(initPlaysManagerScripts, 100);
+                    } else {
+                        console.error('Livewire no se pudo cargar después de múltiples intentos. Verifica la configuración.');
+                    }
                     return;
                 }
+                
+                initAttempts = 0; // Resetear contador cuando Livewire esté disponible
 
-                if (key === "Enter" && activeElement && activeElement.type === 'checkbox') {
-                    if (document.getElementById('lottery-selection-box') && document.getElementById('lottery-selection-box').contains(activeElement)) {
-                        event.preventDefault();
-                        if(inputs.number) { inputs.number.focus(); inputs.number.select(); }
+                document.addEventListener("keydown", function(event) {
+                    const inputs = {
+                        number: document.getElementById("number"),
+                        position: document.getElementById("position"),
+                        import: document.getElementById("import"),
+                        numberR: document.getElementById("numberR"),
+                        positionR: document.getElementById("positionR")
+                    };
+                    const activeElement = document.activeElement;
+                    const key = event.key;
+                    console.log("keydown detected", key, activeElement ? activeElement.id : null);
+
+                    const alpineShortcutKeys = ['PageDown', '+', '='];
+                    if (alpineShortcutKeys.includes(key) && (key !== '=' || event.shiftKey)) {
                         return;
                     }
-                }
 
-                if (!Object.values(inputs).includes(activeElement)) return;
-
-                if (key === "ArrowUp") {
-                    event.preventDefault();
-                    if(inputs.position) { inputs.position.focus(); inputs.position.select(); }
-                    return;
-                }
-
-                if (key === "Enter") {
-                    event.preventDefault();
-                    if (activeElement === inputs.number) {
-                        if (inputs.number.value.trim() === "") return;
-                        if(inputs.import) { inputs.import.focus(); inputs.import.select(); }
-                    } else if (activeElement === inputs.position) {
-                        if(inputs.import) { inputs.import.focus(); inputs.import.select(); }
-                    } else if (activeElement === inputs.import) {
-                        if(inputs.numberR) { inputs.numberR.focus(); inputs.numberR.select(); }
-                    } else if (activeElement === inputs.numberR) {
-                        if(inputs.positionR) { inputs.positionR.focus(); inputs.positionR.select(); }
-                    } else if (activeElement === inputs.positionR) {
-                        // Buscar el wire:id más cercano al input number (root del componente)
-                        let root = inputs.number;
-                        while (root && !root.hasAttribute('wire:id')) {
-                            root = root.parentElement;
+                    if (key === "Enter" && activeElement && activeElement.type === 'checkbox') {
+                        if (document.getElementById('lottery-selection-box') && document.getElementById('lottery-selection-box').contains(activeElement)) {
+                            event.preventDefault();
+                            if(inputs.number) { inputs.number.focus(); inputs.number.select(); }
+                            return;
                         }
-                        if (root && root.hasAttribute('wire:id')) {
-                            const inst = window.Livewire.find(root.getAttribute('wire:id'));
-                            if (inst) {
-                                inst.call('saveRow');
-                            } else {
-                                alert('No se encontró el componente Livewire PlaysManager.');
+                    }
+
+                    if (!Object.values(inputs).includes(activeElement)) return;
+
+                    if (key === "ArrowUp") {
+                        event.preventDefault();
+                        if(inputs.position) { inputs.position.focus(); inputs.position.select(); }
+                        return;
+                    }
+
+                    if (key === "Enter") {
+                        event.preventDefault();
+                        if (activeElement === inputs.number) {
+                            if (inputs.number.value.trim() === "") return;
+                            if(inputs.import) { inputs.import.focus(); inputs.import.select(); }
+                        } else if (activeElement === inputs.position) {
+                            if(inputs.import) { inputs.import.focus(); inputs.import.select(); }
+                        } else if (activeElement === inputs.import) {
+                            if(inputs.numberR) { inputs.numberR.focus(); inputs.numberR.select(); }
+                        } else if (activeElement === inputs.numberR) {
+                            if(inputs.positionR) { inputs.positionR.focus(); inputs.positionR.select(); }
+                        } else if (activeElement === inputs.positionR) {
+                            // Buscar el wire:id más cercano al input number (root del componente)
+                            let root = inputs.number;
+                            while (root && !root.hasAttribute('wire:id')) {
+                                root = root.parentElement;
                             }
-                        } else {
-                            alert('No se encontró el root wire:id para PlaysManager.');
+                            if (root && root.hasAttribute('wire:id')) {
+                                const inst = window.Livewire.find(root.getAttribute('wire:id'));
+                                if (inst) {
+                                    inst.call('saveRow');
+                                } else {
+                                    alert('No se encontró el componente Livewire PlaysManager.');
+                                }
+                            } else {
+                                alert('No se encontró el root wire:id para PlaysManager.');
+                            }
                         }
                     }
-                }
-            });
+                });
 
-            Livewire.on('focus-on-input', (event) => {
-                setTimeout(() => {
-                    const numberInput = document.getElementById("number");
-                    if (numberInput) {
-                        numberInput.focus();
-                        numberInput.select();
-                    }
-                }, 100);
-            });
-
-            // Scroll automático a la última jugada agregada
-            Livewire.on('scroll-to-last-play', (event) => {
-                setTimeout(() => {
-                    const playId = event.playId;
-                    const playRow = document.getElementById(`row-${playId}`);
-                    const playsContainer = document.getElementById('playsContainer');
+                // ✅ OPTIMIZADO: Evento combinado play-added-success (reemplaza play-added y focus-on-input)
+                Livewire.on('play-added-success', (event) => {
+                    const data = event[0] || event;
+                    const { playId, message, type, selector } = data;
                     
-                    if (playRow && playsContainer) {
-                        // Hacer scroll suave hasta la fila de la jugada
-                        playRow.scrollIntoView({ 
-                            behavior: 'smooth', 
-                            block: 'end',
-                            inline: 'nearest'
-                        });
+                    // Función para hacer scroll después de que Livewire actualice el DOM
+                    const scrollToPlay = () => {
+                        const playRow = document.getElementById(`row-${playId}`);
+                        const playsContainer = document.getElementById('playsContainer');
                         
-                        // Resaltar brevemente la fila para indicar que es nueva
-                        playRow.style.backgroundColor = '#4ade80';
-                        setTimeout(() => {
-                            playRow.style.backgroundColor = '';
-                        }, 1000);
-                    } else if (playsContainer) {
-                        // Fallback: scroll al final del contenedor
-                        playsContainer.scrollTop = playsContainer.scrollHeight;
+                        if (playRow && playsContainer) {
+                            // Scroll inmediato sin animación para mejor rendimiento
+                            playRow.scrollIntoView({ 
+                                behavior: 'auto', 
+                                block: 'end',
+                                inline: 'nearest'
+                            });
+                            return true;
+                        } else if (playsContainer) {
+                            // Fallback: scroll al final del contenedor
+                            playsContainer.scrollTop = playsContainer.scrollHeight;
+                            return false;
+                        }
+                        return false;
+                    };
+                    
+                    // Escuchar el evento de Livewire cuando el DOM se actualiza
+                    const handleScroll = () => {
+                        // Intentar hacer scroll después de que Livewire actualice el DOM
+                        requestAnimationFrame(() => {
+                            if (!scrollToPlay()) {
+                                // Si aún no está, esperar un poco más
+                                setTimeout(() => {
+                                    if (!scrollToPlay()) {
+                                        // Último intento después de más tiempo
+                                        setTimeout(() => scrollToPlay(), 200);
+                                    }
+                                }, 100);
+                            }
+                        });
+                    };
+                    
+                    // Escuchar cuando Livewire termine de actualizar el DOM
+                    document.addEventListener('livewire:updated', handleScroll, { once: true });
+                    
+                    // También intentar inmediatamente (por si el DOM ya está actualizado)
+                    handleScroll();
+                    
+                    // Enfocar el input de número después de un pequeño delay
+                    setTimeout(() => {
+                        const numberInput = document.querySelector(selector || '#number');
+                        if (numberInput) {
+                            numberInput.focus();
+                            numberInput.select();
+                        }
+                    }, 50);
+                    
+                    // Notificación (si existe el sistema de notificaciones)
+                    if (typeof window.showNotification === 'function') {
+                        window.showNotification(message, type);
                     }
-                }, 150);
-            });
+                });
+
+                // ✅ OPTIMIZADO: Evento combinado play-saved-complete (reemplaza play-saved y focus-on-input)
+                Livewire.on('play-saved-complete', (event) => {
+                    const data = event[0] || event;
+                    const { focusSelector, message } = data;
+                    
+                    // Enfocar el input después de guardar
+                    setTimeout(() => {
+                        const input = document.querySelector(focusSelector || '#number');
+                        if (input) {
+                            input.focus();
+                            input.select();
+                        }
+                    }, 100);
+                });
+
+                // Mantener el listener anterior por compatibilidad
+                Livewire.on('scroll-to-last-play', (event) => {
+                    const playId = event.playId;
+                    
+                    // Función para hacer scroll
+                    const scrollToPlay = () => {
+                        const playRow = document.getElementById(`row-${playId}`);
+                        const playsContainer = document.getElementById('playsContainer');
+                        
+                        if (playRow && playsContainer) {
+                            playRow.scrollIntoView({ 
+                                behavior: 'auto', 
+                                block: 'end',
+                                inline: 'nearest'
+                            });
+                            return true;
+                        } else if (playsContainer) {
+                            playsContainer.scrollTop = playsContainer.scrollHeight;
+                            return false;
+                        }
+                        return false;
+                    };
+                    
+                    // Intentar hacer scroll después de un pequeño delay
+                    setTimeout(() => {
+                        if (!scrollToPlay()) {
+                            // Si no se encontró, esperar un poco más
+                            requestAnimationFrame(() => {
+                                if (!scrollToPlay()) {
+                                    setTimeout(() => scrollToPlay(), 100);
+                                }
+                            });
+                        }
+                    }, 50);
+                });
+            }
+
+            // Registrar listener para la alerta de loterías (funciona incluso si Livewire aún no está cargado)
+            function registerLotteryAlertListener() {
+                if (typeof window.Livewire !== 'undefined') {
+                    Livewire.on('show-lottery-alert', () => {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Atención',
+                            html: '<p style="color: #ffffff; font-size: 16px;">Debe seleccionar una o mas loterias para realizar una jugada</p>',
+                            confirmButtonText: 'Entendido',
+                            confirmButtonColor: '#f59e0b',
+                            background: '#1b1f22',
+                            color: '#ffffff',
+                            iconColor: '#f59e0b',
+                            customClass: {
+                                popup: 'swal-custom-popup',
+                                title: 'swal-custom-title',
+                                content: 'swal-custom-content'
+                            },
+                            buttonsStyling: true,
+                            allowOutsideClick: true,
+                            allowEscapeKey: true
+                        });
+                    });
+                } else {
+                    setTimeout(registerLotteryAlertListener, 100);
+                }
+            }
+
+            // Registrar listener para la alerta de redoblona (funciona incluso si Livewire aún no está cargado)
+            function registerRedoblonaAlertListener() {
+                if (typeof window.Livewire !== 'undefined') {
+                    Livewire.on('show-redoblona-alert', (event) => {
+                        const data = event[0] || event;
+                        const message = data?.message || 'La redoblona solo se puede con números de 2 cifras.';
+                        
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Validación de Redoblona',
+                            html: '<p style="color: #ffffff; font-size: 16px;">' + message + '</p>',
+                            confirmButtonText: 'Entendido',
+                            confirmButtonColor: '#f59e0b',
+                            background: '#1b1f22',
+                            color: '#ffffff',
+                            iconColor: '#f59e0b',
+                            customClass: {
+                                popup: 'swal-custom-popup',
+                                title: 'swal-custom-title',
+                                content: 'swal-custom-content'
+                            },
+                            buttonsStyling: true,
+                            allowOutsideClick: true,
+                            allowEscapeKey: true
+                        });
+                    });
+                } else {
+                    setTimeout(registerRedoblonaAlertListener, 100);
+                }
+            }
+
+            // Inicializar cuando Livewire esté listo
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    document.addEventListener('livewire:init', initPlaysManagerScripts);
+                    document.addEventListener('livewire:init', registerLotteryAlertListener);
+                    document.addEventListener('livewire:init', registerRedoblonaAlertListener);
+                    setTimeout(initPlaysManagerScripts, 500);
+                    setTimeout(registerLotteryAlertListener, 500);
+                    setTimeout(registerRedoblonaAlertListener, 500);
+                });
+            } else {
+                document.addEventListener('livewire:init', initPlaysManagerScripts);
+                document.addEventListener('livewire:init', registerLotteryAlertListener);
+                document.addEventListener('livewire:init', registerRedoblonaAlertListener);
+                setTimeout(initPlaysManagerScripts, 500);
+                setTimeout(registerLotteryAlertListener, 500);
+                setTimeout(registerRedoblonaAlertListener, 500);
+            }
+            
+            // Intentar registrar el listener inmediatamente si Livewire ya está disponible
+            registerLotteryAlertListener();
+            registerRedoblonaAlertListener();
 
             function printTicket() {
-        html2canvas(document.getElementById('ticketContainer'), { scale: 2 }).then(canvas => {
-            const imgData = canvas.toDataURL('image/png');
-            let iframe = document.createElement('iframe');
-            iframe.style.position = "fixed";
-            iframe.style.right = "0";
-            iframe.style.bottom = "0";
-            iframe.style.width = "0";
-            iframe.style.height = "0";
-            iframe.style.border = "0";
-            document.body.appendChild(iframe);
-            
-            const doc = iframe.contentWindow.document;
-            doc.open();
-            doc.write(`
-              <html>
-                <head>
-                  <title>Imprimir Ticket</title>
-                  <style>
-                    @page { size: Letter; margin: 0mm; }
-                    html, body { margin: 0; padding: 0; }
-                    body { background: #fff; }
-                    img { width: 100%; height: auto; }
-                  </style>
-                </head>
-                <body>
-                  <img src="${imgData}" alt="Ticket" onload="window.focus(); window.print();">
-                </body>
-              </html>
-            `);
-            doc.close();
-            
-            setTimeout(() => {
-                document.body.removeChild(iframe);
-            }, 1000);
-        });
-    }
-
+                const ticketContainer = document.getElementById('ticketContainer');
+                if (!ticketContainer) {
+                    console.error('No se encontró el contenedor del ticket');
+                    return;
+                }
+                
+                html2canvas(ticketContainer, { scale: 2 }).then(canvas => {
+                    const imgData = canvas.toDataURL('image/png');
+                    let iframe = document.createElement('iframe');
+                    iframe.style.position = "fixed";
+                    iframe.style.right = "0";
+                    iframe.style.bottom = "0";
+                    iframe.style.width = "0";
+                    iframe.style.height = "0";
+                    iframe.style.border = "0";
+                    document.body.appendChild(iframe);
+                    
+                    const doc = iframe.contentWindow.document;
+                    doc.open();
+                    doc.write(`
+                        <html>
+                            <head>
+                                <title>Imprimir Ticket</title>
+                                <style>
+                                    @page { size: Letter; margin: 0mm; }
+                                    html, body { margin: 0; padding: 0; }
+                                    body { background: #fff; }
+                                    img { width: 100%; height: auto; }
+                                </style>
+                            </head>
+                            <body>
+                                <img src="${imgData}" alt="Ticket" onload="window.focus(); window.print();">
+                            </body>
+                        </html>
+                    `);
+                    doc.close();
+                    
+                    setTimeout(() => {
+                        if (document.body.contains(iframe)) {
+                            document.body.removeChild(iframe);
+                        }
+                    }, 1000);
+                }).catch(error => {
+                    console.error('Error al generar imagen para imprimir:', error);
+                });
+            }
 
             function guardarTicket() {
                 const ticket = document.getElementById('ticketContainer');
-                if (!ticket) return;
+                if (!ticket) {
+                    console.error('No se encontró el contenedor del ticket');
+                    return;
+                }
+                
                 html2canvas(ticket, { scale: 2 }).then(function(canvas) {
                     const link = document.createElement('a');
                     link.download = 'ticket.png';
                     link.href = canvas.toDataURL('image/png');
                     link.click();
+                }).catch(error => {
+                    console.error('Error al generar imagen para guardar:', error);
                 });
             }
+            
+            // Hacer las funciones disponibles globalmente
+            window.printTicket = printTicket;
+            window.guardarTicket = guardarTicket;
         </script>
     @endpush
     @push('styles')
@@ -666,5 +932,65 @@
 #number::-moz-selection {
     background: transparent;
 }
+
+        /* Estilos personalizados para SweetAlert */
+        .swal-custom-popup {
+            background-color: #1b1f22 !important;
+            border: 2px solid #f59e0b !important;
+            border-radius: 12px !important;
+            box-shadow: 0 10px 40px rgba(245, 158, 11, 0.3) !important;
+        }
+
+        .swal-custom-title {
+            color: #ffffff !important;
+            font-size: 24px !important;
+            font-weight: bold !important;
+            margin-bottom: 20px !important;
+        }
+
+        .swal-custom-content {
+            color: #ffffff !important;
+            font-size: 16px !important;
+        }
+
+        .swal2-popup {
+            background: #1b1f22 !important;
+        }
+
+        .swal2-title {
+            color: #ffffff !important;
+        }
+
+        .swal2-html-container {
+            color: #ffffff !important;
+        }
+
+        .swal2-confirm {
+            background-color: #f59e0b !important;
+            border: none !important;
+            border-radius: 8px !important;
+            padding: 12px 30px !important;
+            font-size: 16px !important;
+            font-weight: 600 !important;
+            transition: all 0.3s ease !important;
+        }
+
+        .swal2-confirm:hover {
+            background-color: #d97706 !important;
+            transform: translateY(-2px) !important;
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4) !important;
+        }
+
+        .swal2-icon.swal2-warning {
+            border-color: #f59e0b !important;
+            color: #f59e0b !important;
+        }
+
+        .swal2-icon.swal2-warning .swal2-icon-content {
+            color: #f59e0b !important;
+        }
         </style>
     @endpush
+
+
+

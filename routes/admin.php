@@ -23,7 +23,6 @@ Route::middleware([
     'role'
 ])->group(function () {
     Route::get('/', PlaysManager::class)->name('plays-manager');
-    Route::get('/plays-manager', PlaysManager::class)->name('plays-manager');
     Route::get('/plays-sent', PlaysSent::class)->name('plays-sent');
     Route::get('/pay-award', PayAward::class)->name('pay-award');
     Route::get('/results', Results::class)->name('results');
@@ -55,6 +54,16 @@ Route::middleware([
             Route::get('/clients', ShowClients::class)->name('clients.show');
             Route::get('/clients/store/{id?}', StoreClient::class)->name('clients.store')
                 ->middleware('permission:editar clientes|crear clientes');
+        });
+        
+        //Clients details
+        Route::group(['middleware' => ['permission:ver clientes']], function () {
+            Route::get('/clients/{id}/details', \App\Livewire\Admin\Clients\ClientDetailsModal::class)->name('clients.details');
+        });
+        
+        //Clients liquidations (solo administradores)
+        Route::middleware(['role:Administrador'])->group(function () {
+            Route::get('/clients/{id}/liquidations', \App\Livewire\Admin\Clients\ClientLiquidations::class)->name('clients.liquidations');
         });
 
       
